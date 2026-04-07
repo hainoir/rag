@@ -1,0 +1,123 @@
+@import "tailwindcss";
+
+:root {
+  --canvas: #f7f1e5;
+  --canvas-deep: #efe4d0;
+  --panel: rgba(255, 251, 245, 0.84);
+  --panel-strong: rgba(255, 250, 242, 0.96);
+  --ink: #1f2a24;
+  --muted: #59645d;
+  --line: rgba(34, 54, 44, 0.14);
+  --line-strong: rgba(34, 54, 44, 0.22);
+  --official: #28513d;
+  --official-soft: rgba(40, 81, 61, 0.12);
+  --community: #7a4a25;
+  --community-soft: rgba(122, 74, 37, 0.12);
+  --accent: #146356;
+  --accent-soft: rgba(20, 99, 86, 0.12);
+  --warm: #efd4b5;
+  --warm-soft: rgba(239, 212, 181, 0.42);
+  --shadow: 0 28px 80px rgba(49, 45, 37, 0.12);
+  --radius-lg: 28px;
+  --radius-md: 20px;
+  --radius-sm: 14px;
+  --font-display: Baskerville, "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  --font-body: "Avenir Next", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--ink);
+  font-family: var(--font-body);
+  background:
+    radial-gradient(circle at top left, rgba(20, 99, 86, 0.14), transparent 30%),
+    radial-gradient(circle at top right, rgba(239, 212, 181, 0.6), transparent 26%),
+    linear-gradient(180deg, #fcfaf6 0%, var(--canvas) 55%, var(--canvas-deep) 100%);
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(40, 81, 61, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(40, 81, 61, 0.035) 1px, transparent 1px);
+  background-size: 36px 36px;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.48), transparent 88%);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  cursor: pointer;
+}
+
+::selection {
+  background: rgba(40, 81, 61, 0.2);
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+.surface {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(18px);
+}
+
+.surface-strong {
+  border: 1px solid var(--line-strong);
+  background: var(--panel-strong);
+  box-shadow: var(--shadow);
+}
+
+.highlight {
+  border-radius: 999px;
+  background: var(--warm-soft);
+  padding: 0.12rem 0.4rem;
+  color: var(--ink);
+}
+
+.mark {
+  border-radius: 0.45rem;
+  background: var(--warm);
+  padding: 0.04rem 0.24rem;
+  color: var(--ink);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.page-shell {
+  min-height: 100vh;
+  padding: 2rem 1rem 4rem;
+}
+
+@media (min-width: 768px) {
+  .page-shell {
+    padding: 2.5rem 1.5rem 4.5rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+

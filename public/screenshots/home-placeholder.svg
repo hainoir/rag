@@ -1,0 +1,20 @@
+<svg width="1280" height="720" viewBox="0 0 1280 720" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1280" height="720" rx="36" fill="#F7F1E5"/>
+  <rect x="48" y="48" width="1184" height="624" rx="32" fill="#FFF9F0" stroke="#D9CBB8"/>
+  <rect x="96" y="104" width="188" height="28" rx="14" fill="#E9D6BC"/>
+  <rect x="96" y="164" width="544" height="66" rx="18" fill="#E5EDE8"/>
+  <rect x="96" y="252" width="760" height="86" rx="22" fill="#FFFFFF" stroke="#C9D5CE"/>
+  <rect x="880" y="164" width="256" height="360" rx="24" fill="#F5F0E8" stroke="#D6C8B6"/>
+  <rect x="96" y="376" width="720" height="44" rx="22" fill="#F1E4D2"/>
+  <rect x="96" y="444" width="168" height="44" rx="22" fill="#FFFFFF" stroke="#D3C4B3"/>
+  <rect x="280" y="444" width="188" height="44" rx="22" fill="#FFFFFF" stroke="#D3C4B3"/>
+  <rect x="484" y="444" width="204" height="44" rx="22" fill="#FFFFFF" stroke="#D3C4B3"/>
+  <rect x="96" y="532" width="720" height="96" rx="24" fill="#FFFFFF" stroke="#C9D5CE"/>
+  <text x="96" y="92" fill="#28513D" font-family="Georgia, serif" font-size="22" font-weight="700">首页占位图</text>
+  <text x="104" y="204" fill="#1F2A24" font-family="Georgia, serif" font-size="34" font-weight="700">校园信息检索与可解释问答助手</text>
+  <text x="118" y="307" fill="#59645D" font-family="sans-serif" font-size="26">[ 输入校园问题............................ ] [ 搜索 ]</text>
+  <text x="110" y="404" fill="#7A4A25" font-family="sans-serif" font-size="24">常见问题</text>
+  <text x="112" y="586" fill="#59645D" font-family="sans-serif" font-size="24">最近搜索模块占位</text>
+  <text x="924" y="216" fill="#28513D" font-family="Georgia, serif" font-size="24" font-weight="700">右侧信息区</text>
+</svg>
+

@@ -1,0 +1,20 @@
+<svg width="1280" height="720" viewBox="0 0 1280 720" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1280" height="720" rx="36" fill="#F7F1E5"/>
+  <rect x="48" y="48" width="1184" height="624" rx="32" fill="#FFF9F0" stroke="#D9CBB8"/>
+  <rect x="88" y="96" width="820" height="134" rx="28" fill="#FFFFFF" stroke="#C9D5CE"/>
+  <rect x="940" y="96" width="252" height="528" rx="28" fill="#F5F0E8" stroke="#D6C8B6"/>
+  <rect x="88" y="258" width="820" height="84" rx="24" fill="#FFFFFF" stroke="#C9D5CE"/>
+  <rect x="88" y="362" width="820" height="72" rx="24" fill="#F1E4D2"/>
+  <rect x="88" y="456" width="820" height="168" rx="28" fill="#FFFFFF" stroke="#C9D5CE"/>
+  <text x="96" y="86" fill="#28513D" font-family="Georgia, serif" font-size="22" font-weight="700">结果页占位图</text>
+  <text x="116" y="156" fill="#1F2A24" font-family="Georgia, serif" font-size="32" font-weight="700">问题：图书馆怎么借书？</text>
+  <text x="118" y="210" fill="#59645D" font-family="sans-serif" font-size="22">搜索框、来源过滤与回答 / 检索结果切换</text>
+  <text x="114" y="309" fill="#146356" font-family="sans-serif" font-size="24">状态提示：检索中 / 正在生成摘要 / 已找到若干来源</text>
+  <text x="112" y="408" fill="#7A4A25" font-family="sans-serif" font-size="26">回答摘要模块</text>
+  <text x="114" y="550" fill="#59645D" font-family="sans-serif" font-size="24">来源卡片列表占位</text>
+  <text x="974" y="146" fill="#28513D" font-family="Georgia, serif" font-size="24" font-weight="700">右侧侧栏</text>
+  <text x="972" y="192" fill="#59645D" font-family="sans-serif" font-size="20">相关问题推荐</text>
+  <text x="972" y="226" fill="#59645D" font-family="sans-serif" font-size="20">回答说明</text>
+  <text x="972" y="260" fill="#59645D" font-family="sans-serif" font-size="20">结果时间提示</text>
+</svg>
+

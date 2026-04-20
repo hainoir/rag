@@ -1,35 +1,263 @@
-import { DEFAULT_QUESTIONS, SEARCH_SCENARIOS, type SearchScenario } from "@/lib/search/mock-data";
-import type { SearchAnswer, SearchProvider, SearchResponse } from "@/lib/search/types";
+import "server-only";
 
-function normalizeText(value: string) {
-  return value.toLowerCase().replace(/[？?！!，,。.:：;；\s]/g, "");
+import { DEFAULT_QUESTIONS } from "@/lib/search/default-questions";
+import type {
+  SearchAnswer,
+  SearchProvider,
+  SearchResponse,
+  SearchSource,
+  SearchStatus,
+  SourceFreshness,
+  SourceType,
+} from "@/lib/search/types";
+
+const DEFAULT_DISCLAIMER = "如果问题涉及时间、费用、资格或办理流程，请以来源原文和最新公告为准。";
+const DEFAULT_TIMEOUT_MS = 8_000;
+const DEFAULT_LIMIT = 6;
+
+type JsonRecord = Record<string, unknown>;
+
+type ResponseInput = Omit<SearchResponse, "resultGeneratedAt" | "retrievedCount"> & {
+  resultGeneratedAt?: string;
+  retrievedCount?: number;
+};
+
+function isRecord(value: unknown): value is JsonRecord {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function scoreScenario(query: string, scenario: SearchScenario) {
-  const normalizedQuery = normalizeText(query);
-  const keywordHits = scenario.keywords.filter((keyword) =>
-    normalizedQuery.includes(normalizeText(keyword)),
-  );
-  const primaryQuestionHit = normalizedQuery.includes(normalizeText(scenario.primaryQuestion));
-  const exactKeywordHit = scenario.keywords.some(
-    (keyword) => normalizeText(keyword) === normalizedQuery,
-  );
-
-  return {
-    scenario,
-    score: keywordHits.length + (primaryQuestionHit ? 3 : 0),
-    exactKeywordHit,
-  };
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
 }
 
-function buildPartialAnswer(query: string, scenario: SearchScenario): SearchAnswer {
+function pickFirst(record: JsonRecord, keys: string[]) {
+  for (const key of keys) {
+    if (key in record) {
+      return record[key];
+    }
+  }
+
+  return undefined;
+}
+
+function pickString(record: JsonRecord, keys: string[]) {
+  const value = pickFirst(record, keys);
+
+  if (!isNonEmptyString(value)) {
+    return undefined;
+  }
+
+  return value.trim();
+}
+
+function pickArray(record: JsonRecord, keys: string[]) {
+  const value = pickFirst(record, keys);
+  return Array.isArray(value) ? value : [];
+}
+
+function toStringArray(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter((item): item is string => isNonEmptyString(item))
+    .map((item) => item.trim());
+}
+
+function clampConfidence(value: unknown, fallback: number) {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return fallback;
+  }
+
+  if (value > 1) {
+    return Math.min(Math.max(value / 100, 0), 1);
+  }
+
+  return Math.min(Math.max(value, 0), 1);
+}
+
+function parsePositiveInteger(value: string | undefined, fallback: number) {
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback;
+  }
+
+  return Math.floor(parsed);
+}
+
+function normalizeTimestamp(value: unknown, fallback: string) {
+  const normalized = normalizeOptionalTimestamp(value);
+  return normalized ?? fallback;
+}
+
+function normalizeOptionalTimestamp(value: unknown) {
+  if (typeof value === "number") {
+    const normalized = new Date(value);
+    return Number.isNaN(normalized.getTime()) ? undefined : normalized.toISOString();
+  }
+
+  if (isNonEmptyString(value)) {
+    const normalized = new Date(value);
+    return Number.isNaN(normalized.getTime()) ? undefined : normalized.toISOString();
+  }
+
+  return undefined;
+}
+
+function normalizeSourceType(value: unknown, url?: string): SourceType {
+  if (isNonEmptyString(value)) {
+    const normalized = value.trim().toLowerCase();
+
+    if (["official", "authority", "admin", "notice", "announcement", "policy"].includes(normalized)) {
+      return "official";
+    }
+
+    if (["community", "forum", "discussion", "ugc", "social", "student"].includes(normalized)) {
+      return "community";
+    }
+  }
+
+  if (url && /(\.edu|\.gov|official|university|college|school)/i.test(url)) {
+    return "official";
+  }
+
+  return "community";
+}
+
+function deriveSourceDomain(url?: string) {
+  if (!url) {
+    return undefined;
+  }
+
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return undefined;
+  }
+}
+
+function deriveSourceName(sourceType: SourceType, url?: string) {
+  const domain = deriveSourceDomain(url);
+
+  if (domain) {
+    return domain;
+  }
+
+  return sourceType === "official" ? "官方站点" : "社区站点";
+}
+
+function normalizeFreshnessLabel(
+  value: unknown,
+  timestamps: Array<string | undefined>,
+): SourceFreshness | undefined {
+  if (isNonEmptyString(value)) {
+    const normalized = value.trim().toLowerCase();
+
+    if (["fresh", "live", "new", "updated"].includes(normalized)) {
+      return "fresh";
+    }
+
+    if (["recent", "current", "stable"].includes(normalized)) {
+      return "recent";
+    }
+
+    if (["stale", "old", "outdated", "expired"].includes(normalized)) {
+      return "stale";
+    }
+
+    if (["undated", "unknown", "missing"].includes(normalized)) {
+      return "undated";
+    }
+  }
+
+  const comparable = timestamps
+    .filter((timestamp): timestamp is string => isNonEmptyString(timestamp))
+    .map((timestamp) => new Date(timestamp).getTime())
+    .filter((timestamp) => Number.isFinite(timestamp));
+
+  if (comparable.length === 0) {
+    return "undated";
+  }
+
+  const newest = Math.max(...comparable);
+  const ageInDays = Math.floor((Date.now() - newest) / (1000 * 60 * 60 * 24));
+
+  if (ageInDays <= 3) {
+    return "fresh";
+  }
+
+  if (ageInDays <= 30) {
+    return "recent";
+  }
+
+  return "stale";
+}
+
+function tokenizeQuery(query: string) {
+  const tokens = query
+    .split(/[\s,.;:!?，。；：！？、/]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  if (tokens.length > 0) {
+    return tokens.slice(0, 5);
+  }
+
+  return query.trim() ? [query.trim()] : [];
+}
+
+function deriveMatchedKeywords(query: string, text: string) {
+  const normalizedText = text.toLowerCase();
+  const tokens = tokenizeQuery(query).filter((token) => normalizedText.includes(token.toLowerCase()));
+
+  return tokens.length > 0 ? tokens : tokenizeQuery(query);
+}
+
+function summarizeSnippet(value: string | undefined) {
+  if (!value) {
+    return undefined;
+  }
+
+  const normalized = value.replace(/\s+/g, " ").trim();
+
+  if (!normalized) {
+    return undefined;
+  }
+
+  return normalized.length > 96 ? `${normalized.slice(0, 96)}...` : normalized;
+}
+
+function buildSourceNote(sources: SearchSource[]) {
+  if (sources.length === 0) {
+    return "当前结果未附带可展示的来源，请回到原始检索服务核对结果。";
+  }
+
+  const officialCount = sources.filter((source) => source.type === "official").length;
+  const communityCount = sources.length - officialCount;
+
+  if (officialCount > 0 && communityCount === 0) {
+    return `当前结论主要基于 ${officialCount} 条官方来源整理，适合先看摘要，再回到原文逐条核对。`;
+  }
+
+  if (officialCount === 0) {
+    return `当前结果主要来自 ${communityCount} 条社区来源，建议把这些内容当作经验补充，而不是最终依据。`;
+  }
+
+  return `当前结果综合了 ${officialCount} 条官方来源和 ${communityCount} 条社区来源，建议优先以官方信息为准。`;
+}
+
+function buildPartialAnswer(query: string, sources: SearchSource[]): SearchAnswer {
+  const leadingSnippet = summarizeSnippet(sources[0]?.snippet);
+
   return {
-    summary: `已找到与“${scenario.title}”相关的通用信息，但暂未检索到能完整回答“${query}”的高置信内容。`,
-    sourceNote:
-      "当前结果以官方 FAQ 和社区经验帖为主，适合先查看原始片段再继续细化问法，例如补充时间、地点或对象范围。",
-    disclaimer:
-      "如果问题涉及具体费用、时段、楼栋或政策细节，请以对应部门的最新公告为准。",
-    confidence: 0.58,
+    summary: leadingSnippet
+      ? `已检索到与“${query}”相关的来源，当前最直接的命中信息是：${leadingSnippet}`
+      : `已检索到与“${query}”相关的来源，但上游检索服务暂未返回可直接展示的结构化回答。`,
+    sourceNote: buildSourceNote(sources),
+    disclaimer: DEFAULT_DISCLAIMER,
+    confidence: 0.56,
   };
 }
 
@@ -39,63 +267,321 @@ function buildResponse({
   answer,
   relatedQuestions,
   sources,
-}: Omit<SearchResponse, "generatedAt" | "retrievedCount">): SearchResponse {
+  resultGeneratedAt,
+  retrievedCount,
+}: ResponseInput): SearchResponse {
+  const generatedAt = normalizeTimestamp(resultGeneratedAt, new Date().toISOString());
+
   return {
     query,
     status,
     answer,
-    relatedQuestions,
+    relatedQuestions: relatedQuestions.length > 0 ? relatedQuestions : DEFAULT_QUESTIONS,
     sources,
-    retrievedCount: sources.length,
-    generatedAt: new Date().toISOString(),
+    retrievedCount: typeof retrievedCount === "number" && retrievedCount >= 0 ? retrievedCount : sources.length,
+    resultGeneratedAt: generatedAt,
   };
 }
 
-export const mockSearchProvider: SearchProvider = {
+function buildEmptyResponse(query: string) {
+  return buildResponse({
+    query,
+    status: "empty",
+    answer: null,
+    sources: [],
+    relatedQuestions: DEFAULT_QUESTIONS,
+  });
+}
+
+function buildErrorResponse(query: string) {
+  return buildResponse({
+    query,
+    status: "error",
+    answer: null,
+    sources: [],
+    relatedQuestions: DEFAULT_QUESTIONS,
+  });
+}
+
+function normalizeSource(rawSource: JsonRecord, index: number, query: string, fallbackDate: string): SearchSource {
+  const url = pickString(rawSource, ["url", "link", "href"]);
+  const sourceType = normalizeSourceType(
+    pickFirst(rawSource, ["type", "sourceType", "origin", "channel"]),
+    url,
+  );
+  const sourceDomain = deriveSourceDomain(url);
+  const sourceName =
+    pickString(rawSource, ["sourceName", "siteName", "publisher", "originName", "organization"]) ??
+    deriveSourceName(sourceType, url);
+  const publishedAt = normalizeOptionalTimestamp(
+    pickFirst(rawSource, ["publishedAt", "published_at", "date", "createdAt"]),
+  );
+  const updatedAt = normalizeOptionalTimestamp(
+    pickFirst(rawSource, ["updatedAt", "updated_at", "modifiedAt", "modified_at", "lastUpdatedAt"]),
+  );
+  const fetchedAt = normalizeTimestamp(
+    pickFirst(rawSource, ["fetchedAt", "fetched_at", "crawledAt", "crawled_at", "indexedAt", "indexed_at"]),
+    fallbackDate,
+  );
+  const lastVerifiedAt = normalizeOptionalTimestamp(
+    pickFirst(rawSource, ["lastVerifiedAt", "last_verified_at", "verifiedAt", "validatedAt", "checkedAt"]),
+  );
+  const title =
+    pickString(rawSource, ["title", "name", "sourceTitle", "documentTitle"]) ?? `检索结果 ${index + 1}`;
+  const snippet =
+    pickString(rawSource, ["snippet", "excerpt", "summary", "content", "text", "chunk", "body"]) ?? title;
+  const fullSnippet =
+    pickString(rawSource, ["fullSnippet", "fullText", "rawText", "content", "text", "body"]) ?? snippet;
+  const providedKeywords = toStringArray(
+    pickFirst(rawSource, ["matchedKeywords", "keywords", "matched_terms", "highlights"]),
+  );
+  const matchedKeywords = providedKeywords.length > 0
+    ? providedKeywords.slice(0, 5)
+    : deriveMatchedKeywords(query, `${title} ${fullSnippet}`);
+  const trustScore = pickFirst(rawSource, ["trustScore", "trust_score", "authorityScore", "sourceScore"]);
+  const canonicalUrl = pickString(rawSource, ["canonicalUrl", "canonical_url"]) ?? url;
+
+  return {
+    id:
+      pickString(rawSource, ["id", "documentId", "sourceId", "chunkId"]) ??
+      url ??
+      `source-${index + 1}`,
+    title,
+    type: sourceType,
+    sourceName,
+    sourceDomain,
+    publishedAt,
+    updatedAt,
+    fetchedAt,
+    lastVerifiedAt,
+    snippet,
+    fullSnippet,
+    matchedKeywords,
+    url,
+    canonicalUrl,
+    freshnessLabel: normalizeFreshnessLabel(
+      pickFirst(rawSource, ["freshnessLabel", "freshness", "recency", "freshness_label"]),
+      [lastVerifiedAt, updatedAt, publishedAt, fetchedAt],
+    ),
+    trustScore:
+      typeof trustScore === "number"
+        ? clampConfidence(trustScore, sourceType === "official" ? 0.92 : 0.72)
+        : undefined,
+    dedupKey: pickString(rawSource, ["dedupKey", "dedupeKey", "contentFingerprint", "documentFingerprint"]),
+  };
+}
+
+function normalizeAnswer(value: unknown, sources: SearchSource[]) {
+  const fallbackConfidence = sources.length > 0 ? 0.74 : 0.58;
+
+  if (isNonEmptyString(value)) {
+    return {
+      summary: value.trim(),
+      sourceNote: buildSourceNote(sources),
+      disclaimer: DEFAULT_DISCLAIMER,
+      confidence: fallbackConfidence,
+    } satisfies SearchAnswer;
+  }
+
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const summary = pickString(value, ["summary", "text", "answer"]);
+
+  if (!summary) {
+    return null;
+  }
+
+  return {
+    summary,
+    sourceNote: pickString(value, ["sourceNote", "sourcesSummary", "evidenceNote"]) ?? buildSourceNote(sources),
+    disclaimer: pickString(value, ["disclaimer", "warning", "note"]) ?? DEFAULT_DISCLAIMER,
+    confidence: clampConfidence(pickFirst(value, ["confidence", "score"]), fallbackConfidence),
+  } satisfies SearchAnswer;
+}
+
+function normalizeStatus(value: unknown, sources: SearchSource[], answer: SearchAnswer | null): SearchStatus {
+  if (isNonEmptyString(value)) {
+    const normalized = value.trim().toLowerCase();
+
+    if (normalized === "ok" || normalized === "partial" || normalized === "empty" || normalized === "error") {
+      return normalized;
+    }
+  }
+
+  if (sources.length === 0) {
+    return "empty";
+  }
+
+  return answer ? "ok" : "partial";
+}
+
+function unwrapPayload(payload: unknown) {
+  if (!isRecord(payload)) {
+    return null;
+  }
+
+  if (isRecord(payload.data)) {
+    return payload.data;
+  }
+
+  return payload;
+}
+
+function normalizeUpstreamResponse(query: string, payload: unknown) {
+  const body = unwrapPayload(payload);
+
+  if (!body) {
+    return buildErrorResponse(query);
+  }
+
+  const generatedAt = normalizeTimestamp(
+    pickFirst(body, ["resultGeneratedAt", "generatedAt", "timestamp"]),
+    new Date().toISOString(),
+  );
+  const sources = pickArray(body, ["sources", "results", "items", "documents", "matches"])
+    .filter(isRecord)
+    .map((source, index) => normalizeSource(source, index, query, generatedAt));
+  const answerValue =
+    pickFirst(body, ["answer"]) ??
+    (pickString(body, ["summary"]) || "sourceNote" in body || "disclaimer" in body || "confidence" in body
+      ? body
+      : null);
+  let answer = normalizeAnswer(answerValue, sources);
+  let status = normalizeStatus(pickFirst(body, ["status", "state"]), sources, answer);
+
+  if (status === "error") {
+    return buildErrorResponse(query);
+  }
+
+  if (status === "empty" || sources.length === 0) {
+    return buildEmptyResponse(query);
+  }
+
+  if (!answer) {
+    answer = buildPartialAnswer(query, sources);
+    status = "partial";
+  }
+
+  return buildResponse({
+    query: pickString(body, ["query"]) ?? query,
+    status,
+    answer,
+    sources,
+    relatedQuestions: toStringArray(
+      pickFirst(body, ["relatedQuestions", "suggestions", "followUpQuestions"]),
+    ),
+    retrievedCount:
+      typeof pickFirst(body, ["retrievedCount", "total", "totalHits"]) === "number"
+        ? (pickFirst(body, ["retrievedCount", "total", "totalHits"]) as number)
+        : sources.length,
+    resultGeneratedAt: generatedAt,
+  });
+}
+
+function buildRequestHeaders() {
+  const headers = new Headers({
+    Accept: "application/json",
+  });
+  const apiKey = process.env.SEARCH_SERVICE_API_KEY;
+  const authHeader = process.env.SEARCH_SERVICE_AUTH_HEADER ?? "Authorization";
+
+  if (isNonEmptyString(apiKey)) {
+    headers.set(
+      authHeader,
+      authHeader.toLowerCase() === "authorization" && !apiKey.trim().startsWith("Bearer ")
+        ? `Bearer ${apiKey.trim()}`
+        : apiKey.trim(),
+    );
+  }
+
+  return headers;
+}
+
+function buildSearchServiceRequest(query: string) {
+  const endpoint = process.env.SEARCH_SERVICE_URL;
+
+  if (!isNonEmptyString(endpoint)) {
+    return null;
+  }
+
+  const method = (process.env.SEARCH_SERVICE_METHOD ?? "POST").trim().toUpperCase();
+  const limit = parsePositiveInteger(process.env.SEARCH_SERVICE_LIMIT, DEFAULT_LIMIT);
+  const headers = buildRequestHeaders();
+
+  if (method === "GET") {
+    const url = new URL(endpoint);
+    url.searchParams.set("q", query);
+    url.searchParams.set("limit", String(limit));
+
+    return {
+      url: url.toString(),
+      init: {
+        method: "GET",
+        headers,
+        cache: "no-store" as const,
+      },
+    };
+  }
+
+  headers.set("Content-Type", "application/json");
+
+  return {
+    url: endpoint,
+    init: {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        query,
+        limit,
+      }),
+      cache: "no-store" as const,
+    },
+  };
+}
+
+async function callSearchService(query: string) {
+  const request = buildSearchServiceRequest(query);
+
+  if (!request) {
+    console.error("SEARCH_SERVICE_URL is not configured.");
+    return buildErrorResponse(query);
+  }
+
+  const timeoutMs = parsePositiveInteger(process.env.SEARCH_SERVICE_TIMEOUT_MS, DEFAULT_TIMEOUT_MS);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(request.url, {
+      ...request.init,
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      console.error("Search service returned a non-OK status.", response.status, response.statusText);
+      return buildErrorResponse(query);
+    }
+
+    const payload = (await response.json()) as unknown;
+    return normalizeUpstreamResponse(query, payload);
+  } catch (error) {
+    console.error("Failed to call search service.", error);
+    return buildErrorResponse(query);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export const searchServiceProvider: SearchProvider = {
   async search(query: string) {
     const trimmedQuery = query.trim();
 
     if (!trimmedQuery) {
-      return buildResponse({
-        query: "",
-        status: "empty",
-        answer: null,
-        sources: [],
-        relatedQuestions: DEFAULT_QUESTIONS,
-      });
+      return buildEmptyResponse("");
     }
 
-    const rankedScenarios = SEARCH_SCENARIOS.map((scenario) => scoreScenario(trimmedQuery, scenario))
-      .sort((left, right) => right.score - left.score);
-
-    const bestMatch = rankedScenarios[0];
-
-    if (!bestMatch || bestMatch.score === 0) {
-      return buildResponse({
-        query: trimmedQuery,
-        status: "empty",
-        answer: null,
-        sources: [],
-        relatedQuestions: DEFAULT_QUESTIONS,
-      });
-    }
-
-    if (bestMatch.score >= 2 || bestMatch.exactKeywordHit) {
-      return buildResponse({
-        query: trimmedQuery,
-        status: "ok",
-        answer: bestMatch.scenario.answer,
-        sources: bestMatch.scenario.sources,
-        relatedQuestions: bestMatch.scenario.relatedQuestions,
-      });
-    }
-
-    return buildResponse({
-      query: trimmedQuery,
-      status: "partial",
-      answer: buildPartialAnswer(trimmedQuery, bestMatch.scenario),
-      sources: bestMatch.scenario.sources.slice(0, 3),
-      relatedQuestions: bestMatch.scenario.relatedQuestions,
-    });
+    return callSearchService(trimmedQuery);
   },
 };

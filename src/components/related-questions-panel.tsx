@@ -1,7 +1,7 @@
 "use client";
 
 import type { SearchResponse } from "@/lib/search/types";
-import { formatGeneratedAt } from "@/lib/utils";
+import { formatResultGeneratedAt } from "@/lib/utils";
 import { SuggestedQuestions } from "@/components/suggested-questions";
 
 type RelatedQuestionsPanelProps = {
@@ -14,7 +14,9 @@ export function RelatedQuestionsPanel({
   onSameQuery,
 }: RelatedQuestionsPanelProps) {
   const statusLabel =
-    response?.status === "partial"
+    response?.status === "error"
+      ? "这次检索失败了，但这不等于当前主题没有资料。"
+      : response?.status === "partial"
       ? "当前结果为部分命中，建议优先看原始来源。"
       : response?.status === "empty"
         ? "没有可靠来源时不会强行生成答案。"
@@ -50,11 +52,12 @@ export function RelatedQuestionsPanel({
         </h2>
         <p className="mt-4 text-sm leading-7 muted">
           {response
-            ? `本次结果生成于 ${formatGeneratedAt(response.generatedAt)}。如果问题涉及近期政策或营业安排，请回到原始通知再次核验。`
+            ? response.status === "error"
+              ? `本次检索失败于 ${formatResultGeneratedAt(response.resultGeneratedAt)}。如果你怀疑是临时请求问题，可以直接重新检索。`
+              : `本次结果生成于 ${formatResultGeneratedAt(response.resultGeneratedAt)}。如果问题涉及近期政策或营业安排，请回到原始通知再次核验。`
             : "发起检索后，这里会展示结果生成时间和可信度说明。"}
         </p>
       </div>
     </div>
   );
 }
-

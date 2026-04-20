@@ -1,16 +1,26 @@
 export type SourceType = "official" | "community";
 export type ViewMode = "answer" | "retrieval";
-export type SearchStatus = "ok" | "partial" | "empty";
+export type SearchStatus = "ok" | "partial" | "empty" | "error";
+export type SourceFreshness = "fresh" | "recent" | "stale" | "undated";
 
 export type SearchSource = {
   id: string;
   title: string;
   type: SourceType;
-  publishedAt: string;
+  sourceName: string;
+  sourceDomain?: string;
+  publishedAt?: string;
+  updatedAt?: string;
+  fetchedAt: string;
+  lastVerifiedAt?: string;
   snippet: string;
   fullSnippet?: string;
   matchedKeywords: string[];
   url?: string;
+  canonicalUrl?: string;
+  freshnessLabel?: SourceFreshness;
+  trustScore?: number;
+  dedupKey?: string;
 };
 
 export type SearchAnswer = {
@@ -27,10 +37,9 @@ export type SearchResponse = {
   sources: SearchSource[];
   relatedQuestions: string[];
   retrievedCount: number;
-  generatedAt: string;
+  resultGeneratedAt: string;
 };
 
 export type SearchProvider = {
   search: (query: string) => Promise<SearchResponse>;
 };
-

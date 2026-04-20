@@ -4,12 +4,13 @@ import { useEffect, useState } from "react";
 
 import { AnswerPanel } from "@/components/answer-panel";
 import { EmptyState } from "@/components/empty-state";
+import { ErrorState } from "@/components/error-state";
 import { RelatedQuestionsPanel } from "@/components/related-questions-panel";
 import { ResultToolbar } from "@/components/result-toolbar";
 import { SearchBox } from "@/components/search-box";
 import { SourceList } from "@/components/source-list";
 import { StatusPanel } from "@/components/status-panel";
-import { mockSearchProvider } from "@/lib/search/search-provider";
+import { DEFAULT_QUESTIONS } from "@/lib/search/default-questions";
 import type { SearchResponse, SourceType, ViewMode } from "@/lib/search/types";
 
 type LoadingPhase = "idle" | "retrieving" | "summarizing" | "done";
@@ -26,6 +27,31 @@ function wait(ms: number) {
   });
 }
 
+function buildErrorResponse(query: string): SearchResponse {
+  return {
+    query,
+    status: "error",
+    answer: null,
+    sources: [],
+    relatedQuestions: DEFAULT_QUESTIONS,
+    retrievedCount: 0,
+    resultGeneratedAt: new Date().toISOString(),
+  };
+}
+
+async function fetchSearchResponse(query: string, signal: AbortSignal) {
+  const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`, {
+    cache: "no-store",
+    signal,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Search request failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as SearchResponse;
+}
+
 export function ResultsShell({ initialQuery }: ResultsShellProps) {
   const [response, setResponse] = useState<SearchResponse | null>(null);
   const [loadingPhase, setLoadingPhase] = useState<LoadingPhase>("idle");
@@ -36,6 +62,7 @@ export function ResultsShell({ initialQuery }: ResultsShellProps) {
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
 
     async function loadSearch() {
       if (!initialQuery.trim()) {
@@ -55,20 +82,31 @@ export function ResultsShell({ initialQuery }: ResultsShellProps) {
       }
 
       setLoadingPhase("summarizing");
-      const nextResponse = await mockSearchProvider.search(initialQuery);
+      try {
+        const nextResponse = await fetchSearchResponse(initialQuery, controller.signal);
 
-      if (cancelled) {
-        return;
+        if (cancelled) {
+          return;
+        }
+
+        setResponse(nextResponse);
+        setLoadingPhase("done");
+      } catch (error) {
+        if (cancelled || controller.signal.aborted) {
+          return;
+        }
+
+        console.error("Failed to load search results", error);
+        setResponse(buildErrorResponse(initialQuery.trim()));
+        setLoadingPhase("done");
       }
-
-      setResponse(nextResponse);
-      setLoadingPhase("done");
     }
 
     loadSearch();
 
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [initialQuery, reloadToken]);
 
@@ -87,6 +125,14 @@ export function ResultsShell({ initialQuery }: ResultsShellProps) {
 
   const handleSameQuery = () => {
     setReloadToken((current) => current + 1);
+  };
+
+  const handleRetry = (query: string) => {
+    if (!query.trim()) {
+      return;
+    }
+
+    handleSameQuery();
   };
 
   const queryHeading = initialQuery.trim() || "先输入一个校园问题";
@@ -145,6 +191,12 @@ export function ResultsShell({ initialQuery }: ResultsShellProps) {
                       sources={[]}
                     />
                   </>
+                ) : response?.status === "error" ? (
+                  <ErrorState
+                    onRetry={handleRetry}
+                    onSameQuery={handleSameQuery}
+                    query={initialQuery}
+                  />
                 ) : response?.status === "empty" ? (
                   <EmptyState onSameQuery={handleSameQuery} query={initialQuery} />
                 ) : (

@@ -1,4 +1,4 @@
-import { DEFAULT_QUESTIONS } from "@/lib/search/mock-data";
+import { DEFAULT_QUESTIONS } from "@/lib/search/default-questions";
 import { HistoryPanel } from "@/components/history-panel";
 import { SearchBox } from "@/components/search-box";
 import { SuggestedQuestions } from "@/components/suggested-questions";
@@ -14,7 +14,7 @@ const HIGHLIGHTS = [
   },
   {
     title: "引用片段可追溯",
-    body: "每条回答都附带命中片段、发布时间和来源类型，方便快速验证信息。",
+    body: "每条回答都附带命中片段、来源站点、发布时间或更新时间，方便快速验证信息。",
   },
 ];
 
@@ -83,9 +83,9 @@ export function HomePage() {
                 数据策略
               </p>
               <ul className="mt-4 space-y-3 text-sm leading-7 muted">
-                <li>官方公开信息：FAQ、办事流程、图书馆与后勤通知。</li>
-                <li>社区讨论内容：经验帖、使用感受与高频问答整理。</li>
-                <li>清洗规则：去重、去广告、去联系方式、保留时间与来源标注。</li>
+                <li>来源注册表：官方公开信息与社区白名单来源分开管理。</li>
+                <li>清洗规则：去广告、去联系方式、保留来源站点和更新时间。</li>
+                <li>去重策略：规范链接、标题日期指纹和正文近重复同时生效。</li>
               </ul>
             </div>
           </div>
@@ -114,7 +114,7 @@ export function HomePage() {
               <div className="rounded-[22px] border border-[var(--line)] bg-white/70 p-4">
                 <h2 className="font-semibold">规模适中，MVP 完整</h2>
                 <p className="mt-2 text-sm leading-7 muted">
-                  只做两页、一个主流程和少量高质量 mock 数据，也能形成完整产品闭环。
+                  两页、一个主流程，再加统一搜索接口、来源契约和入库链路骨架，就能形成可继续扩展的产品闭环。
                 </p>
               </div>
             </div>

@@ -1,4 +1,4 @@
-import { DEFAULT_QUESTIONS } from "@/lib/search/mock-data";
+import { DEFAULT_QUESTIONS } from "@/lib/search/default-questions";
 import { SuggestedQuestions } from "@/components/suggested-questions";
 
 type EmptyStateProps = {
@@ -54,4 +54,3 @@ export function EmptyState({ query, onSameQuery }: EmptyStateProps) {
     </section>
   );
 }
-

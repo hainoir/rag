@@ -1,0 +1,64 @@
+{
+  "query": "图书馆怎么借书",
+  "status": "ok",
+  "answer": {
+    "summary": "图书馆借书应先确认馆藏状态，再使用校园卡或读者码办理借阅；如果快到期，可以在线续借。社区来源补充提醒，高峰期热门教材外借额度可能更紧张，最终仍以图书馆原文为准。",
+    "sourceNote": "本次答案优先依据官方来源整理，并用社区经验补充高频场景提示。",
+    "disclaimer": "如果问题涉及时间、费用、资格或办理流程，请以来源原文和最新公告为准。",
+    "confidence": 0.86
+  },
+  "sources": [
+    {
+      "id": "official-library-borrow-guide",
+      "title": "图书馆借阅与续借办理说明",
+      "type": "official",
+      "sourceName": "天津商业大学图书馆",
+      "sourceDomain": "lib.tjcu.edu.cn",
+      "publishedAt": "2026-03-01T02:00:00.000Z",
+      "updatedAt": "2026-04-18T02:00:00.000Z",
+      "fetchedAt": "2026-04-20T02:00:00.000Z",
+      "lastVerifiedAt": "2026-04-20T02:00:00.000Z",
+      "snippet": "在馆藏系统确认图书状态后，可凭校园卡或读者码办理借阅；到期前可在线续借。",
+      "fullSnippet": "图书馆借阅流程通常包括登录馆藏检索系统、确认在馆状态、凭校园卡或读者码办理借阅。热门教材和工具书按照馆内规则限制外借，到期前可以在线续借，逾期会影响后续借阅与预约。",
+      "matchedKeywords": [
+        "图书馆",
+        "借书",
+        "续借"
+      ],
+      "url": "https://lib.tjcu.edu.cn/gk/borrow-guide.html",
+      "canonicalUrl": "https://lib.tjcu.edu.cn/gk/borrow-guide.html",
+      "freshnessLabel": "fresh",
+      "trustScore": 0.95,
+      "dedupKey": "lib-borrow-guide"
+    },
+    {
+      "id": "community-library-borrow-thread",
+      "title": "图书馆借书高峰期要不要早点去",
+      "type": "community",
+      "sourceName": "天津商业大学吧",
+      "sourceDomain": "tieba.baidu.com",
+      "publishedAt": "2026-03-12T09:00:00.000Z",
+      "updatedAt": null,
+      "fetchedAt": "2026-04-20T02:00:00.000Z",
+      "lastVerifiedAt": null,
+      "snippet": "有同学提到考试周前后热门教材借阅更紧张，最好先查馆藏并尽量避开高峰时段。",
+      "fullSnippet": "社区讨论里有同学提到，考试周前后热门教材借阅更紧张，最好提前在馆藏系统确认是否可借，再决定是否去现场办理。此类内容只能作为经验补充，不能替代图书馆正式借阅规则。",
+      "matchedKeywords": [
+        "图书馆",
+        "借书",
+        "热门教材"
+      ],
+      "url": "https://tieba.baidu.com/p/1234567890",
+      "canonicalUrl": "https://tieba.baidu.com/p/1234567890",
+      "freshnessLabel": "stale",
+      "trustScore": 0.62,
+      "dedupKey": "community-library-borrow-thread"
+    }
+  ],
+  "relatedQuestions": [
+    "图书馆自习座位怎么预约？",
+    "借阅到期后还能续借吗？"
+  ],
+  "retrievedCount": 2,
+  "resultGeneratedAt": "2026-04-20T08:30:00.000Z"
+}

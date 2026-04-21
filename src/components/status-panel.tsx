@@ -8,7 +8,7 @@ type StatusPanelProps = {
   response: SearchResponse | null;
 };
 
-function pickLatestTimestamp(values: Array<string | undefined>) {
+function pickLatestTimestamp(values: Array<string | null | undefined>) {
   const normalized = values
     .filter((value): value is string => Boolean(value))
     .map((value) => new Date(value).getTime())

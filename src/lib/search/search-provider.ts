@@ -148,41 +148,52 @@ function deriveSourceName(sourceType: SourceType, url?: string) {
   return sourceType === "official" ? "官方站点" : "社区站点";
 }
 
+function pickFreshnessReferenceTimestamp(timestamps: Array<string | null | undefined>) {
+  return timestamps.find((timestamp): timestamp is string => isNonEmptyString(timestamp));
+}
+
 function normalizeFreshnessLabel(
   value: unknown,
-  timestamps: Array<string | undefined>,
-): SourceFreshness | undefined {
+  referenceTimestamp?: string | null,
+  generatedAt?: string,
+): SourceFreshness {
   if (isNonEmptyString(value)) {
     const normalized = value.trim().toLowerCase();
 
-    if (["fresh", "live", "new", "updated"].includes(normalized)) {
+    if (normalized === "fresh") {
       return "fresh";
     }
 
-    if (["recent", "current", "stable"].includes(normalized)) {
+    if (normalized === "recent") {
       return "recent";
     }
 
-    if (["stale", "old", "outdated", "expired"].includes(normalized)) {
+    if (normalized === "stale") {
       return "stale";
     }
 
-    if (["undated", "unknown", "missing"].includes(normalized)) {
+    if (normalized === "undated") {
       return "undated";
     }
   }
 
-  const comparable = timestamps
-    .filter((timestamp): timestamp is string => isNonEmptyString(timestamp))
-    .map((timestamp) => new Date(timestamp).getTime())
-    .filter((timestamp) => Number.isFinite(timestamp));
-
-  if (comparable.length === 0) {
+  if (!isNonEmptyString(referenceTimestamp)) {
     return "undated";
   }
 
-  const newest = Math.max(...comparable);
-  const ageInDays = Math.floor((Date.now() - newest) / (1000 * 60 * 60 * 24));
+  const comparable = new Date(referenceTimestamp).getTime();
+
+  if (!Number.isFinite(comparable)) {
+    return "undated";
+  }
+
+  const generatedAtMs = generatedAt ? new Date(generatedAt).getTime() : Date.now();
+
+  if (!Number.isFinite(generatedAtMs)) {
+    return "undated";
+  }
+
+  const ageInDays = Math.floor((generatedAtMs - comparable) / (1000 * 60 * 60 * 24));
 
   if (ageInDays <= 3) {
     return "fresh";
@@ -310,22 +321,23 @@ function normalizeSource(rawSource: JsonRecord, index: number, query: string, fa
     url,
   );
   const sourceDomain = deriveSourceDomain(url);
+  // The canonical upstream contract is camelCase. Legacy aliases remain here only as migration fallbacks.
   const sourceName =
     pickString(rawSource, ["sourceName", "siteName", "publisher", "originName", "organization"]) ??
     deriveSourceName(sourceType, url);
   const publishedAt = normalizeOptionalTimestamp(
     pickFirst(rawSource, ["publishedAt", "published_at", "date", "createdAt"]),
-  );
+  ) ?? null;
   const updatedAt = normalizeOptionalTimestamp(
     pickFirst(rawSource, ["updatedAt", "updated_at", "modifiedAt", "modified_at", "lastUpdatedAt"]),
-  );
+  ) ?? null;
   const fetchedAt = normalizeTimestamp(
     pickFirst(rawSource, ["fetchedAt", "fetched_at", "crawledAt", "crawled_at", "indexedAt", "indexed_at"]),
     fallbackDate,
   );
   const lastVerifiedAt = normalizeOptionalTimestamp(
     pickFirst(rawSource, ["lastVerifiedAt", "last_verified_at", "verifiedAt", "validatedAt", "checkedAt"]),
-  );
+  ) ?? null;
   const title =
     pickString(rawSource, ["title", "name", "sourceTitle", "documentTitle"]) ?? `检索结果 ${index + 1}`;
   const snippet =
@@ -361,7 +373,8 @@ function normalizeSource(rawSource: JsonRecord, index: number, query: string, fa
     canonicalUrl,
     freshnessLabel: normalizeFreshnessLabel(
       pickFirst(rawSource, ["freshnessLabel", "freshness", "recency", "freshness_label"]),
-      [lastVerifiedAt, updatedAt, publishedAt, fetchedAt],
+      pickFreshnessReferenceTimestamp([lastVerifiedAt, updatedAt, publishedAt, fetchedAt]),
+      fallbackDate,
     ),
     trustScore:
       typeof trustScore === "number"

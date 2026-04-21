@@ -4,7 +4,7 @@ export function cn(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
 }
 
-function parseDate(value?: string) {
+function parseDate(value?: string | null) {
   if (!value) {
     return null;
   }
@@ -13,7 +13,7 @@ function parseDate(value?: string) {
   return Number.isNaN(normalized.getTime()) ? null : normalized;
 }
 
-export function formatSourceDate(value?: string) {
+export function formatSourceDate(value?: string | null) {
   const normalized = parseDate(value);
 
   if (!normalized) {
@@ -41,7 +41,7 @@ export function formatResultGeneratedAt(value: string) {
   }).format(normalized);
 }
 
-export function formatDateTime(value?: string) {
+export function formatDateTime(value?: string | null) {
   const normalized = parseDate(value);
 
   if (!normalized) {

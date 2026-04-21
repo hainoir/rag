@@ -91,8 +91,12 @@
 ```bash
 npm install
 cp .env.example .env.local
+npm run verify:search-contract
+npm run search-service
 npm run dev
 ```
+
+仓库现在内置了一个最小可用的上游搜索服务，启动 `npm run search-service` 后会在 `http://localhost:8080/api/search` 提供 HTTP 搜索接口。这个服务基于本地 seed corpus 做关键词召回和结果归一化，适合把前端搜索链路从 mock 切到真实接口；如果后续接入爬虫、清洗和索引服务，只需要继续复用同一条 `SearchResponse` 契约。
 
 `.env.local` 至少需要配置一个可访问的 `SEARCH_SERVICE_URL`。如果上游服务没有准备好，前端会进入错误态，而不会伪装成“无答案”。
 

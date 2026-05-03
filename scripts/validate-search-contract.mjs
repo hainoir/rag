@@ -79,7 +79,7 @@ function deriveFreshnessLabel(source, generatedAt) {
   return "stale";
 }
 
-function validateAnswer(answer, status) {
+function validateAnswer(answer, status, sources) {
   if (status === "empty" || status === "error") {
     assert(answer === null, `answer must be null when status is "${status}".`);
     return;
@@ -93,6 +93,28 @@ function validateAnswer(answer, status) {
     typeof answer.confidence === "number" && answer.confidence >= 0 && answer.confidence <= 1,
     "answer.confidence must be a number between 0 and 1.",
   );
+
+  if (hasOwn(answer, "evidence")) {
+    assert(Array.isArray(answer.evidence), "answer.evidence must be an array when provided.");
+    const sourceIds = new Set(sources.map((source) => source.id));
+
+    answer.evidence.forEach((item, index) => {
+      const base = `answer.evidence[${index}]`;
+
+      assert(isPlainObject(item), `${base} must be an object.`);
+      assertString(item.sourceId, `${base}.sourceId`);
+      assert(sourceIds.has(item.sourceId), `${base}.sourceId must reference a source in this response.`);
+      assertString(item.title, `${base}.title`);
+
+      if (hasOwn(item, "sourceName") && item.sourceName !== undefined && item.sourceName !== null) {
+        assertString(item.sourceName, `${base}.sourceName`);
+      }
+
+      if (hasOwn(item, "snippet") && item.snippet !== undefined && item.snippet !== null) {
+        assertString(item.snippet, `${base}.snippet`);
+      }
+    });
+  }
 }
 
 function validateSource(source, index, generatedAt) {
@@ -169,7 +191,7 @@ function validateResponse(response) {
   );
   assertIsoUtcTimestamp(response.resultGeneratedAt, "resultGeneratedAt");
 
-  validateAnswer(response.answer, response.status);
+  validateAnswer(response.answer, response.status, response.sources);
 
   if (response.status === "empty" || response.status === "error") {
     assert(response.sources.length === 0, `sources must be empty when status is "${response.status}".`);

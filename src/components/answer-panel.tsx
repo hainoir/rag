@@ -69,6 +69,7 @@ export function AnswerPanel(props: AnswerPanelProps) {
   }
 
   const badgeText = props.status === "partial" ? "信息不完整" : "高置信回答";
+  const evidence = props.answer.evidence ?? [];
 
   return (
     <section className="surface rounded-[var(--radius-lg)] p-6">
@@ -108,6 +109,30 @@ export function AnswerPanel(props: AnswerPanelProps) {
           <p className="mt-3 text-sm leading-7 muted">{props.answer.disclaimer}</p>
         </article>
       </div>
+
+      {evidence.length > 0 ? (
+        <div className="mt-4 rounded-[24px] border border-[var(--line)] bg-white/78 p-4">
+          <p className="text-xs font-semibold tracking-[0.16em] text-[var(--official)] uppercase">
+            依据片段
+          </p>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            {evidence.map((item) => (
+              <div
+                className="rounded-[18px] border border-[var(--line)] bg-white/72 p-3"
+                key={item.sourceId}
+              >
+                <p className="text-sm font-semibold leading-6">{item.title}</p>
+                {item.sourceName ? (
+                  <p className="mt-1 text-xs muted">{item.sourceName}</p>
+                ) : null}
+                {item.snippet ? (
+                  <p className="mt-2 text-sm leading-6 muted">{item.snippet}</p>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

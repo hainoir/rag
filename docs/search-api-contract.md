@@ -200,11 +200,13 @@
 - `sourceNote: string`
 - `disclaimer: string`
 - `confidence: number`
+- `evidence?: Array<{ sourceId: string; title: string; sourceName?: string; snippet?: string }>`
 
 约束：
 
 - `confidence` 使用 `0-1` 浮点数
 - 不要混用百分比整数和小数
+- `evidence` 用于把摘要绑定到本次 `sources` 中已展示的来源或 chunk，不能引用本次响应之外的片段
 
 ## Non-Negotiable Naming Rules
 

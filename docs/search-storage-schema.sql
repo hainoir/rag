@@ -1,4 +1,7 @@
-create table source_registry (
+create extension if not exists pgcrypto;
+create extension if not exists pg_trgm;
+
+create table if not exists source_registry (
   id text primary key,
   name text not null,
   type text not null check (type in ('official', 'community')),
@@ -13,7 +16,7 @@ create table source_registry (
   updated_at timestamptz not null default now()
 );
 
-create table documents (
+create table if not exists documents (
   id uuid primary key default gen_random_uuid(),
   source_id text not null references source_registry(id),
   external_id text,
@@ -35,7 +38,7 @@ create table documents (
   unique (source_id, external_id)
 );
 
-create table document_versions (
+create table if not exists document_versions (
   id uuid primary key default gen_random_uuid(),
   document_id uuid not null references documents(id) on delete cascade,
   version_no integer not null,
@@ -45,7 +48,7 @@ create table document_versions (
   unique (document_id, version_no)
 );
 
-create table chunks (
+create table if not exists chunks (
   id uuid primary key default gen_random_uuid(),
   document_version_id uuid not null references document_versions(id) on delete cascade,
   chunk_index integer not null,
@@ -57,7 +60,7 @@ create table chunks (
   unique (document_version_id, chunk_index)
 );
 
-create table ingestion_runs (
+create table if not exists ingestion_runs (
   id uuid primary key default gen_random_uuid(),
   source_id text not null references source_registry(id),
   status text not null check (status in ('queued', 'running', 'succeeded', 'failed', 'partial')),
@@ -71,8 +74,11 @@ create table ingestion_runs (
   error_message text
 );
 
-create index documents_source_id_idx on documents (source_id);
-create index documents_published_at_idx on documents (published_at desc);
-create index documents_last_verified_at_idx on documents (last_verified_at desc);
-create index chunks_document_version_id_idx on chunks (document_version_id);
-create index ingestion_runs_source_id_idx on ingestion_runs (source_id, started_at desc);
+create index if not exists documents_source_id_idx on documents (source_id);
+create index if not exists documents_published_at_idx on documents (published_at desc);
+create index if not exists documents_last_verified_at_idx on documents (last_verified_at desc);
+create index if not exists documents_title_trgm_idx on documents using gin (title gin_trgm_ops);
+create index if not exists chunks_document_version_id_idx on chunks (document_version_id);
+create index if not exists chunks_snippet_trgm_idx on chunks using gin (snippet gin_trgm_ops);
+create index if not exists chunks_full_snippet_trgm_idx on chunks using gin (full_snippet gin_trgm_ops);
+create index if not exists ingestion_runs_source_id_idx on ingestion_runs (source_id, started_at desc);

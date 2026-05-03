@@ -5,7 +5,21 @@
     "summary": "图书馆借书应先确认馆藏状态，再使用校园卡或读者码办理借阅；如果快到期，可以在线续借。社区来源补充提醒，高峰期热门教材外借额度可能更紧张，最终仍以图书馆原文为准。",
     "sourceNote": "本次答案优先依据官方来源整理，并用社区经验补充高频场景提示。",
     "disclaimer": "如果问题涉及时间、费用、资格或办理流程，请以来源原文和最新公告为准。",
-    "confidence": 0.86
+    "confidence": 0.86,
+    "evidence": [
+      {
+        "sourceId": "official-library-borrow-guide",
+        "title": "图书馆借阅与续借办理说明",
+        "sourceName": "天津商业大学图书馆",
+        "snippet": "在馆藏系统确认图书状态后，可凭校园卡或读者码办理借阅；到期前可在线续借。"
+      },
+      {
+        "sourceId": "community-library-borrow-thread",
+        "title": "图书馆借书高峰期要不要早点去",
+        "sourceName": "天津商业大学吧",
+        "snippet": "有同学提到考试周前后热门教材借阅更紧张，最好先查馆藏并尽量避开高峰时段。"
+      }
+    ]
   },
   "sources": [
     {

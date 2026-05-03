@@ -96,17 +96,49 @@ npm run search-service
 npm run dev
 ```
 
-仓库现在内置了一个最小可用的上游搜索服务，启动 `npm run search-service` 后会在 `http://localhost:8080/api/search` 提供 HTTP 搜索接口。这个服务基于本地 seed corpus 做关键词召回和结果归一化，适合把前端搜索链路从 mock 切到真实接口；如果后续接入爬虫、清洗和索引服务，只需要继续复用同一条 `SearchResponse` 契约。
+仓库现在内置了一个最小可用的上游搜索服务，启动 `npm run search-service` 后会在 `http://localhost:8080/api/search` 提供 HTTP 搜索接口。默认 `SEARCH_SERVICE_PROVIDER=auto`：配置 `DATABASE_URL` 时优先读取 Postgres 中的 ingestion chunks；没有数据库时使用本地 seed corpus 作为 demo fallback。无论哪种模式，都继续输出同一条 `SearchResponse` 契约。
 
 `.env.local` 至少需要配置一个可访问的 `SEARCH_SERVICE_URL`。如果上游服务没有准备好，前端会进入错误态，而不会伪装成“无答案”。
 
 然后访问 [http://localhost:3000](http://localhost:3000)。
 
+## 官方来源 Ingestion v1
+
+仓库现在额外提供了一套面向官方来源的 CLI ingestion 闭环，运行在 `search-service/` 下的 TypeScript runtime 中，不改前端查询链路。默认同步 5 个官方源，运行时已支持主站、图书馆、教务处、学生处、后勤、就业网、本科招生网和研究生招生网。
+
+在执行同步前，需要先配置数据库和 ingestion 运行参数：
+
+```bash
+DATABASE_URL=postgres://...
+SEARCH_SERVICE_PROVIDER=postgres
+INGEST_SOURCE_IDS=tjcu-main-notices,tjcu-library,tjcu-academic-affairs,tjcu-undergrad-admissions,tjcu-grad-admissions
+INGEST_FETCH_LIMIT=12
+INGEST_HTTP_TIMEOUT_MS=15000
+INGEST_CONCURRENCY=4
+INGEST_USER_AGENT=campus-rag-ingestion/1.0 (+https://www.tjcu.edu.cn/)
+```
+
+常用命令：
+
+```bash
+npm run db:init
+npm run ingest:official
+npm run ingest:source -- tjcu-main-notices
+npm run inspect:ingestion
+npm run smoke:postgres
+npm run test:ingestion
+```
+
+这期已经闭合了 `documents / document_versions / chunks / ingestion_runs -> search-service -> SearchResponse` 的最小真实数据回路。重复执行 `npm run ingest:official` 时，未变化文章只刷新校验时间，不会重复插入相同文档和版本。
+`npm run smoke:postgres` 会检查默认官方源是否已有可检索文档和 chunk，并验证一个真实命中 query 与一个预期无命中 query，避免把 seed corpus 或泛词命中误判为真实闭环成功。
+
+本地 Postgres 启动和真实检索闭环见 [docs/local-postgres.md](./docs/local-postgres.md)。演示 query 与部署边界见 [docs/demo-and-deploy.md](./docs/demo-and-deploy.md)。
+
 ## 后续方向
 
 当前推荐的演进顺序是：
 
-1. 把 `source-registry.ts` 里的模板域名替换成目标校园的真实官方 / 社区来源
-2. 在独立搜索服务里实现抓取、清洗、去重、分块和索引
-3. 固定依赖版本并补自动化测试
-4. 再补更细的错误分类、埋点和监控
+1. 固化本地真实闭环复验：`db:init -> ingest:official -> inspect:ingestion -> smoke:postgres -> /api/search`
+2. 扩大官方来源 adapter 的实站验证范围，优先保证 3-5 个来源稳定重复同步
+3. 在当前 extractive answer 基础上接入 LLM，但要求回答必须绑定来源或 chunk
+4. 再补更细的错误分类、埋点、监控和定时摄取任务

@@ -1,4 +1,4 @@
-import type { SourceType } from "@/lib/search/types";
+import type { SourceType } from "./types";
 
 export type SourceFetchMode = "api" | "rss" | "html" | "sitemap" | "manual";
 export type SourceUpdateCadence = "hourly" | "daily" | "weekly" | "manual";

@@ -269,7 +269,17 @@ function buildPartialAnswer(query: string, sources: SearchSource[]): SearchAnswe
     sourceNote: buildSourceNote(sources),
     disclaimer: DEFAULT_DISCLAIMER,
     confidence: 0.56,
+    evidence: buildAnswerEvidenceFromSources(sources),
   };
+}
+
+function buildAnswerEvidenceFromSources(sources: SearchSource[]) {
+  return sources.slice(0, 4).map((source) => ({
+    sourceId: source.id,
+    title: source.title,
+    sourceName: source.sourceName,
+    snippet: summarizeSnippet(source.snippet),
+  }));
 }
 
 function buildResponse({
@@ -384,8 +394,9 @@ function normalizeSource(rawSource: JsonRecord, index: number, query: string, fa
   };
 }
 
-function normalizeAnswer(value: unknown, sources: SearchSource[]) {
+function normalizeAnswer(value: unknown, sources: SearchSource[]): SearchAnswer | null {
   const fallbackConfidence = sources.length > 0 ? 0.74 : 0.58;
+  const fallbackEvidence = buildAnswerEvidenceFromSources(sources);
 
   if (isNonEmptyString(value)) {
     return {
@@ -393,6 +404,7 @@ function normalizeAnswer(value: unknown, sources: SearchSource[]) {
       sourceNote: buildSourceNote(sources),
       disclaimer: DEFAULT_DISCLAIMER,
       confidence: fallbackConfidence,
+      evidence: fallbackEvidence,
     } satisfies SearchAnswer;
   }
 
@@ -406,12 +418,43 @@ function normalizeAnswer(value: unknown, sources: SearchSource[]) {
     return null;
   }
 
+  const rawEvidence = pickFirst(value, ["evidence", "citations", "sourceEvidence"]);
+  const evidence = normalizeAnswerEvidence(rawEvidence, fallbackEvidence);
+
   return {
     summary,
     sourceNote: pickString(value, ["sourceNote", "sourcesSummary", "evidenceNote"]) ?? buildSourceNote(sources),
     disclaimer: pickString(value, ["disclaimer", "warning", "note"]) ?? DEFAULT_DISCLAIMER,
     confidence: clampConfidence(pickFirst(value, ["confidence", "score"]), fallbackConfidence),
+    evidence,
   } satisfies SearchAnswer;
+}
+
+function normalizeAnswerEvidence(value: unknown, fallback: ReturnType<typeof buildAnswerEvidenceFromSources>) {
+  if (!Array.isArray(value)) {
+    return fallback;
+  }
+
+  const normalized = value
+    .filter(isRecord)
+    .map((item) => {
+      const sourceId = pickString(item, ["sourceId", "source_id", "id", "chunkId", "chunk_id"]);
+      const title = pickString(item, ["title", "sourceTitle", "documentTitle"]);
+
+      if (!sourceId || !title) {
+        return null;
+      }
+
+      return {
+        sourceId,
+        title,
+        sourceName: pickString(item, ["sourceName", "source_name", "siteName"]),
+        snippet: pickString(item, ["snippet", "excerpt"]),
+      };
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null);
+
+  return normalized.length > 0 ? normalized.slice(0, 4) : fallback;
 }
 
 function normalizeStatus(value: unknown, sources: SearchSource[], answer: SearchAnswer | null): SearchStatus {

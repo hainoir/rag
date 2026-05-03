@@ -28,6 +28,14 @@ export type SearchAnswer = {
   sourceNote: string;
   disclaimer: string;
   confidence: number;
+  evidence?: SearchAnswerEvidence[];
+};
+
+export type SearchAnswerEvidence = {
+  sourceId: string;
+  title: string;
+  sourceName?: string;
+  snippet?: string;
 };
 
 export type SearchResponse = {

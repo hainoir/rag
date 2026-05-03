@@ -1,5 +1,5 @@
-import type { CleaningProfile } from "@/lib/search/source-registry";
-import type { SourceType } from "@/lib/search/types";
+import type { CleaningProfile } from "./source-registry";
+import type { SourceType } from "./types";
 
 export type CleaningAction =
   | "strip_navigation"

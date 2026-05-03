@@ -1,13 +1,47 @@
 const http = require("node:http");
 const { URL } = require("node:url");
+const { Pool } = require("pg");
 
+const { loadLocalEnv } = require("./load-env.cjs");
 const { defaultQuestions, seedCorpus } = require("./seed-corpus.cjs");
+
+loadLocalEnv();
 
 const DEFAULT_PORT = 8080;
 const DEFAULT_HOST = "127.0.0.1";
 const DEFAULT_LIMIT = 6;
 const MAX_LIMIT = 10;
+const DEFAULT_CANDIDATE_LIMIT = 80;
 const DEFAULT_DISCLAIMER = "如果问题涉及时间、费用、资格或办理流程，请以来源原文和最新公告为准。";
+const ALLOWED_PROVIDERS = new Set(["auto", "postgres", "seed"]);
+const GENERIC_QUERY_TERMS = new Set([
+  "今天",
+  "明天",
+  "昨天",
+  "校园",
+  "学校",
+  "大学",
+  "天津",
+  "商业",
+  "开始",
+  "几点",
+  "哪里",
+  "什么",
+  "怎么",
+  "如何",
+  "一般",
+  "时候",
+  "需要",
+  "办理",
+  "流程",
+  "通知",
+  "公告",
+  "查询",
+  "相关",
+  "问题",
+]);
+
+let postgresPool = null;
 
 function parsePositiveInteger(value, fallback) {
   const parsed = Number.parseInt(String(value ?? ""), 10);
@@ -26,8 +60,78 @@ function normalizeText(value) {
   return String(value ?? "").trim().toLowerCase();
 }
 
+function summarizeSnippet(value) {
+  const normalized = String(value ?? "").replace(/\s+/g, " ").trim();
+
+  if (!normalized) {
+    return undefined;
+  }
+
+  return normalized.length > 96 ? `${normalized.slice(0, 96)}...` : normalized;
+}
+
 function unique(values) {
   return [...new Set(values.filter(Boolean))];
+}
+
+function normalizeProvider(value) {
+  const provider = String(value ?? "auto").trim().toLowerCase();
+  return ALLOWED_PROVIDERS.has(provider) ? provider : "auto";
+}
+
+function quoteIdentifier(identifier) {
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(identifier)) {
+    throw new Error(`Invalid schema identifier: ${identifier}`);
+  }
+
+  return `"${identifier}"`;
+}
+
+function getSearchSchema() {
+  return process.env.SEARCH_DATABASE_SCHEMA || process.env.DATABASE_SCHEMA || "public";
+}
+
+function getPostgresPool() {
+  const databaseUrl = String(process.env.DATABASE_URL ?? "").trim();
+
+  if (!databaseUrl) {
+    return null;
+  }
+
+  if (!postgresPool) {
+    postgresPool = new Pool({
+      connectionString: databaseUrl,
+    });
+  }
+
+  return postgresPool;
+}
+
+async function closePostgresPool() {
+  if (!postgresPool) {
+    return;
+  }
+
+  const pool = postgresPool;
+  postgresPool = null;
+  await pool.end();
+}
+
+async function withPostgresClient(task) {
+  const pool = getPostgresPool();
+
+  if (!pool) {
+    throw new Error("DATABASE_URL is not configured.");
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query(`set search_path to ${quoteIdentifier(getSearchSchema())}, public`);
+    return await task(client);
+  } finally {
+    client.release();
+  }
 }
 
 function buildTerms(query) {
@@ -50,6 +154,18 @@ function buildTerms(query) {
   return unique([normalized, ...asciiTerms, ...cjkTerms]);
 }
 
+function buildSearchPatterns(query, terms) {
+  const candidates = unique([
+    normalizeText(query),
+    ...terms,
+  ])
+    .map((term) => term.trim())
+    .filter((term) => term.length >= 2)
+    .slice(0, 24);
+
+  return candidates.length > 0 ? candidates.map((term) => `%${term}%`) : [`%${query.trim()}%`];
+}
+
 function countMatches(haystack, terms, weight) {
   let score = 0;
 
@@ -60,6 +176,18 @@ function countMatches(haystack, terms, weight) {
   }
 
   return score;
+}
+
+function pickSpecificTerms(terms) {
+  return terms.filter((term) => {
+    const normalized = normalizeText(term);
+    return normalized.length >= 2 && !GENERIC_QUERY_TERMS.has(normalized);
+  });
+}
+
+function hasSpecificTermMatch(haystack, terms) {
+  const normalizedHaystack = normalizeText(haystack);
+  return pickSpecificTerms(terms).some((term) => normalizedHaystack.includes(term));
 }
 
 function scoreRecord(record, query, terms) {
@@ -118,6 +246,85 @@ function pickMatchedKeywords(record, terms) {
   return keywords.slice(0, 5);
 }
 
+function pickMatchedTermsFromText(terms, query, text) {
+  const normalizedText = normalizeText(text);
+  const matched = unique(
+    terms.filter((term) => {
+      const normalizedTerm = normalizeText(term);
+      return normalizedTerm.length >= 2 && normalizedText.includes(normalizedTerm);
+    }),
+  );
+
+  if (matched.length > 0) {
+    return matched.slice(0, 5);
+  }
+
+  const tokens = buildTerms(query);
+  return tokens.length > 0 ? tokens.slice(0, 5) : [query.trim()].filter(Boolean);
+}
+
+function toIsoTimestamp(value, fallback = new Date().toISOString()) {
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? fallback : value.toISOString();
+  }
+
+  if (typeof value === "string" || typeof value === "number") {
+    const normalized = new Date(value);
+    return Number.isNaN(normalized.getTime()) ? fallback : normalized.toISOString();
+  }
+
+  return fallback;
+}
+
+function toNullableIsoTimestamp(value) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  const normalized = toIsoTimestamp(value, "");
+  return normalized || null;
+}
+
+function deriveSourceDomain(url) {
+  if (!url) {
+    return undefined;
+  }
+
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return undefined;
+  }
+}
+
+function deriveFreshnessLabel(source, generatedAt) {
+  const reference =
+    source.lastVerifiedAt ?? source.updatedAt ?? source.publishedAt ?? source.fetchedAt ?? null;
+
+  if (!reference) {
+    return "undated";
+  }
+
+  const generatedAtMs = Date.parse(generatedAt);
+  const referenceMs = Date.parse(reference);
+
+  if (Number.isNaN(generatedAtMs) || Number.isNaN(referenceMs)) {
+    return "undated";
+  }
+
+  const ageInDays = Math.floor((generatedAtMs - referenceMs) / (1000 * 60 * 60 * 24));
+
+  if (ageInDays <= 3) {
+    return "fresh";
+  }
+
+  if (ageInDays <= 30) {
+    return "recent";
+  }
+
+  return "stale";
+}
+
 function buildSource(record, terms) {
   return {
     id: record.id,
@@ -137,6 +344,37 @@ function buildSource(record, terms) {
     freshnessLabel: record.freshnessLabel ?? "undated",
     trustScore: record.trustScore,
     dedupKey: record.dedupKey,
+  };
+}
+
+function buildPostgresSource(row, terms, query, generatedAt) {
+  const fetchedAt = toIsoTimestamp(row.fetched_at, generatedAt);
+  const source = {
+    id: row.chunk_id,
+    title: row.title,
+    type: row.source_type === "community" ? "community" : "official",
+    sourceName: row.source_name,
+    sourceDomain: deriveSourceDomain(row.url),
+    publishedAt: toNullableIsoTimestamp(row.published_at),
+    updatedAt: toNullableIsoTimestamp(row.updated_at),
+    fetchedAt,
+    lastVerifiedAt: toNullableIsoTimestamp(row.last_verified_at),
+    snippet: row.snippet,
+    fullSnippet: row.full_snippet,
+    matchedKeywords: pickMatchedTermsFromText(
+      terms,
+      query,
+      `${row.title} ${row.snippet} ${row.full_snippet}`,
+    ),
+    url: row.url,
+    canonicalUrl: row.canonical_url,
+    trustScore: typeof row.trust_score === "number" ? clamp(row.trust_score, 0, 1) : undefined,
+    dedupKey: row.dedup_key,
+  };
+
+  return {
+    ...source,
+    freshnessLabel: deriveFreshnessLabel(source, generatedAt),
   };
 }
 
@@ -213,6 +451,40 @@ function buildAnswer(query, results, scoredResults) {
     sourceNote: buildSourceNote(results),
     disclaimer: DEFAULT_DISCLAIMER,
     confidence: Number(confidence.toFixed(2)),
+    evidence: results.slice(0, 4).map((record) => ({
+      sourceId: record.id,
+      title: record.title,
+      sourceName: record.sourceName,
+      snippet: summarizeSnippet(record.snippet),
+    })),
+  };
+}
+
+function buildExtractiveAnswer(query, sources, scoredResults) {
+  const evidence = sources.slice(0, 4).map((source) => ({
+    sourceId: source.id,
+    title: source.title,
+    sourceName: source.sourceName,
+    snippet: source.snippet,
+  }));
+  const topSnippets = evidence
+    .slice(0, 3)
+    .map((item) => summarizeSnippet(item.snippet))
+    .filter(Boolean);
+  const officialCount = sources.filter((source) => source.type === "official").length;
+  const topScore = scoredResults[0]?.score ?? 0;
+  const confidenceBase = officialCount > 0 ? 0.66 : 0.48;
+  const confidence = clamp(confidenceBase + topScore / 140, 0.45, 0.9);
+
+  return {
+    summary:
+      topSnippets.length > 0
+        ? `针对“${query}”，当前检索到的高相关片段显示：${topSnippets.join(" ")}`
+        : `针对“${query}”，当前检索到相关来源，但片段内容不足以形成完整摘要。`,
+    sourceNote: buildSourceNote(sources),
+    disclaimer: DEFAULT_DISCLAIMER,
+    confidence: Number(confidence.toFixed(2)),
+    evidence,
   };
 }
 
@@ -228,7 +500,7 @@ function buildEmptyResponse(query) {
   };
 }
 
-function search(query, limit) {
+function searchSeed(query, limit) {
   const trimmedQuery = String(query ?? "").trim();
   if (!trimmedQuery) {
     return buildEmptyResponse("");
@@ -261,6 +533,175 @@ function search(query, limit) {
     retrievedCount: scored.length,
     resultGeneratedAt: new Date().toISOString(),
   };
+}
+
+function scorePostgresSource(source, query, terms) {
+  const normalizedQuery = normalizeText(query);
+  const title = normalizeText(source.title);
+  const snippet = normalizeText(source.snippet);
+  const fullSnippet = normalizeText(source.fullSnippet ?? source.snippet);
+  const sourceName = normalizeText(source.sourceName);
+
+  if (!hasSpecificTermMatch(`${title} ${snippet} ${fullSnippet} ${sourceName}`, terms)) {
+    return 0;
+  }
+
+  let score = 0;
+
+  if (title.includes(normalizedQuery)) {
+    score += 32;
+  }
+
+  if (fullSnippet.includes(normalizedQuery)) {
+    score += 28;
+  }
+
+  score += countMatches(title, terms, 9);
+  score += countMatches(snippet, terms, 6);
+  score += countMatches(fullSnippet, terms, 4);
+  score += countMatches(sourceName, terms, 3);
+
+  if (source.type === "official") {
+    score += 10;
+  }
+
+  score += Math.round((source.trustScore ?? 0.72) * 10);
+
+  if (source.freshnessLabel === "fresh") {
+    score += 5;
+  } else if (source.freshnessLabel === "recent") {
+    score += 3;
+  }
+
+  return score;
+}
+
+async function searchPostgres(query, limit) {
+  const trimmedQuery = String(query ?? "").trim();
+
+  if (!trimmedQuery) {
+    return buildEmptyResponse("");
+  }
+
+  const generatedAt = new Date().toISOString();
+  const terms = buildTerms(trimmedQuery);
+  const patterns = buildSearchPatterns(trimmedQuery, terms);
+  const candidateLimit = clamp(limit * 8, limit, DEFAULT_CANDIDATE_LIMIT);
+
+  const rows = await withPostgresClient(async (client) => {
+    const result = await client.query(
+      `
+        with latest_versions as (
+          select distinct on (document_id)
+            document_id,
+            id as version_id
+          from document_versions
+          order by document_id, version_no desc
+        )
+        select
+          c.id::text as chunk_id,
+          c.chunk_index,
+          c.snippet,
+          c.full_snippet,
+          d.id::text as document_id,
+          d.source_id,
+          d.source_type,
+          d.source_name,
+          d.title,
+          d.url,
+          d.canonical_url,
+          d.published_at,
+          d.updated_at,
+          d.fetched_at,
+          d.last_verified_at,
+          d.dedup_key,
+          coalesce(sr.trust_weight, 0.72)::float as trust_score
+        from chunks c
+        join latest_versions lv on lv.version_id = c.document_version_id
+        join documents d on d.id = lv.document_id
+        left join source_registry sr on sr.id = d.source_id
+        where d.status = 'active'
+          and (
+            d.title ilike any($1::text[])
+            or c.snippet ilike any($1::text[])
+            or c.full_snippet ilike any($1::text[])
+          )
+        order by coalesce(d.last_verified_at, d.updated_at, d.published_at, d.fetched_at) desc nulls last
+        limit $2
+      `,
+      [patterns, candidateLimit],
+    );
+
+    return result.rows;
+  });
+
+  if (rows.length === 0) {
+    return buildEmptyResponse(trimmedQuery);
+  }
+
+  const scoredRows = rows
+    .map((row) => {
+      const source = buildPostgresSource(row, terms, trimmedQuery, generatedAt);
+
+      return {
+        row,
+        source,
+        score: scorePostgresSource(source, trimmedQuery, terms),
+      };
+    })
+    .filter((item) => item.score >= 12)
+    .sort((left, right) => right.score - left.score);
+
+  if (scoredRows.length === 0) {
+    return buildEmptyResponse(trimmedQuery);
+  }
+
+  const bestByDocument = new Map();
+
+  for (const item of scoredRows) {
+    const documentId = item.row.document_id;
+
+    if (!bestByDocument.has(documentId)) {
+      bestByDocument.set(documentId, item);
+    }
+  }
+
+  const selected = [...bestByDocument.values()].slice(0, limit);
+  const sources = selected.map((item) => item.source);
+  const officialCount = sources.filter((source) => source.type === "official").length;
+  const status = officialCount > 0 && sources.length >= Math.min(2, limit) ? "ok" : "partial";
+
+  return {
+    query: trimmedQuery,
+    status,
+    answer: buildExtractiveAnswer(trimmedQuery, sources, selected),
+    sources,
+    relatedQuestions: buildRelatedQuestions(trimmedQuery, sources),
+    retrievedCount: scoredRows.length,
+    resultGeneratedAt: generatedAt,
+  };
+}
+
+async function search(query, limit) {
+  const provider = normalizeProvider(process.env.SEARCH_SERVICE_PROVIDER);
+
+  if (provider === "seed") {
+    return searchSeed(query, limit);
+  }
+
+  if (provider === "postgres") {
+    return searchPostgres(query, limit);
+  }
+
+  if (getPostgresPool()) {
+    try {
+      return await searchPostgres(query, limit);
+    } catch (error) {
+      console.error("Postgres search failed; falling back to seed corpus.", error);
+    }
+  }
+
+  return searchSeed(query, limit);
 }
 
 function sendJson(response, statusCode, payload) {
@@ -313,56 +754,84 @@ async function handleSearch(request, response, url) {
   }
 
   const limit = clamp(parsePositiveInteger(limitValue, DEFAULT_LIMIT), 1, MAX_LIMIT);
-  sendJson(response, 200, search(query, limit));
+  sendJson(response, 200, await search(query, limit));
 }
 
-const port = parsePositiveInteger(process.env.PORT, DEFAULT_PORT);
-const host = process.env.HOST || DEFAULT_HOST;
+function createServer() {
+  const port = parsePositiveInteger(process.env.PORT, DEFAULT_PORT);
+  const host = process.env.HOST || DEFAULT_HOST;
 
-const server = http.createServer(async (request, response) => {
-  const url = new URL(request.url ?? "/", `http://${request.headers.host ?? `${host}:${port}`}`);
+  return http.createServer(async (request, response) => {
+    const url = new URL(request.url ?? "/", `http://${request.headers.host ?? `${host}:${port}`}`);
 
-  if (request.method === "OPTIONS") {
-    sendJson(response, 204, {});
-    return;
-  }
+    if (request.method === "OPTIONS") {
+      sendJson(response, 204, {});
+      return;
+    }
 
-  if (url.pathname === "/health") {
-    sendJson(response, 200, {
-      status: "ok",
-      corpusSize: seedCorpus.length,
-      timestamp: new Date().toISOString(),
-    });
-    return;
-  }
+    if (url.pathname === "/health") {
+      sendJson(response, 200, {
+        status: "ok",
+        provider: normalizeProvider(process.env.SEARCH_SERVICE_PROVIDER),
+        databaseConfigured: Boolean(getPostgresPool()),
+        corpusSize: seedCorpus.length,
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
 
-  if (url.pathname !== "/api/search" || !["GET", "POST"].includes(request.method ?? "GET")) {
-    sendJson(response, 404, {
-      error: "Not Found",
-    });
-    return;
-  }
+    if (url.pathname !== "/api/search" || !["GET", "POST"].includes(request.method ?? "GET")) {
+      sendJson(response, 404, {
+        error: "Not Found",
+      });
+      return;
+    }
 
-  try {
-    await handleSearch(request, response, url);
-  } catch (error) {
-    console.error("Upstream search service request failed.", error);
-    sendJson(response, 500, {
-      error: "Internal Server Error",
-      message: "The upstream search service failed to process the request.",
-    });
-  }
-});
-
-server.listen(port, host, () => {
-  console.log(`Upstream search service listening on http://${host}:${port}`);
-  console.log(`Health check: http://${host}:${port}/health`);
-});
-
-for (const signal of ["SIGINT", "SIGTERM"]) {
-  process.on(signal, () => {
-    server.close(() => {
-      process.exit(0);
-    });
+    try {
+      await handleSearch(request, response, url);
+    } catch (error) {
+      console.error("Upstream search service request failed.", error);
+      sendJson(response, 500, {
+        error: "Internal Server Error",
+        message: "The upstream search service failed to process the request.",
+      });
+    }
   });
 }
+
+function startServer() {
+  const port = parsePositiveInteger(process.env.PORT, DEFAULT_PORT);
+  const host = process.env.HOST || DEFAULT_HOST;
+  const server = createServer();
+
+  server.listen(port, host, () => {
+    console.log(`Upstream search service listening on http://${host}:${port}`);
+    console.log(`Provider: ${normalizeProvider(process.env.SEARCH_SERVICE_PROVIDER)}`);
+    console.log(`Health check: http://${host}:${port}/health`);
+  });
+
+  for (const signal of ["SIGINT", "SIGTERM"]) {
+    process.on(signal, () => {
+      server.close(async () => {
+        await closePostgresPool();
+        process.exit(0);
+      });
+    });
+  }
+
+  return server;
+}
+
+if (require.main === module) {
+  startServer();
+}
+
+module.exports = {
+  buildTerms,
+  closePostgresPool,
+  createServer,
+  search,
+  searchPostgres,
+  searchSeed,
+  startServer,
+};

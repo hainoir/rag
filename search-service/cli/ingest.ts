@@ -1,7 +1,7 @@
 import { createRequire } from "node:module";
 
-import { readIngestRuntimeConfig, requireDatabaseUrl, resolveCliSourceIds } from "../ingest/config";
-import { runIngestionPipeline } from "../ingest/pipeline";
+import { readIngestRuntimeConfig, requireDatabaseUrl, resolveCliSourceIds } from "../ingest/config.ts";
+import { runIngestionPipeline } from "../ingest/pipeline.ts";
 
 const require = createRequire(import.meta.url);
 require("../load-env.cjs").loadLocalEnv();

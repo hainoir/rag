@@ -2,9 +2,9 @@ import fs from "node:fs/promises";
 
 import { Pool, type PoolClient } from "pg";
 
-import type { IngestionRunStatus, IngestionStage } from "../../src/lib/search/ingestion-contract";
-import type { SelectedSource } from "./types";
-import type { ParsedArticle, PersistOutcome } from "./types";
+import type { IngestionRunStatus, IngestionStage } from "../../src/lib/search/ingestion-contract.ts";
+import type { SelectedSource } from "./types.ts";
+import type { ParsedArticle, PersistOutcome } from "./types.ts";
 
 type RunProgressPatch = {
   stage?: IngestionStage;

@@ -1,10 +1,10 @@
-import { SOURCE_REGISTRY } from "../../src/lib/search/source-registry";
+import { SOURCE_REGISTRY } from "../../src/lib/search/source-registry.ts";
 import {
   DEFAULT_OFFICIAL_SOURCE_IDS,
   OFFICIAL_INGEST_SOURCE_IDS,
   type SelectedSource,
   type SupportedSourceId,
-} from "./types";
+} from "./types.ts";
 
 const DEFAULT_FETCH_LIMIT = 12;
 const DEFAULT_HTTP_TIMEOUT_MS = 15_000;

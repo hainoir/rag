@@ -1,7 +1,7 @@
 import { load, type Cheerio, type CheerioAPI } from "cheerio";
 import type { AnyNode, Element } from "domhandler";
 
-import { parseTimestampsFromText, resolveAbsoluteUrl } from "./utils";
+import { parseTimestampsFromText, resolveAbsoluteUrl } from "./utils.ts";
 
 type SectionListParseOptions = {
   html: string;

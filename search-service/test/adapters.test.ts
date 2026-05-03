@@ -3,8 +3,8 @@ import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
-import { getSourceAdapter } from "../ingest/adapters";
-import { resolveSelectedSources } from "../ingest/config";
+import { getSourceAdapter } from "../ingest/adapters.ts";
+import { resolveSelectedSources } from "../ingest/config.ts";
 
 const fixtureDir = path.resolve(process.cwd(), "search-service/test/fixtures");
 

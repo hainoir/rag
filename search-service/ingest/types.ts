@@ -1,4 +1,4 @@
-import type { SourceRegistryEntry } from "../../src/lib/search/source-registry";
+import type { SourceRegistryEntry } from "../../src/lib/search/source-registry.ts";
 
 export const OFFICIAL_INGEST_SOURCE_IDS = [
   "tjcu-main-notices",

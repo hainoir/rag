@@ -17,7 +17,7 @@
 
 ## 部署边界
 
-生产部署时不要让前端直接读数据库。前端仍然只访问 `/api/search`，由 Route Handler 调用 `SEARCH_SERVICE_URL`。搜索服务负责读取 Postgres、排序 chunks、生成 extractive answer，并返回 `SearchResponse`。
+生产部署时不要让前端直接读数据库。前端仍然只访问 `/api/search`，由 Route Handler 调用 `SEARCH_SERVICE_URL`。搜索服务负责读取 Postgres、排序 chunks、生成 extractive answer；如果配置了 LLM，也只在检索命中后基于 evidence 生成回答，并继续返回同一个 `SearchResponse`。
 
 最低环境变量：
 
@@ -27,12 +27,27 @@ SEARCH_SERVICE_METHOD=POST
 SEARCH_SERVICE_TIMEOUT_MS=8000
 DATABASE_URL=postgres://...
 SEARCH_SERVICE_PROVIDER=postgres
+SEARCH_ANSWER_MODE=extractive
 INGEST_SOURCE_IDS=tjcu-main-notices,tjcu-library,tjcu-academic-affairs,tjcu-undergrad-admissions,tjcu-grad-admissions
 ```
+
+可选 LLM 环境变量：
+
+```bash
+SEARCH_ANSWER_MODE=llm
+LLM_API_KEY=...
+LLM_BASE_URL=https://api.openai.com/v1
+LLM_MODEL=your-chat-model
+LLM_TIMEOUT_MS=12000
+LLM_TEMPERATURE=0.2
+```
+
+`SEARCH_ANSWER_MODE=auto` 也可用：配置了 key/model 时使用 LLM，未配置时保持 extractive。演示时建议先用 `extractive` 跑通数据库 smoke，再切到 `llm` 对比回答质量。
 
 ## 发布前检查
 
 ```bash
+npm run smoke:search-service
 npm run verify:search-contract
 npm run smoke:postgres
 npm run test:ingestion

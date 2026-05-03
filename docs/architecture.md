@@ -4,9 +4,9 @@
 
 这个项目是一个 **Next.js App Router + React + TypeScript + Tailwind CSS v4** 的前端产品原型，主题是“校园信息检索与可解释问答助手”。
 
-它现在的边界比早期 mock 版本清晰得多：前端通过 `src/app/api/search/route.ts` 请求结果，Route Handler 内部再调用 `searchServiceProvider` 访问外部搜索服务。这个仓库负责统一结果契约、状态编排和可信度表达；`search-service/` 负责最小可用的官方来源摄取、Postgres chunk 检索和 seed fallback。
+它现在的边界比早期 mock 版本清晰得多：前端通过 `src/app/api/search/route.ts` 请求结果，Route Handler 内部再调用 `searchServiceProvider` 访问外部搜索服务。这个仓库负责统一结果契约、状态编排和可信度表达；`search-service/` 负责最小可用的官方来源摄取、Postgres chunk 检索、seed fallback，以及可选的 evidence-bound LLM 回答生成。
 
-从项目形态看，它已经具备完整主流程，适合作品集展示；从工程成熟度看，它仍然不是完整生产级 RAG 平台，因为当前只有 lexical ranking 和 extractive answer，还没有向量召回、rerank、评估、监控和定时调度体系。
+从项目形态看，它已经具备完整主流程，适合作品集展示；从工程成熟度看，它仍然不是完整生产级 RAG 平台，因为当前仍以 lexical ranking 为主，LLM 只是在检索命中后生成回答，还没有向量召回、rerank、评估、监控和定时调度体系。
 
 ## 项目定位与目标用户
 
@@ -71,7 +71,7 @@
 
 - `/api/search` 只是前端唯一入口，不代表仓库里已经包含完整搜索服务
 - `searchServiceProvider` 负责请求上游搜索服务，不直接读取数据库
-- `search-service/` 可以读取 Postgres chunks 并生成 extractive answer
+- `search-service/` 可以读取 Postgres chunks，默认生成 extractive answer，也可以在 `SEARCH_ANSWER_MODE=llm` 时调用 LLM 生成回答
 - 向量召回、BM25、rerank 和评估体系仍属于后续搜索服务能力
 
 ## 架构分层
@@ -156,6 +156,10 @@
 
 回答不是悬空文本。每条回答都能在来源卡片中找到依据，来源卡片同时提供来源站点、发布时间、更新时间、抓取时间和命中关键词。
 
+### 可选生成式回答
+
+`search-service/answer-generator.cjs` 提供 OpenAI-compatible Chat Completions 接入点。它只在检索命中后调用模型，提示词要求模型返回 `summary / usedSourceIds / confidence`，服务端再把 `usedSourceIds` 映射回 `SearchAnswer.evidence`。如果没有配置 key/model，或模型调用失败，系统会回退到 extractive answer。
+
 ### 无答案兜底
 
 系统在信息不足时不会硬生成一个看起来完整的答案，而是返回空结果或部分命中，并引导用户继续细化提问。
@@ -165,6 +169,7 @@
 需要明确承认的边界：
 
 - 这个仓库已经包含最小官方来源摄取和 Postgres-backed lexical retrieval，但还不是完整向量检索平台
+- LLM 回答是可选生成层，不替代检索和来源校验；没有配置模型时仍是 extractive answer
 - `source-registry.ts` 已绑定天津商业大学官方 / 社区来源，社区来源仍不进入自动摄取
 - 当前只有前端统一错误态，还没有上游错误码和服务降级体系
 - 没有埋点、监控和自动化测试体系

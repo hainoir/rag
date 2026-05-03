@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { parseArticlePage } from "../ingest/html";
-import { buildChunksFromMarkdown, buildContentHash, buildDedupKey, normalizeCanonicalUrl } from "../ingest/utils";
+import { parseArticlePage } from "../ingest/html.ts";
+import { buildChunksFromMarkdown, buildContentHash, buildDedupKey, normalizeCanonicalUrl } from "../ingest/utils.ts";
 
 test("canonical URL normalization removes search, hash, and trailing slash", () => {
   assert.equal(

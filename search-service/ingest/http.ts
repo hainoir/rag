@@ -1,6 +1,6 @@
 import iconv from "iconv-lite";
 
-import type { IngestRuntimeConfig } from "./config";
+import type { IngestRuntimeConfig } from "./config.ts";
 
 function sniffEncoding(buffer: Buffer, contentType: string | null) {
   const headerCharset = contentType?.match(/charset=([^;]+)/i)?.[1]?.trim().toLowerCase();

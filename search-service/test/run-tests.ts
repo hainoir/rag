@@ -4,18 +4,18 @@ import fs from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 
-import { getSourceAdapter } from "../ingest/adapters";
-import { resolveSelectedSources } from "../ingest/config";
-import { parseArticlePage } from "../ingest/html";
-import { PostgresStore } from "../ingest/postgres-store";
-import { OFFICIAL_INGEST_SOURCE_IDS } from "../ingest/types";
+import { getSourceAdapter } from "../ingest/adapters.ts";
+import { resolveSelectedSources } from "../ingest/config.ts";
+import { parseArticlePage } from "../ingest/html.ts";
+import { PostgresStore } from "../ingest/postgres-store.ts";
+import { OFFICIAL_INGEST_SOURCE_IDS } from "../ingest/types.ts";
 import {
   buildChunksFromMarkdown,
   buildContentHash,
   buildDedupKey,
   isAllowedArticleUrl,
   normalizeCanonicalUrl,
-} from "../ingest/utils";
+} from "../ingest/utils.ts";
 
 const fixtureDir = path.resolve(process.cwd(), "search-service/test/fixtures");
 const require = createRequire(import.meta.url);
@@ -36,6 +36,32 @@ const {
     sources: Array<{ id: string; title: string }>;
   };
 } = require("../server.cjs");
+const {
+  generateLlmAnswer,
+  shouldUseLlm,
+}: {
+  generateLlmAnswer: (
+    query: string,
+    sources: Array<{
+      id: string;
+      title: string;
+      sourceName: string;
+      type: string;
+      publishedAt: string | null;
+      updatedAt: string | null;
+      fetchedAt: string;
+      snippet: string;
+      fullSnippet?: string;
+    }>,
+    baseAnswer: { confidence: number },
+    env?: Record<string, string | undefined>,
+  ) => Promise<{
+    summary: string;
+    usedSourceIds: string[];
+    confidence: number;
+  } | null>;
+  shouldUseLlm: (config: { mode: string; apiKey: string; model: string }) => boolean;
+} = require("../answer-generator.cjs");
 
 function readFixture(name: string) {
   return fs.readFileSync(path.join(fixtureDir, name), "utf8");
@@ -201,6 +227,80 @@ async function main() {
       assert.ok(response.sources.length > 0);
       assert.ok(response.answer?.evidence?.length);
       assert.equal(response.answer?.evidence?.[0].sourceId, response.sources[0].id);
+    }),
+  );
+
+  results.push(
+    await runCase("seed search rejects unrelated generic queries", () => {
+      const response = searchSeed("明天校园集市几点开始", 2);
+
+      assert.equal(response.status, "empty");
+      assert.equal(response.sources.length, 0);
+      assert.equal(response.answer, null);
+    }),
+  );
+
+  results.push(
+    await runCase("llm answer generation keeps evidence ids bounded", async () => {
+      assert.equal(shouldUseLlm({ mode: "extractive", apiKey: "test-key", model: "test-model" }), false);
+      assert.equal(shouldUseLlm({ mode: "llm", apiKey: "test-key", model: "test-model" }), true);
+
+      const previousFetch = globalThis.fetch;
+
+      globalThis.fetch = (async () => {
+        return new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    summary: "图书馆借阅需要凭校园卡办理，续借以图书馆规则为准。",
+                    usedSourceIds: ["source-a", "unknown-source"],
+                    confidence: 0.81,
+                  }),
+                },
+              },
+            ],
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+            },
+          },
+        );
+      }) as typeof fetch;
+
+      try {
+        const generated = await generateLlmAnswer(
+          "图书馆借书",
+          [
+            {
+              id: "source-a",
+              title: "图书馆借阅与续借办理说明",
+              sourceName: "图书馆",
+              type: "official",
+              publishedAt: null,
+              updatedAt: null,
+              fetchedAt: "2026-04-21T02:00:00.000Z",
+              snippet: "读者凭校园卡可在图书馆办理借阅，续借以系统规则为准。",
+            },
+          ],
+          { confidence: 0.72 },
+          {
+            SEARCH_ANSWER_MODE: "llm",
+            LLM_API_KEY: "test-key",
+            LLM_MODEL: "test-model",
+            LLM_BASE_URL: "https://llm.example.test/v1",
+          },
+        );
+
+        assert.equal(generated?.summary, "图书馆借阅需要凭校园卡办理，续借以图书馆规则为准。");
+        assert.deepEqual(generated?.usedSourceIds, ["source-a"]);
+        assert.equal(generated?.confidence, 0.81);
+      } finally {
+        globalThis.fetch = previousFetch;
+      }
     }),
   );
 

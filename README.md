@@ -17,6 +17,7 @@
 - Route Handler 内部调用 `searchServiceProvider`，再代理到外部搜索服务
 - `SearchSource` 已支持来源站点、发布时间、更新时间、抓取时间、最近校验时间和来源新鲜度
 - 仓库内已经补齐来源注册表、清洗规则、去重规则和入库表结构骨架，方便接真实数据链路
+- 搜索服务可选接入 OpenAI-compatible LLM，把检索片段升级为生成式回答；未配置 key 时自动保持 extractive answer
 
 这个项目适合作为：
 
@@ -39,7 +40,7 @@
 
 浏览器提问后，当前链路是：
 
-`SearchBox / SuggestedQuestions -> /api/search -> searchServiceProvider -> SEARCH_SERVICE_URL -> SearchResponse -> ResultsShell -> 回答视图 / 检索视图`
+`SearchBox / SuggestedQuestions -> /api/search -> searchServiceProvider -> SEARCH_SERVICE_URL -> search-service -> SearchResponse -> ResultsShell -> 回答视图 / 检索视图`
 
 这条链路已经具备“前端只消费统一结果结构”的边界。当前仓库**不直接包含**下面这些生产能力：
 
@@ -102,6 +103,19 @@ npm run dev
 
 然后访问 [http://localhost:3000](http://localhost:3000)。
 
+### 可选 LLM 回答
+
+默认回答模式是 `SEARCH_ANSWER_MODE=extractive`，只根据命中的 chunk 片段拼接摘要，不需要任何模型密钥。需要演示生成式 RAG 回答时，可以配置 OpenAI-compatible Chat Completions：
+
+```bash
+SEARCH_ANSWER_MODE=llm
+LLM_API_KEY=...
+LLM_BASE_URL=https://api.openai.com/v1
+LLM_MODEL=your-chat-model
+```
+
+LLM 只在检索已有来源时调用，提示词要求模型只使用传入 evidence，并返回 `usedSourceIds`。服务会把这些 sourceId 映射回 `SearchAnswer.evidence`，保持前端契约不变；模型调用失败时回退 extractive answer。
+
 ## 官方来源 Ingestion v1
 
 仓库现在额外提供了一套面向官方来源的 CLI ingestion 闭环，运行在 `search-service/` 下的 TypeScript runtime 中，不改前端查询链路。默认同步 5 个官方源，运行时已支持主站、图书馆、教务处、学生处、后勤、就业网、本科招生网和研究生招生网。
@@ -121,6 +135,7 @@ INGEST_USER_AGENT=campus-rag-ingestion/1.0 (+https://www.tjcu.edu.cn/)
 常用命令：
 
 ```bash
+npm run smoke:search-service
 npm run db:init
 npm run ingest:official
 npm run ingest:source -- tjcu-main-notices
@@ -139,6 +154,6 @@ npm run test:ingestion
 当前推荐的演进顺序是：
 
 1. 固化本地真实闭环复验：`db:init -> ingest:official -> inspect:ingestion -> smoke:postgres -> /api/search`
-2. 扩大官方来源 adapter 的实站验证范围，优先保证 3-5 个来源稳定重复同步
-3. 在当前 extractive answer 基础上接入 LLM，但要求回答必须绑定来源或 chunk
-4. 再补更细的错误分类、埋点、监控和定时摄取任务
+2. 配置 `SEARCH_ANSWER_MODE=llm` 做生成式回答演示，并保留无 key 时的 extractive fallback
+3. 扩大官方来源 adapter 的实站验证范围，优先保证 3-5 个来源稳定重复同步
+4. 再补向量检索、错误分类、埋点、监控和定时摄取任务

@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import test from "node:test";
 
-import { resolveSelectedSources } from "../ingest/config";
-import { PostgresStore } from "../ingest/postgres-store";
-import { buildChunksFromMarkdown, buildContentHash, buildDedupKey } from "../ingest/utils";
+import { resolveSelectedSources } from "../ingest/config.ts";
+import { PostgresStore } from "../ingest/postgres-store.ts";
+import { buildChunksFromMarkdown, buildContentHash, buildDedupKey } from "../ingest/utils.ts";
 
 const databaseUrl = process.env.DATABASE_URL;
 const integrationTest = databaseUrl ? test : test.skip;

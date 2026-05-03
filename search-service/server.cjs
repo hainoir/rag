@@ -2,6 +2,7 @@ const http = require("node:http");
 const { URL } = require("node:url");
 const { Pool } = require("pg");
 
+const { generateLlmAnswer } = require("./answer-generator.cjs");
 const { loadLocalEnv } = require("./load-env.cjs");
 const { defaultQuestions, seedCorpus } = require("./seed-corpus.cjs");
 
@@ -488,6 +489,57 @@ function buildExtractiveAnswer(query, sources, scoredResults) {
   };
 }
 
+function buildAnswerEvidenceFromSources(sources) {
+  return sources.slice(0, 4).map((source) => ({
+    sourceId: source.id,
+    title: source.title,
+    sourceName: source.sourceName,
+    snippet: summarizeSnippet(source.snippet),
+  }));
+}
+
+function pickEvidenceSources(sources, usedSourceIds) {
+  if (!Array.isArray(usedSourceIds) || usedSourceIds.length === 0) {
+    return sources.slice(0, 4);
+  }
+
+  const sourceById = new Map(sources.map((source) => [source.id, source]));
+  const selected = usedSourceIds
+    .map((sourceId) => sourceById.get(sourceId))
+    .filter(Boolean);
+
+  return selected.length > 0 ? selected : sources.slice(0, 4);
+}
+
+async function enhanceResponseWithLlmAnswer(response) {
+  if (!response.answer || response.sources.length === 0 || response.status === "empty" || response.status === "error") {
+    return response;
+  }
+
+  try {
+    const generated = await generateLlmAnswer(response.query, response.sources, response.answer);
+
+    if (!generated) {
+      return response;
+    }
+
+    const evidenceSources = pickEvidenceSources(response.sources, generated.usedSourceIds);
+
+    return {
+      ...response,
+      answer: {
+        ...response.answer,
+        summary: generated.summary,
+        confidence: generated.confidence,
+        evidence: buildAnswerEvidenceFromSources(evidenceSources),
+      },
+    };
+  } catch (error) {
+    console.error("LLM answer generation failed; falling back to extractive answer.", error);
+    return response;
+  }
+}
+
 function buildEmptyResponse(query) {
   return {
     query,
@@ -512,7 +564,17 @@ function searchSeed(query, limit) {
       record,
       score: scoreRecord(record, trimmedQuery, terms),
     }))
-    .filter((item) => item.score >= 18)
+    .filter((item) => {
+      const searchableText = [
+        item.record.title,
+        item.record.snippet,
+        item.record.fullSnippet,
+        item.record.answer,
+        ...(item.record.keywords ?? []),
+      ].join(" ");
+
+      return item.score >= 18 && hasSpecificTermMatch(searchableText, terms);
+    })
     .sort((left, right) => right.score - left.score);
 
   if (scored.length === 0) {
@@ -684,24 +746,24 @@ async function searchPostgres(query, limit) {
 
 async function search(query, limit) {
   const provider = normalizeProvider(process.env.SEARCH_SERVICE_PROVIDER);
+  let response;
 
   if (provider === "seed") {
-    return searchSeed(query, limit);
-  }
-
-  if (provider === "postgres") {
-    return searchPostgres(query, limit);
-  }
-
-  if (getPostgresPool()) {
+    response = searchSeed(query, limit);
+  } else if (provider === "postgres") {
+    response = await searchPostgres(query, limit);
+  } else if (getPostgresPool()) {
     try {
-      return await searchPostgres(query, limit);
+      response = await searchPostgres(query, limit);
     } catch (error) {
       console.error("Postgres search failed; falling back to seed corpus.", error);
+      response = searchSeed(query, limit);
     }
+  } else {
+    response = searchSeed(query, limit);
   }
 
-  return searchSeed(query, limit);
+  return enhanceResponseWithLlmAnswer(response);
 }
 
 function sendJson(response, statusCode, payload) {

@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 
-import type { PreparedChunk, SelectedSource } from "./types";
+import type { PreparedChunk, SelectedSource } from "./types.ts";
 
 const CONTENT_SENTENCE_SPLIT = /(?<=[。！？；])/u;
 

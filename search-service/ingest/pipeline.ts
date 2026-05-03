@@ -1,8 +1,8 @@
-import { getSourceAdapter } from "./adapters";
-import { readIngestRuntimeConfig, resolveSelectedSources } from "./config";
-import { fetchHtml } from "./http";
-import { PostgresStore } from "./postgres-store";
-import type { ParsedArticle, SourceRunSummary, SupportedSourceId } from "./types";
+import { getSourceAdapter } from "./adapters.ts";
+import { readIngestRuntimeConfig, resolveSelectedSources } from "./config.ts";
+import { fetchHtml } from "./http.ts";
+import { PostgresStore } from "./postgres-store.ts";
+import type { ParsedArticle, SourceRunSummary, SupportedSourceId } from "./types.ts";
 import {
   buildChunksFromMarkdown,
   buildContentHash,
@@ -10,7 +10,7 @@ import {
   extractExternalIdFromUrl,
   normalizeCanonicalUrl,
   runWithConcurrency,
-} from "./utils";
+} from "./utils.ts";
 
 type PreparedArticleResult =
   | {

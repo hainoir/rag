@@ -4,6 +4,7 @@ out
 dist
 coverage
 .playwright-mcp/
+.tmp/
 .DS_Store
 *.log
 .env*

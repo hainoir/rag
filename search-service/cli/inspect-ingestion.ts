@@ -1,7 +1,7 @@
 import { createRequire } from "node:module";
 
-import { readIngestRuntimeConfig, requireDatabaseUrl, resolveCliSourceIds } from "../ingest/config";
-import { PostgresStore } from "../ingest/postgres-store";
+import { readIngestRuntimeConfig, requireDatabaseUrl, resolveCliSourceIds } from "../ingest/config.ts";
+import { PostgresStore } from "../ingest/postgres-store.ts";
 
 const require = createRequire(import.meta.url);
 require("../load-env.cjs").loadLocalEnv();

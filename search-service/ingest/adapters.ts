@@ -1,6 +1,6 @@
-import type { SelectedSource, SupportedSourceId } from "./types";
-import { parseArticlePage, parseSectionListPage } from "./html";
-import { isAllowedArticleUrl } from "./utils";
+import type { SelectedSource, SupportedSourceId } from "./types.ts";
+import { parseArticlePage, parseSectionListPage } from "./html.ts";
+import { isAllowedArticleUrl } from "./utils.ts";
 
 type SourceAdapter = {
   sourceId: SupportedSourceId;

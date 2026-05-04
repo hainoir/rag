@@ -100,6 +100,18 @@ button {
   color: var(--ink);
 }
 
+.skeleton-line {
+  animation: skeleton-shimmer 1.25s ease-in-out infinite;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.54),
+    rgba(255, 255, 255, 0.86),
+    rgba(255, 255, 255, 0.54)
+  );
+  background-size: 220% 100%;
+}
+
 .muted {
   color: var(--muted);
 }
@@ -107,6 +119,25 @@ button {
 .page-shell {
   min-height: 100vh;
   padding: 2rem 1rem 4rem;
+}
+
+h1,
+h2,
+h3,
+p,
+a,
+button {
+  overflow-wrap: anywhere;
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 160% 0;
+  }
+
+  100% {
+    background-position: -60% 0;
+  }
 }
 
 @media (min-width: 768px) {
@@ -119,5 +150,8 @@ button {
   html {
     scroll-behavior: auto;
   }
-}
 
+  .skeleton-line {
+    animation: none;
+  }
+}

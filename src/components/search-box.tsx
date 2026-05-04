@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useId, useState, type FormEvent } from "react";
 
 import { useSearchNavigation } from "@/hooks/use-search-navigation";
 import { cn } from "@/lib/utils";
@@ -19,6 +19,8 @@ export function SearchBox({
   onSameQuery,
 }: SearchBoxProps) {
   const [query, setQuery] = useState(initialValue);
+  const inputId = useId();
+  const hintId = useId();
   const { submitQuery, isPending } = useSearchNavigation({
     onSameQuery,
   });
@@ -34,11 +36,13 @@ export function SearchBox({
 
   return (
     <form
+      aria-busy={isPending}
       className={cn(
         "surface rounded-[var(--radius-lg)] p-2",
         compact ? "w-full" : "w-full max-w-4xl",
       )}
       onSubmit={handleSubmit}
+      role="search"
     >
       <div
         className={cn(
@@ -46,23 +50,27 @@ export function SearchBox({
           compact ? "flex-col sm:flex-row" : "flex-col md:flex-row md:items-center",
         )}
       >
-        <label className="sr-only" htmlFor="campus-search-input">
+        <label className="sr-only" htmlFor={inputId}>
           输入校园问题
         </label>
         <div className="relative flex-1">
           <input
+            aria-describedby={hintId}
             autoFocus={autoFocus}
             className={cn(
               "w-full rounded-[calc(var(--radius-lg)-10px)] border border-transparent bg-white/70 px-5 py-4 text-base text-[var(--ink)] outline-none transition",
               "placeholder:text-[color:var(--muted)] focus:border-[color:var(--accent)] focus:bg-white",
               compact ? "min-h-[56px]" : "min-h-[64px] text-lg",
             )}
-            id="campus-search-input"
+            id={inputId}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="例如：图书馆怎么借书？"
             value={query}
           />
-          <div className="pointer-events-none absolute right-4 top-1/2 hidden -translate-y-1/2 rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs text-[var(--accent)] md:block">
+          <div
+            className="pointer-events-none absolute right-4 top-1/2 hidden -translate-y-1/2 rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs text-[var(--accent)] md:block"
+            id={hintId}
+          >
             检索优先，回答可追溯
           </div>
         </div>
@@ -81,4 +89,3 @@ export function SearchBox({
     </form>
   );
 }
-

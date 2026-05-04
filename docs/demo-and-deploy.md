@@ -2,11 +2,20 @@
 
 ## 固定演示问题
 
-建议保留三类 query，用于覆盖主要状态：
+固定 query 已沉淀在 [../fixtures/demo-queries.json](../fixtures/demo-queries.json)，用于覆盖主要状态：
 
 - `图书馆借书`：期望 `ok`，展示官方来源、答案摘要和依据片段。
-- `宿舍报修流程`：期望 `partial` 或 `ok`，取决于是否已同步学生处 / 后勤来源。
+- `宿舍报修流程`：期望 `partial` 或 `ok`，覆盖后勤 / 学生生活类流程问题。
+- `社团纳新什么时候开始`：期望 `partial` 或 `ok`，覆盖校园活动类问题。
 - `明天校园集市几点开始`：期望 `empty`，用于证明系统不会在无来源时编造答案。
+
+本地可以直接运行：
+
+```bash
+npm run verify:demo
+```
+
+这个脚本会强制使用 seed provider，检查固定 query 的状态、来源数量和 evidence，不依赖真实数据库。
 
 ## 本地服务分工
 
@@ -48,10 +57,18 @@ LLM_TEMPERATURE=0.2
 
 ```bash
 npm run smoke:search-service
+npm run verify:demo
 npm run verify:search-contract
 npm run smoke:postgres
 npm run test:ingestion
 npm run build
+npm run e2e
 ```
 
 如果没有配置 `DATABASE_URL`，`npm run smoke:postgres` 会失败，`npm run test:ingestion` 也无法证明真实数据库闭环。发布前至少要让 smoke 检查和 Postgres 集成测试都通过。
+
+E2E 默认会启动 seed 搜索服务和 Next.js dev server，覆盖首页搜索、结果页渲染、来源展开、无结果和错误态。首次运行如果本机没有浏览器二进制，需要先执行：
+
+```bash
+npx playwright install chromium
+```

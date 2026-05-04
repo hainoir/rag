@@ -93,6 +93,7 @@
 npm install
 cp .env.example .env.local
 npm run verify:search-contract
+npm run verify:demo
 npm run search-service
 npm run dev
 ```
@@ -136,6 +137,7 @@ INGEST_USER_AGENT=campus-rag-ingestion/1.0 (+https://www.tjcu.edu.cn/)
 
 ```bash
 npm run smoke:search-service
+npm run verify:demo
 npm run db:init
 npm run ingest:official
 npm run ingest:source -- tjcu-main-notices
@@ -146,6 +148,8 @@ npm run test:ingestion
 
 这期已经闭合了 `documents / document_versions / chunks / ingestion_runs -> search-service -> SearchResponse` 的最小真实数据回路。重复执行 `npm run ingest:official` 时，未变化文章只刷新校验时间，不会重复插入相同文档和版本。
 `npm run smoke:postgres` 会检查默认官方源是否已有可检索文档和 chunk，并验证一个真实命中 query 与一个预期无命中 query，避免把 seed corpus 或泛词命中误判为真实闭环成功。
+
+`npm run verify:demo` 使用 [fixtures/demo-queries.json](./fixtures/demo-queries.json) 中的固定问题验证 seed 演示闭环；`npm run e2e` 会启动 seed 搜索服务和 Next.js dev server，覆盖首页搜索、结果页渲染、来源展开、无答案兜底和错误态。
 
 本地 Postgres 启动和真实检索闭环见 [docs/local-postgres.md](./docs/local-postgres.md)。演示 query 与部署边界见 [docs/demo-and-deploy.md](./docs/demo-and-deploy.md)。
 

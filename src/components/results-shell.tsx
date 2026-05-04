@@ -138,7 +138,7 @@ export function ResultsShell({ initialQuery }: ResultsShellProps) {
   const queryHeading = initialQuery.trim() || "先输入一个校园问题";
 
   return (
-    <main className="page-shell">
+    <main aria-labelledby="search-results-heading" className="page-shell">
       <div className="mx-auto max-w-7xl">
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_340px]">
           <div className="space-y-6">
@@ -155,10 +155,13 @@ export function ResultsShell({ initialQuery }: ResultsShellProps) {
                 </span>
               </div>
 
-              <h1 className="mt-5 font-display text-3xl leading-tight md:text-5xl">
+              <h1
+                className="mt-5 font-display text-3xl leading-tight md:text-5xl"
+                id="search-results-heading"
+              >
                 {queryHeading}
               </h1>
-              <p className="mt-3 max-w-3xl text-sm leading-7 muted">
+              <p className="mt-3 max-w-3xl text-sm leading-7 muted" id="search-results-note">
                 回答会优先展示结论摘要与来源说明；如果你更想核对依据，可以直接切到检索结果视图查看原始命中片段。
               </p>
 

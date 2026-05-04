@@ -49,18 +49,22 @@ export function AnswerPanel(props: AnswerPanelProps) {
 
   if (props.loading) {
     return (
-      <section className="surface rounded-[var(--radius-lg)] p-6">
-        <div className="mb-4 h-5 w-28 animate-pulse rounded-full bg-white/65" />
-        <div className="space-y-3">
-          <div className="h-8 w-5/6 animate-pulse rounded-2xl bg-white/65" />
-          <div className="h-8 w-4/6 animate-pulse rounded-2xl bg-white/65" />
+      <section
+        aria-busy="true"
+        aria-label="正在生成回答摘要"
+        className="surface rounded-[var(--radius-lg)] p-6"
+      >
+        <div aria-hidden="true" className="mb-4 h-5 w-28 skeleton-line" />
+        <div aria-hidden="true" className="space-y-3">
+          <div className="h-8 w-5/6 skeleton-line" />
+          <div className="h-8 w-4/6 skeleton-line" />
         </div>
-        <div className="mt-6 grid gap-4 md:grid-cols-3">
+        <div aria-hidden="true" className="mt-6 grid gap-4 md:grid-cols-3">
           {Array.from({ length: 3 }).map((_, index) => (
             <div className="rounded-[22px] border border-[var(--line)] bg-white/70 p-4" key={index}>
-              <div className="h-4 w-24 animate-pulse rounded-full bg-white/65" />
-              <div className="mt-4 h-4 w-full animate-pulse rounded-full bg-white/65" />
-              <div className="mt-2 h-4 w-5/6 animate-pulse rounded-full bg-white/65" />
+              <div className="h-4 w-24 skeleton-line" />
+              <div className="mt-4 h-4 w-full skeleton-line" />
+              <div className="mt-2 h-4 w-5/6 skeleton-line" />
             </div>
           ))}
         </div>

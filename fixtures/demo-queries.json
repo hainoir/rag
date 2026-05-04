@@ -1,0 +1,34 @@
+[
+  {
+    "id": "library-borrow",
+    "query": "图书馆借书",
+    "expectedStatuses": ["ok", "partial"],
+    "minSources": 1,
+    "requiresAnswer": true,
+    "note": "命中官方来源、回答摘要和依据片段。"
+  },
+  {
+    "id": "dorm-repair",
+    "query": "宿舍报修流程",
+    "expectedStatuses": ["ok", "partial"],
+    "minSources": 1,
+    "requiresAnswer": true,
+    "note": "覆盖后勤/学生生活类流程问题。"
+  },
+  {
+    "id": "club-recruitment",
+    "query": "社团纳新什么时候开始",
+    "expectedStatuses": ["ok", "partial"],
+    "minSources": 1,
+    "requiresAnswer": true,
+    "note": "覆盖校园活动类问题。"
+  },
+  {
+    "id": "empty-campus-market",
+    "query": "明天校园集市几点开始",
+    "expectedStatuses": ["empty"],
+    "minSources": 0,
+    "requiresAnswer": false,
+    "note": "验证无可靠来源时不编造答案。"
+  }
+]

@@ -14,6 +14,7 @@ export function SourceCard({ source, expanded, onToggle }: SourceCardProps) {
   const isOfficial = source.type === "official";
   const displayText =
     expanded && source.fullSnippet ? source.fullSnippet : source.snippet;
+  const snippetId = `source-snippet-${source.id}`;
   const freshnessLabel = formatFreshnessLabel(source.freshnessLabel);
   const metadata = [
     { label: "来源站点", value: source.sourceName },
@@ -27,6 +28,7 @@ export function SourceCard({ source, expanded, onToggle }: SourceCardProps) {
   return (
     <article
       className="surface-strong rounded-[28px] p-5"
+      data-testid="source-card"
       style={{
         borderColor: isOfficial ? "rgba(40,81,61,0.18)" : "rgba(122,74,37,0.18)",
         background: isOfficial
@@ -77,7 +79,7 @@ export function SourceCard({ source, expanded, onToggle }: SourceCardProps) {
               </div>
             ))}
           </div>
-          <p className="mt-3 text-sm leading-7 muted">
+          <p className="mt-3 text-sm leading-7 muted" id={snippetId}>
             <QueryHighlight terms={source.matchedKeywords} text={displayText} />
           </p>
         </div>
@@ -86,6 +88,7 @@ export function SourceCard({ source, expanded, onToggle }: SourceCardProps) {
       <div className="mt-4 flex flex-wrap gap-3">
         {source.url ? (
           <a
+            aria-label={`查看原文：${source.title}`}
             className="rounded-full border border-[var(--line)] bg-white/80 px-4 py-2 text-sm transition hover:border-[var(--official)]"
             href={source.url}
             rel="noreferrer"
@@ -96,6 +99,7 @@ export function SourceCard({ source, expanded, onToggle }: SourceCardProps) {
         ) : null}
         {canonicalUrl ? (
           <a
+            aria-label={`打开规范链接：${source.title}`}
             className="rounded-full border border-[var(--line)] bg-white/80 px-4 py-2 text-sm transition hover:border-[var(--official)]"
             href={canonicalUrl}
             rel="noreferrer"
@@ -105,6 +109,8 @@ export function SourceCard({ source, expanded, onToggle }: SourceCardProps) {
           </a>
         ) : null}
         <button
+          aria-controls={snippetId}
+          aria-expanded={expanded}
           className="rounded-full border border-[var(--line)] bg-white/70 px-4 py-2 text-sm transition hover:border-[var(--official)]"
           onClick={() => onToggle(source.id)}
           type="button"

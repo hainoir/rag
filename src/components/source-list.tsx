@@ -23,20 +23,20 @@ export function SourceList({
       : "这里直接展示检索命中的原始片段，便于你跳过摘要自行判断。";
 
   return (
-    <section className="space-y-4">
+    <section aria-busy={loading} className="space-y-4">
       <div className="space-y-2">
         <h2 className="text-xl font-semibold">{title}</h2>
         <p className="text-sm muted">{body}</p>
       </div>
 
       {loading ? (
-        <div className="space-y-4">
+        <div aria-hidden="true" className="space-y-4">
           {Array.from({ length: 3 }).map((_, index) => (
             <div className="surface rounded-[28px] p-5" key={`source-skeleton-${index}`}>
-              <div className="h-5 w-32 animate-pulse rounded-full bg-white/65" />
-              <div className="mt-4 h-6 w-3/4 animate-pulse rounded-full bg-white/65" />
-              <div className="mt-3 h-4 w-full animate-pulse rounded-full bg-white/65" />
-              <div className="mt-2 h-4 w-11/12 animate-pulse rounded-full bg-white/65" />
+              <div className="h-5 w-32 skeleton-line" />
+              <div className="mt-4 h-6 w-3/4 skeleton-line" />
+              <div className="mt-3 h-4 w-full skeleton-line" />
+              <div className="mt-2 h-4 w-11/12 skeleton-line" />
             </div>
           ))}
         </div>
@@ -59,4 +59,3 @@ export function SourceList({
     </section>
   );
 }
-

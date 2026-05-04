@@ -15,11 +15,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-CN">
+    <html data-scroll-behavior="smooth" lang="zh-CN">
       <body>
         <SearchHistoryProvider>{children}</SearchHistoryProvider>
       </body>
     </html>
   );
 }
-

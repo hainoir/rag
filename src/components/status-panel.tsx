@@ -69,7 +69,10 @@ export function StatusPanel({ loadingPhase, response }: StatusPanelProps) {
     : undefined;
 
   return (
-    <section className="surface rounded-[var(--radius-lg)] p-5">
+    <section
+      aria-live={loadingPhase === "done" ? "polite" : "assertive"}
+      className="surface rounded-[var(--radius-lg)] p-5"
+    >
       <div className="mb-3 inline-flex rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold tracking-[0.16em] text-[var(--accent)] uppercase">
         {content.label}
       </div>

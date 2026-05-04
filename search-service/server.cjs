@@ -155,10 +155,25 @@ function buildTerms(query) {
   return unique([normalized, ...asciiTerms, ...cjkTerms]);
 }
 
+function isSpecificTerm(term) {
+  const normalized = normalizeText(term);
+  return normalized.length >= 2 && !GENERIC_QUERY_TERMS.has(normalized);
+}
+
+function pickSpecificTerms(terms) {
+  return terms.filter(isSpecificTerm);
+}
+
+function pickScoringTerms(terms) {
+  const specificTerms = pickSpecificTerms(terms);
+  return specificTerms.length > 0 ? specificTerms : terms;
+}
+
 function buildSearchPatterns(query, terms) {
+  const specificTerms = pickSpecificTerms(terms);
   const candidates = unique([
     normalizeText(query),
-    ...terms,
+    ...(specificTerms.length > 0 ? specificTerms : terms),
   ])
     .map((term) => term.trim())
     .filter((term) => term.length >= 2)
@@ -171,19 +186,18 @@ function countMatches(haystack, terms, weight) {
   let score = 0;
 
   for (const term of terms) {
-    if (haystack.includes(term)) {
-      score += weight;
+    const normalizedTerm = normalizeText(term);
+
+    if (!isSpecificTerm(normalizedTerm)) {
+      continue;
+    }
+
+    if (haystack.includes(normalizedTerm)) {
+      score += weight + Math.min(4, Math.max(0, normalizedTerm.length - 2));
     }
   }
 
   return score;
-}
-
-function pickSpecificTerms(terms) {
-  return terms.filter((term) => {
-    const normalized = normalizeText(term);
-    return normalized.length >= 2 && !GENERIC_QUERY_TERMS.has(normalized);
-  });
 }
 
 function hasSpecificTermMatch(haystack, terms) {
@@ -193,6 +207,7 @@ function hasSpecificTermMatch(haystack, terms) {
 
 function scoreRecord(record, query, terms) {
   const normalizedQuery = normalizeText(query);
+  const scoringTerms = pickScoringTerms(terms);
   const title = normalizeText(record.title);
   const snippet = normalizeText(record.snippet);
   const answer = normalizeText(record.answer);
@@ -212,10 +227,10 @@ function scoreRecord(record, query, terms) {
     score += 24;
   }
 
-  score += countMatches(title, terms, 8);
-  score += countMatches(snippet, terms, 5);
-  score += countMatches(answer, terms, 4);
-  score += countMatches(keywordText, terms, 6);
+  score += countMatches(title, scoringTerms, 8);
+  score += countMatches(snippet, scoringTerms, 5);
+  score += countMatches(answer, scoringTerms, 4);
+  score += countMatches(keywordText, scoringTerms, 6);
 
   for (const keyword of keywords) {
     if (normalizedQuery.includes(keyword) || keyword.includes(normalizedQuery)) {
@@ -249,8 +264,9 @@ function pickMatchedKeywords(record, terms) {
 
 function pickMatchedTermsFromText(terms, query, text) {
   const normalizedText = normalizeText(text);
+  const scoringTerms = pickScoringTerms(terms);
   const matched = unique(
-    terms.filter((term) => {
+    scoringTerms.filter((term) => {
       const normalizedTerm = normalizeText(term);
       return normalizedTerm.length >= 2 && normalizedText.includes(normalizedTerm);
     }),
@@ -599,6 +615,7 @@ function searchSeed(query, limit) {
 
 function scorePostgresSource(source, query, terms) {
   const normalizedQuery = normalizeText(query);
+  const scoringTerms = pickScoringTerms(terms);
   const title = normalizeText(source.title);
   const snippet = normalizeText(source.snippet);
   const fullSnippet = normalizeText(source.fullSnippet ?? source.snippet);
@@ -618,10 +635,10 @@ function scorePostgresSource(source, query, terms) {
     score += 28;
   }
 
-  score += countMatches(title, terms, 9);
-  score += countMatches(snippet, terms, 6);
-  score += countMatches(fullSnippet, terms, 4);
-  score += countMatches(sourceName, terms, 3);
+  score += countMatches(title, scoringTerms, 9);
+  score += countMatches(snippet, scoringTerms, 6);
+  score += countMatches(fullSnippet, scoringTerms, 4);
+  score += countMatches(sourceName, scoringTerms, 3);
 
   if (source.type === "official") {
     score += 10;
@@ -688,7 +705,10 @@ async function searchPostgres(query, limit) {
             or c.snippet ilike any($1::text[])
             or c.full_snippet ilike any($1::text[])
           )
-        order by coalesce(d.last_verified_at, d.updated_at, d.published_at, d.fetched_at) desc nulls last
+        order by
+          case when d.source_type = 'official' then 1 else 0 end desc,
+          coalesce(sr.trust_weight, 0.72) desc,
+          coalesce(d.last_verified_at, d.updated_at, d.published_at, d.fetched_at) desc nulls last
         limit $2
       `,
       [patterns, candidateLimit],

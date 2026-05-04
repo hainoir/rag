@@ -32,12 +32,16 @@ export function ResultToolbar({
   totalCount,
 }: ResultToolbarProps) {
   return (
-    <section className="surface sticky top-4 z-20 rounded-[var(--radius-lg)] p-4">
+    <section
+      aria-label="结果筛选和视图切换"
+      className="surface sticky top-4 z-20 rounded-[var(--radius-lg)] p-4"
+    >
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-col gap-3">
-          <div className="flex flex-wrap gap-2">
+          <div aria-label="来源类型筛选" className="flex flex-wrap gap-2" role="group">
             {FILTER_ITEMS.map((item) => (
               <button
+                aria-pressed={filter === item.value}
                 className={cn(
                   "rounded-full px-4 py-2 text-sm transition",
                   filter === item.value
@@ -52,9 +56,10 @@ export function ResultToolbar({
               </button>
             ))}
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div aria-label="结果视图切换" className="flex flex-wrap gap-2" role="group">
             {VIEW_ITEMS.map((item) => (
               <button
+                aria-pressed={viewMode === item.value}
                 className={cn(
                   "rounded-full px-4 py-2 text-sm transition",
                   viewMode === item.value
@@ -78,4 +83,3 @@ export function ResultToolbar({
     </section>
   );
 }
-

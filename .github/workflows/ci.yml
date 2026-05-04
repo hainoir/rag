@@ -38,5 +38,9 @@ jobs:
 
       - run: npm ci
       - run: npm run verify:search-contract
+      - run: npm run verify:demo
+      - run: npm run smoke:search-service
       - run: npm run test:ingestion
       - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run e2e -- --reporter=line

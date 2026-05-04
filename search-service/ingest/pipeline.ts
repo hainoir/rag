@@ -36,6 +36,13 @@ function summarizeErrors(errors: string[]) {
   return errors.join("\n").slice(0, 4_000);
 }
 
+export function sanitizeCommunityMarkdown(markdown: string) {
+  return markdown
+    .replace(/\b1[3-9]\d{9}\b/g, "[手机号已隐藏]")
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[邮箱已隐藏]")
+    .replace(/((?:微信|vx|QQ|qq)[:：\s]*)[A-Za-z0-9_-]{5,}/g, "$1[联系方式已隐藏]");
+}
+
 async function discoverDetailUrls(
   sourceId: SupportedSourceId,
   config: ReturnType<typeof readIngestRuntimeConfig>,
@@ -96,7 +103,11 @@ async function prepareArticle(
     html = await fetchHtml(detailUrl, config);
     const parsed = adapter.parseDetailPage(detailUrl, html);
     const canonicalUrl = normalizeCanonicalUrl(detailUrl);
-    const chunks = buildChunksFromMarkdown(parsed.cleanedMarkdown);
+    const cleanedMarkdown =
+      source.cleaningProfile === "community_thread"
+        ? sanitizeCommunityMarkdown(parsed.cleanedMarkdown)
+        : parsed.cleanedMarkdown;
+    const chunks = buildChunksFromMarkdown(cleanedMarkdown);
 
     if (chunks.length === 0) {
       throw new Error("No chunks generated from cleaned markdown.");
@@ -114,9 +125,9 @@ async function prepareArticle(
         updatedAt: parsed.updatedAt,
         fetchedAt: new Date().toISOString(),
         rawHtml: html,
-        cleanedMarkdown: parsed.cleanedMarkdown,
+        cleanedMarkdown,
         dedupKey: buildDedupKey(source.id, parsed.title, parsed.publishedAt),
-        contentHash: buildContentHash(parsed.cleanedMarkdown),
+        contentHash: buildContentHash(cleanedMarkdown),
         chunks,
       },
     };

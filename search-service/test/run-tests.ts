@@ -7,8 +7,9 @@ import path from "node:path";
 import { getSourceAdapter } from "../ingest/adapters.ts";
 import { resolveSelectedSources } from "../ingest/config.ts";
 import { parseArticlePage } from "../ingest/html.ts";
+import { sanitizeCommunityMarkdown } from "../ingest/pipeline.ts";
 import { PostgresStore } from "../ingest/postgres-store.ts";
-import { OFFICIAL_INGEST_SOURCE_IDS } from "../ingest/types.ts";
+import { COMMUNITY_INGEST_SOURCE_IDS, OFFICIAL_INGEST_SOURCE_IDS } from "../ingest/types.ts";
 import {
   buildChunksFromMarkdown,
   buildContentHash,
@@ -62,6 +63,31 @@ const {
   } | null>;
   shouldUseLlm: (config: { mode: string; apiKey: string; model: string }) => boolean;
 } = require("../answer-generator.cjs");
+
+type TestMode = "unit" | "postgres" | "all";
+
+function resolveTestMode(): TestMode {
+  const rawMode =
+    process.argv.includes("--postgres")
+      ? "postgres"
+      : process.argv.includes("--all")
+        ? "all"
+        : process.argv.includes("--unit")
+          ? "unit"
+          : process.env.INGESTION_TEST_MODE;
+
+  if (rawMode === "postgres" || rawMode === "all" || rawMode === "unit") {
+    return rawMode;
+  }
+
+  return "unit";
+}
+
+const testMode = resolveTestMode();
+
+if (testMode === "unit") {
+  process.env.DATABASE_URL = "";
+}
 
 function readFixture(name: string) {
   return fs.readFileSync(path.join(fixtureDir, name), "utf8");
@@ -167,6 +193,52 @@ async function main() {
         assert.equal(adapter.sourceId, source.id);
         assert.deepEqual(adapter.seedListUrls(source), [source.baseUrl]);
       }
+    }),
+  );
+
+  results.push(
+    await runCase("community adapters parse public thread links and redact contacts", () => {
+      const [tiebaSource] = resolveSelectedSources(["tjcu-tieba"]);
+      const tiebaAdapter = getSourceAdapter(tiebaSource.id);
+      const tiebaList = tiebaAdapter.parseListPage(
+        tiebaSource,
+        tiebaSource.baseUrl,
+        `
+          <html>
+            <body>
+              <a href="/p/1234567890">宿舍经验贴</a>
+              <a href="https://example.com/p/999">外站链接</a>
+              <a href="/f?kw=test">列表页</a>
+            </body>
+          </html>
+        `,
+      );
+
+      assert.deepEqual(tiebaList.detailUrls, ["https://tieba.baidu.com/p/1234567890"]);
+      assert.deepEqual(tiebaList.extraListUrls, []);
+
+      const detail = tiebaAdapter.parseDetailPage(
+        "https://tieba.baidu.com/p/1234567890",
+        `
+          <html>
+            <body>
+              <h1 class="core_title_txt">宿舍经验贴</h1>
+              <div id="j_p_postlist">
+                <div class="d_post_content">住宿经验仅供参考，具体安排以学校官方通知为准。</div>
+                <div class="d_post_content">手机号 13812345678，邮箱 test@example.com，微信 wx123456。</div>
+              </div>
+            </body>
+          </html>
+        `,
+      );
+      const sanitized = sanitizeCommunityMarkdown(detail.cleanedMarkdown);
+
+      assert.match(sanitized, /住宿经验仅供参考/);
+      assert.doesNotMatch(sanitized, /13812345678/);
+      assert.doesNotMatch(sanitized, /test@example\.com/);
+      assert.doesNotMatch(sanitized, /wx123456/);
+      assert.match(sanitized, /\[手机号已隐藏\]/);
+      assert.ok(COMMUNITY_INGEST_SOURCE_IDS.includes("tjcu-tieba"));
     }),
   );
 
@@ -304,8 +376,12 @@ async function main() {
     }),
   );
 
-  if (!process.env.DATABASE_URL) {
-    console.log("SKIP postgres integration (DATABASE_URL is not configured)");
+  if (testMode === "unit") {
+    console.log("SKIP postgres integration (unit mode)");
+  } else if (!process.env.DATABASE_URL) {
+    console.error("FAIL postgres integration");
+    console.error("DATABASE_URL is required. Start Postgres or set INGESTION_TEST_MODE=unit.");
+    results.push(false);
   } else {
     results.push(
       await runCase("postgres integration", async () => {

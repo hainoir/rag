@@ -1,0 +1,40 @@
+name: Scheduled Ingestion
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 20 * * *"
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      SEARCH_DATABASE_SCHEMA: ${{ vars.SEARCH_DATABASE_SCHEMA || 'public' }}
+      SEARCH_SERVICE_PROVIDER: postgres
+      SEARCH_ANSWER_MODE: extractive
+      INGEST_SOURCE_IDS: ${{ vars.INGEST_SOURCE_IDS || 'tjcu-main-notices,tjcu-library,tjcu-academic-affairs,tjcu-undergrad-admissions,tjcu-grad-admissions' }}
+      RUN_COMMUNITY_INGESTION: ${{ vars.RUN_COMMUNITY_INGESTION || 'false' }}
+      INGEST_COMMUNITY_SOURCE_IDS: ${{ vars.INGEST_COMMUNITY_SOURCE_IDS || 'tjcu-tieba' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Skip when DATABASE_URL is not configured
+        if: ${{ env.DATABASE_URL == '' }}
+        run: echo "DATABASE_URL secret is not configured; scheduled ingestion skipped."
+
+      - name: Run official ingestion
+        if: ${{ env.DATABASE_URL != '' }}
+        run: npm run verify:real-data
+
+      - name: Run community ingestion
+        if: ${{ env.DATABASE_URL != '' && env.RUN_COMMUNITY_INGESTION == 'true' }}
+        run: npm run ingest:community

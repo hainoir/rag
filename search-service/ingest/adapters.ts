@@ -70,6 +70,55 @@ function createOfficialHtmlAdapter({
   };
 }
 
+function createCommunityHtmlAdapter({
+  sourceId,
+  isDetailPath,
+  titleSelectors = ["h1", "title"],
+  contentSelectors = [
+    "article",
+    "main",
+    ".Post-RichTextContainer",
+    ".RichContent-inner",
+    ".Question-main",
+    "#j_p_postlist",
+    ".p_content",
+    ".d_post_content",
+    "body",
+  ],
+  metaSelectors = ["time", ".ContentItem-time", ".post-tail-wrap", ".tail-info"],
+}: {
+  sourceId: SupportedSourceId;
+  isDetailPath: (pathname: string) => boolean;
+  titleSelectors?: string[];
+  contentSelectors?: string[];
+  metaSelectors?: string[];
+}): SourceAdapter {
+  return {
+    sourceId,
+    seedListUrls: (source) => [source.baseUrl],
+    parseListPage: (source, pageUrl, html) =>
+      parseSectionListPage({
+        html,
+        pageUrl,
+        headingTexts: [],
+        isDetailUrl: (url) => {
+          const candidate = new URL(url);
+
+          return isSameHost(source, url) && isDetailPath(candidate.pathname);
+        },
+        isExtraListUrl: () => false,
+      }),
+    parseDetailPage: (pageUrl, html) =>
+      parseArticlePage({
+        html,
+        pageUrl,
+        titleSelectors,
+        contentSelectors,
+        metaSelectors,
+      }),
+  };
+}
+
 const adapters: Record<SupportedSourceId, SourceAdapter> = {
   "tjcu-main-notices": {
     sourceId: "tjcu-main-notices",
@@ -172,6 +221,20 @@ const adapters: Record<SupportedSourceId, SourceAdapter> = {
         metaSelectors: [".show_info", ".article-info", ".v_news_detail", ".news_meta"],
       }),
   },
+  "tjcu-tieba": createCommunityHtmlAdapter({
+    sourceId: "tjcu-tieba",
+    isDetailPath: (pathname) => /^\/p\/\d+$/i.test(pathname),
+    titleSelectors: ["h1", ".core_title_txt", ".card_title", "title"],
+    contentSelectors: ["#j_p_postlist", ".p_content", ".d_post_content", "article", "main", "body"],
+    metaSelectors: [".post-tail-wrap", ".tail-info", "time"],
+  }),
+  "tjcu-zhihu": createCommunityHtmlAdapter({
+    sourceId: "tjcu-zhihu",
+    isDetailPath: (pathname) => /^\/question\/\d+/i.test(pathname),
+    titleSelectors: ["h1", ".QuestionHeader-title", "title"],
+    contentSelectors: ["article", ".Question-main", ".RichContent-inner", ".Post-RichTextContainer", "main", "body"],
+    metaSelectors: ["time", ".ContentItem-time", ".QuestionHeader-detail"],
+  }),
 };
 
 export function getSourceAdapter(sourceId: SupportedSourceId) {

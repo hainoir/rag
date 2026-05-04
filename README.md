@@ -18,6 +18,7 @@
 - `SearchSource` 已支持来源站点、发布时间、更新时间、抓取时间、最近校验时间和来源新鲜度
 - 仓库内已经补齐来源注册表、清洗规则、去重规则和入库表结构骨架，方便接真实数据链路
 - 搜索服务可选接入 OpenAI-compatible LLM，把检索片段升级为生成式回答；未配置 key 时自动保持 extractive answer
+- Postgres 检索默认走 lexical / pg_trgm；配置 pgvector 与 embedding key 后可启用可选 hybrid retrieval
 
 这个项目适合作为：
 
@@ -33,6 +34,7 @@
 - 官方 / 社区来源分层筛选
 - 来源卡片展开、原文跳转和关键词高亮
 - 来源卡片展示来源站点、发布时间、更新时间、抓取时间和最近校验时间
+- 暗色模式切换，偏好会保存在浏览器本地
 - 无答案兜底和相关问题推荐
 - 统一的 `/api/search` 搜索入口
 
@@ -42,12 +44,12 @@
 
 `SearchBox / SuggestedQuestions -> /api/search -> searchServiceProvider -> SEARCH_SERVICE_URL -> search-service -> SearchResponse -> ResultsShell -> 回答视图 / 检索视图`
 
-这条链路已经具备“前端只消费统一结果结构”的边界。当前仓库**不直接包含**下面这些生产能力：
+这条链路已经具备“前端只消费统一结果结构”的边界。当前仓库已经包含最小官方来源摄取、保守社区来源摄取、Postgres chunk 检索和可选 pgvector embedding 扩展；但它仍然**不等同于生产级 RAG 平台**，下面这些能力仍需要继续完善：
 
-- 爬虫或 RSS 抓取服务
-- 正文抽取与清洗执行器
-- 向量数据库 / BM25 / rerank 服务
-- 在线评估与监控平台
+- 大规模稳定抓取、失败重试和来源合规审计
+- BM25 / rerank / 评估集驱动的检索质量优化
+- 线上监控、告警、限流和缓存策略
+- 社区内容的长期质量治理与人工复核流程
 
 这些能力现在通过仓库内的契约文件和文档留好了接口，而不是继续写死在前端页面里。
 
@@ -117,9 +119,30 @@ LLM_MODEL=your-chat-model
 
 LLM 只在检索已有来源时调用，提示词要求模型只使用传入 evidence，并返回 `usedSourceIds`。服务会把这些 sourceId 映射回 `SearchAnswer.evidence`，保持前端契约不变；模型调用失败时回退 extractive answer。
 
-## 官方来源 Ingestion v1
+### 可选 pgvector embedding
 
-仓库现在额外提供了一套面向官方来源的 CLI ingestion 闭环，运行在 `search-service/` 下的 TypeScript runtime 中，不改前端查询链路。默认同步 5 个官方源，运行时已支持主站、图书馆、教务处、学生处、后勤、就业网、本科招生网和研究生招生网。
+Postgres 检索默认不要求 embedding key，使用 `ILIKE`、`pg_trgm` 和来源权重排序。需要演示 hybrid retrieval 时，先确保 Postgres 支持 pgvector，再运行：
+
+```bash
+npm run vector:init
+npm run embed:chunks
+npm run smoke:vector
+```
+
+相关环境变量：
+
+```bash
+EMBEDDING_API_KEY=...
+EMBEDDING_BASE_URL=https://api.openai.com/v1
+EMBEDDING_MODEL=text-embedding-3-small
+EMBEDDING_DIMENSIONS=1536
+```
+
+未配置 `EMBEDDING_API_KEY` 时，`embed:chunks` 会保持 skip/dry-run 边界，`search-service` 继续使用 lexical retrieval，不会破坏现有 `SearchResponse`。
+
+## 真实来源 Ingestion v1
+
+仓库现在额外提供了一套 CLI ingestion 闭环，运行在 `search-service/` 下的 TypeScript runtime 中，不改前端查询链路。默认官方同步 5 个官方源，运行时已支持主站、图书馆、教务处、学生处、后勤、就业网、本科招生网和研究生招生网。社区摄取目前只默认启用 `tjcu-tieba`，`tjcu-zhihu` 作为可指定来源，定位是经验补充而不是权威事实来源。
 
 在执行同步前，需要先配置数据库和 ingestion 运行参数：
 
@@ -127,6 +150,7 @@ LLM 只在检索已有来源时调用，提示词要求模型只使用传入 evi
 DATABASE_URL=postgres://...
 SEARCH_SERVICE_PROVIDER=postgres
 INGEST_SOURCE_IDS=tjcu-main-notices,tjcu-library,tjcu-academic-affairs,tjcu-undergrad-admissions,tjcu-grad-admissions
+INGEST_COMMUNITY_SOURCE_IDS=tjcu-tieba
 INGEST_FETCH_LIMIT=12
 INGEST_HTTP_TIMEOUT_MS=15000
 INGEST_CONCURRENCY=4
@@ -137,19 +161,29 @@ INGEST_USER_AGENT=campus-rag-ingestion/1.0 (+https://www.tjcu.edu.cn/)
 
 ```bash
 npm run smoke:search-service
+npm run test:unit
+npm run lint
+npm run format:check
 npm run verify:demo
 npm run db:init
 npm run ingest:official
+npm run ingest:community
 npm run ingest:source -- tjcu-main-notices
 npm run inspect:ingestion
+npm run vector:init
+npm run embed:chunks
+npm run smoke:vector
 npm run smoke:postgres
-npm run test:ingestion
+npm run test:ingestion:unit
+npm run test:ingestion:postgres
 ```
 
-这期已经闭合了 `documents / document_versions / chunks / ingestion_runs -> search-service -> SearchResponse` 的最小真实数据回路。重复执行 `npm run ingest:official` 时，未变化文章只刷新校验时间，不会重复插入相同文档和版本。
+这期已经具备 `documents / document_versions / chunks / ingestion_runs -> search-service -> SearchResponse` 的最小真实数据回路代码。是否已经在当前环境闭合，必须以 `npm run verify:real-data` 或 `npm run smoke:postgres` 的输出为准。重复执行 `npm run ingest:official` 或 `npm run ingest:community` 时，未变化文章只刷新校验时间，不会重复插入相同文档和版本。
 `npm run smoke:postgres` 会检查默认官方源是否已有可检索文档和 chunk，并验证一个真实命中 query 与一个预期无命中 query，避免把 seed corpus 或泛词命中误判为真实闭环成功。
 
-`npm run verify:demo` 使用 [fixtures/demo-queries.json](./fixtures/demo-queries.json) 中的固定问题验证 seed 演示闭环；`npm run e2e` 会启动 seed 搜索服务和 Next.js dev server，覆盖首页搜索、结果页渲染、来源展开、无答案兜底和错误态。
+`npm run test:ingestion` 现在等同于无数据库单元测试；`npm run test:ingestion:postgres` 明确要求 `DATABASE_URL` 和可连接的 Postgres。`npm run verify:real-data` 会按 `db:init -> ingest:official -> inspect:ingestion -> smoke:postgres -> test:ingestion:postgres` 串起真实数据验收。
+
+`npm run verify:demo` 使用 [fixtures/demo-queries.json](./fixtures/demo-queries.json) 中的固定问题验证 seed 演示闭环；`npm run test:components` 用 Vitest + Testing Library 覆盖核心 React 组件；`npm run e2e` 会启动 seed 搜索服务和 Next.js dev server，覆盖首页搜索、暗色模式、结果页渲染、来源展开、无答案兜底和错误态。
 
 本地 Postgres 启动和真实检索闭环见 [docs/local-postgres.md](./docs/local-postgres.md)。演示 query 与部署边界见 [docs/demo-and-deploy.md](./docs/demo-and-deploy.md)。
 
@@ -159,5 +193,7 @@ npm run test:ingestion
 
 1. 固化本地真实闭环复验：`db:init -> ingest:official -> inspect:ingestion -> smoke:postgres -> /api/search`
 2. 配置 `SEARCH_ANSWER_MODE=llm` 做生成式回答演示，并保留无 key 时的 extractive fallback
-3. 扩大官方来源 adapter 的实站验证范围，优先保证 3-5 个来源稳定重复同步
-4. 再补向量检索、错误分类、埋点、监控和定时摄取任务
+3. 配置 pgvector embedding，复验 `vector:init -> embed:chunks -> smoke:vector -> hybrid search`
+4. 扩大官方来源 adapter 的实站验证范围，优先保证 3-5 个来源稳定重复同步
+5. 对社区来源补合规策略、质量阈值和人工复核记录，再扩大自动摄取范围
+6. 再补 rerank、评估集、埋点、监控和生产调度

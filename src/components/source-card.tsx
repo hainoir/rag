@@ -31,9 +31,7 @@ export function SourceCard({ source, expanded, onToggle }: SourceCardProps) {
       data-testid="source-card"
       style={{
         borderColor: isOfficial ? "rgba(40,81,61,0.18)" : "rgba(122,74,37,0.18)",
-        background: isOfficial
-          ? "linear-gradient(180deg, rgba(255,251,247,0.92) 0%, rgba(244,249,246,0.92) 100%)"
-          : "linear-gradient(180deg, rgba(255,251,247,0.92) 0%, rgba(249,244,239,0.92) 100%)",
+        background: isOfficial ? "var(--source-card-official)" : "var(--source-card-community)",
       }}
     >
       <div className="flex flex-wrap items-center gap-3">

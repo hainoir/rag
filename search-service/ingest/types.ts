@@ -21,13 +21,24 @@ export const DEFAULT_OFFICIAL_SOURCE_IDS = [
 
 export const OFFICIAL_NOTICE_SOURCE_IDS = OFFICIAL_INGEST_SOURCE_IDS;
 
-export type SupportedSourceId = (typeof OFFICIAL_INGEST_SOURCE_IDS)[number];
+export const COMMUNITY_INGEST_SOURCE_IDS = ["tjcu-tieba", "tjcu-zhihu"] as const;
+
+export const DEFAULT_COMMUNITY_SOURCE_IDS = ["tjcu-tieba"] as const;
+
+export const SUPPORTED_INGEST_SOURCE_IDS = [
+  ...OFFICIAL_INGEST_SOURCE_IDS,
+  ...COMMUNITY_INGEST_SOURCE_IDS,
+] as const;
+
+export type OfficialIngestSourceId = (typeof OFFICIAL_INGEST_SOURCE_IDS)[number];
+export type CommunityIngestSourceId = (typeof COMMUNITY_INGEST_SOURCE_IDS)[number];
+export type SupportedSourceId = (typeof SUPPORTED_INGEST_SOURCE_IDS)[number];
 
 export type SelectedSource = SourceRegistryEntry & {
   id: SupportedSourceId;
-  type: "official";
+  type: "official" | "community";
   fetchMode: "html";
-  cleaningProfile: "official_notice" | "official_faq";
+  cleaningProfile: "official_notice" | "official_faq" | "community_thread";
 };
 
 export type PreparedChunk = {

@@ -17,7 +17,7 @@
 - `cleaningProfile`：决定使用哪套清洗规则
 - `trustWeight`：进入排序和回答时的基础权重
 
-建议先只接 8 到 12 个高质量白名单来源，不要一开始就做全站抓取。
+建议先只接 8 到 12 个高质量白名单来源，不要一开始就做全站抓取。当前自动摄取入口分两类：`ingest:official` 默认跑官方源；`ingest:community` 默认只跑低权重的 `tjcu-tieba`，其余社区来源需要显式指定。
 
 ## 2. 清洗规则
 
@@ -36,6 +36,7 @@
 - 只保留公开帖子正文
 - 把“昨天 / 上周 / 刚刚”转换成抓取当天对应的绝对时间
 - 只把社区内容作为经验补充，不把它提升为权威事实
+- 入库前隐藏手机号、邮箱和常见微信 / QQ 联系方式
 
 ## 3. 去重规则
 
@@ -72,7 +73,8 @@
    - 对清洗后的正文按段落或固定 token 数切片
    - 为每个 chunk 生成可回显的 `snippet` 和 `fullSnippet`
 5. `index`
-   - 写入全文索引或向量索引
+   - 写入全文索引
+   - 可选执行 `vector:init -> embed:chunks` 写入 pgvector embedding
    - 记录 chunk 数量和入库结果
 6. `publish`
    - 对查询 API 暴露统一的搜索结果结构
@@ -119,7 +121,7 @@
 
 ## 7. 存储结构
 
-表结构草案见 [search-storage-schema.sql](./search-storage-schema.sql)。
+表结构草案见 [search-storage-schema.sql](./search-storage-schema.sql)。可选 pgvector 扩展见 [vector-search-schema.sql](./vector-search-schema.sql)。
 
 最小可用集合：
 
@@ -130,3 +132,21 @@
 - `ingestion_runs`
 
 如果后续要做失败重试或调试回放，再补 `ingestion_run_items`。
+
+## 8. 向量检索扩展
+
+当前 pgvector 是可选增强，不改变前端契约：
+
+1. `npm run vector:init`
+   - 创建 `vector` extension
+   - 给 `chunks` 增加 `embedding / embedding_model / embedded_at`
+   - 创建 HNSW 索引，失败时回退 IVFFLAT
+2. `npm run embed:chunks`
+   - 读取最新 active document version 中未 embedding 的 chunks
+   - 调用 OpenAI-compatible embeddings API
+   - 把向量、模型名和写入时间落回 `chunks`
+3. `npm run smoke:vector`
+   - 用一个固定 query 生成 query embedding
+   - 检查向量距离排序能返回已入库 chunk
+
+`search-service` 会检测 `chunks.embedding` 和 embedding key。满足条件时使用 lexical + vector hybrid retrieval；不满足时仍使用现有 lexical / pg_trgm 路径。

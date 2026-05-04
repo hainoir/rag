@@ -22,7 +22,24 @@ npm run verify:demo
 - Next.js 前端：`npm run dev`，默认 `http://localhost:3000`。
 - 上游搜索服务：`npm run search-service`，默认 `http://127.0.0.1:8080/api/search`。
 - Postgres：通过 `docker compose up -d postgres` 或托管数据库提供。
-- 摄取任务：手动运行 `npm run ingest:official`；后续部署时可放进 cron / scheduled job。
+- 摄取任务：手动运行 `npm run ingest:official` 和按需运行 `npm run ingest:community`；后续部署时可放进 cron / scheduled job。
+- 可选向量任务：`npm run vector:init` 初始化一次，之后用 `npm run embed:chunks` 增量补 embedding。
+
+## Docker 镜像
+
+仓库根目录的 `Dockerfile` 提供两个目标：
+
+```bash
+docker build --target web -t campus-rag-web .
+docker build --target search-service -t campus-rag-search-service .
+```
+
+运行时仍保持同一条边界：web 容器只需要 `SEARCH_SERVICE_URL`，search-service 容器通过 `SEARCH_SERVICE_PROVIDER` 决定读取 seed 或 Postgres。
+
+```bash
+docker run --rm -p 8080:8080 campus-rag-search-service
+docker run --rm -p 3000:3000 -e SEARCH_SERVICE_URL=http://host.docker.internal:8080/api/search campus-rag-web
+```
 
 ## 部署边界
 
@@ -53,19 +70,50 @@ LLM_TEMPERATURE=0.2
 
 `SEARCH_ANSWER_MODE=auto` 也可用：配置了 key/model 时使用 LLM，未配置时保持 extractive。演示时建议先用 `extractive` 跑通数据库 smoke，再切到 `llm` 对比回答质量。
 
+可选 embedding 环境变量：
+
+```bash
+EMBEDDING_API_KEY=...
+EMBEDDING_BASE_URL=https://api.openai.com/v1
+EMBEDDING_MODEL=text-embedding-3-small
+EMBEDDING_DIMENSIONS=1536
+```
+
+启用 pgvector 后，search-service 会把 lexical / pg_trgm 候选和 vector 候选合并排序；前端仍只消费同一个 `SearchResponse`。未配置 embedding key 或数据库没有 `chunks.embedding` 时，服务不会调用 embedding API。
+
 ## 发布前检查
 
 ```bash
 npm run smoke:search-service
 npm run verify:demo
 npm run verify:search-contract
-npm run smoke:postgres
-npm run test:ingestion
+npm run test:unit
+npm run verify:real-data
+npm run smoke:vector
 npm run build
 npm run e2e
 ```
 
-如果没有配置 `DATABASE_URL`，`npm run smoke:postgres` 会失败，`npm run test:ingestion` 也无法证明真实数据库闭环。发布前至少要让 smoke 检查和 Postgres 集成测试都通过。
+`npm run test:unit` 不依赖数据库，覆盖 adapter、清洗、去重、seed 搜索和搜索代理归一化逻辑。`npm run verify:real-data` 依赖 `DATABASE_URL`，会初始化 schema、同步官方来源、检查 ingestion 状态、跑 Postgres smoke 和 Postgres 集成测试。`npm run smoke:vector` 还要求 pgvector schema、已写入 embedding 的 chunks 和可用 embedding key。
+
+如果没有配置 `DATABASE_URL`，`npm run verify:real-data` 会失败；这时只能证明 seed demo 和前端流程可用，不能声称真实数据库闭环已验证。发布前至少要让 Postgres smoke 检查和 Postgres 集成测试都通过。
+
+## 定时摄取
+
+仓库内置 `.github/workflows/scheduled-ingestion.yml`。它每天 UTC 20:00 运行，也支持手动触发；只有配置了 `DATABASE_URL` secret 时才执行 `npm run verify:real-data`。可用 GitHub Actions variables 覆盖：
+
+- `SEARCH_DATABASE_SCHEMA`
+- `INGEST_SOURCE_IDS`
+- `RUN_COMMUNITY_INGESTION`
+- `INGEST_COMMUNITY_SOURCE_IDS`
+
+默认不在定时任务里自动跑社区来源；把 `RUN_COMMUNITY_INGESTION=true` 后，workflow 才会额外执行 `npm run ingest:community`。这样可以先把官方来源作为稳定基线，社区来源按合规和质量策略逐步打开。
+
+## 错误分类与降级
+
+上游 search-service 的 HTTP 错误 payload 会返回稳定 `error` code，例如 `invalid_json`、`database_unavailable`、`upstream_timeout` 和 `search_service_error`。Next.js 搜索代理不会把这些字段扩展进 `SearchResponse`，而是记录结构化日志并继续给前端返回既有 `status: "error"`。
+
+`SEARCH_SERVICE_PROVIDER=auto` 时，Postgres 失败会按错误分类记录 `fallbackReason`，然后回退 seed corpus；`SEARCH_SERVICE_PROVIDER=postgres` 时不会回退，适合验证真实数据链路。
 
 E2E 默认会启动 seed 搜索服务和 Next.js dev server，覆盖首页搜索、结果页渲染、来源展开、无结果和错误态。首次运行如果本机没有浏览器二进制，需要先执行：
 

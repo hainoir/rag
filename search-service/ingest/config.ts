@@ -1,7 +1,7 @@
 import { SOURCE_REGISTRY } from "../../src/lib/search/source-registry.ts";
 import {
   DEFAULT_OFFICIAL_SOURCE_IDS,
-  OFFICIAL_INGEST_SOURCE_IDS,
+  SUPPORTED_INGEST_SOURCE_IDS,
   type SelectedSource,
   type SupportedSourceId,
 } from "./types.ts";
@@ -11,7 +11,7 @@ const DEFAULT_HTTP_TIMEOUT_MS = 15_000;
 const DEFAULT_CONCURRENCY = 4;
 const DEFAULT_USER_AGENT = "campus-rag-ingestion/1.0 (+https://www.tjcu.edu.cn/)";
 
-const SUPPORTED_SOURCE_IDS = new Set<string>(OFFICIAL_INGEST_SOURCE_IDS);
+const SUPPORTED_SOURCE_IDS = new Set<string>(SUPPORTED_INGEST_SOURCE_IDS);
 
 export type IngestRuntimeConfig = {
   databaseUrl: string;
@@ -43,9 +43,11 @@ export function getAllSupportedSources() {
     return (
       SUPPORTED_SOURCE_IDS.has(source.id) &&
       source.enabled &&
-      source.type === "official" &&
+      (source.type === "official" || source.type === "community") &&
       source.fetchMode === "html" &&
-      (source.cleaningProfile === "official_notice" || source.cleaningProfile === "official_faq")
+      (source.cleaningProfile === "official_notice" ||
+        source.cleaningProfile === "official_faq" ||
+        source.cleaningProfile === "community_thread")
     );
   });
 }

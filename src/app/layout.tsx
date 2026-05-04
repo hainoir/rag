@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import "./globals.css";
 import { SearchHistoryProvider } from "@/components/search-history-provider";
+import { ThemeProvider } from "@/components/theme-provider";
 
 export const metadata: Metadata = {
   title: "校园信息检索与可解释问答助手",
@@ -15,9 +16,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html data-scroll-behavior="smooth" lang="zh-CN">
+    <html data-scroll-behavior="smooth" lang="zh-CN" suppressHydrationWarning>
       <body>
-        <SearchHistoryProvider>{children}</SearchHistoryProvider>
+        <ThemeProvider>
+          <SearchHistoryProvider>{children}</SearchHistoryProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

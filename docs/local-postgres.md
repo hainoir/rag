@@ -34,6 +34,7 @@ npm run db:init
 npm run ingest:official
 npm run inspect:ingestion
 npm run smoke:postgres
+npm run test:ingestion:postgres
 ```
 
 默认同步 5 个官方源：主站、图书馆、教务处、本科招生网、研究生招生网。需要扩展时可设置：
@@ -42,7 +43,47 @@ npm run smoke:postgres
 INGEST_SOURCE_IDS=tjcu-main-notices,tjcu-library,tjcu-academic-affairs,tjcu-student-affairs,tjcu-logistics,tjcu-career,tjcu-undergrad-admissions,tjcu-grad-admissions
 ```
 
-`npm run smoke:postgres` 是本地闭环的最小自动验收：默认要求至少 3 个官方源已有文档和最新 chunk，`图书馆` 能在 Postgres 中命中，`明天校园集市几点开始` 保持 `empty`。如果需要替换演示 query，可以通过 `SEARCH_SMOKE_HIT_QUERY`、`SEARCH_SMOKE_EMPTY_QUERY` 和 `SEARCH_SMOKE_MIN_SOURCES` 覆盖。
+社区来源使用单独命令，默认只同步 `tjcu-tieba`，也可以显式指定 `tjcu-zhihu`：
+
+```bash
+npm run ingest:community
+npm run ingest:community -- tjcu-zhihu
+```
+
+社区内容会按 `community_thread` profile 清洗，并隐藏手机号、邮箱和常见微信 / QQ 联系方式。它的 `trustWeight` 低于官方来源，搜索结果中只能作为经验补充。
+
+`npm run smoke:postgres` 是本地闭环的最小自动验收：默认要求至少 3 个官方源已有文档和最新 chunk，`图书馆` 能在 Postgres 中命中，`明天校园集市几点开始` 保持 `empty`。Postgres 检索会使用 `ILIKE` 候选、`pg_trgm` 相似度和应用层来源权重共同排序。如果需要替换演示 query，可以通过 `SEARCH_SMOKE_HIT_QUERY`、`SEARCH_SMOKE_EMPTY_QUERY` 和 `SEARCH_SMOKE_MIN_SOURCES` 覆盖。
+
+如果只想跑不依赖数据库的 ingestion 单元测试，使用 `npm run test:ingestion:unit`。`npm run test:ingestion:postgres` 会强制要求可连接的 `DATABASE_URL`，避免把本地 seed 或跳过数据库的测试误判成真实闭环。
+
+需要一条命令复验真实链路时，使用：
+
+```bash
+npm run verify:real-data
+```
+
+## 可选 pgvector
+
+如果数据库支持 pgvector，并且已完成 `db:init` 与至少一次 ingestion，可以增加向量字段和 embedding：
+
+```bash
+npm run vector:init
+npm run embed:chunks
+npm run smoke:vector
+```
+
+需要的最小环境变量：
+
+```bash
+EMBEDDING_API_KEY=...
+EMBEDDING_BASE_URL=https://api.openai.com/v1
+EMBEDDING_MODEL=text-embedding-3-small
+EMBEDDING_DIMENSIONS=1536
+```
+
+`vector:init` 会创建 `vector` extension，并给 `chunks` 增加 `embedding / embedding_model / embedded_at` 字段与向量索引。`embed:chunks` 只处理最新 active document version 中尚未写入 embedding 的 chunk。没有 `EMBEDDING_API_KEY` 时，它会输出 skip/dry-run 信息，不会伪装成已完成 embedding。
+
+搜索服务会自动检测 `chunks.embedding` 字段和 embedding key。条件满足时走 lexical + vector hybrid retrieval；条件不满足或 query embedding 失败时，Postgres 搜索继续回到 lexical / pg_trgm 路径。
 
 ## 运行查询链路
 
@@ -58,4 +99,5 @@ npm run dev
 - `npm run smoke:search-service` 在无数据库场景下能证明上游 HTTP 服务和 seed fallback 可用。
 - `npm run inspect:ingestion` 至少显示 3 个官方源有 `documents > 0` 且 `latestVersionChunks > 0`。
 - `npm run smoke:postgres` 输出 `Postgres smoke passed`。
+- `npm run test:ingestion:postgres` 输出 `PASS postgres integration`。
 - `SEARCH_SERVICE_PROVIDER=postgres` 时，预期无命中 query 不应因为 `校园`、`通知` 这类泛词返回演示答案。

@@ -2,6 +2,7 @@ import { DEFAULT_QUESTIONS } from "@/lib/search/default-questions";
 import { HistoryPanel } from "@/components/history-panel";
 import { SearchBox } from "@/components/search-box";
 import { SuggestedQuestions } from "@/components/suggested-questions";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const HIGHLIGHTS = [
   {
@@ -22,6 +23,9 @@ export function HomePage() {
   return (
     <main className="page-shell">
       <div className="mx-auto flex max-w-7xl flex-col gap-8">
+        <div className="flex justify-end">
+          <ThemeToggle />
+        </div>
         <section className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_360px]">
           <div className="surface rounded-[40px] px-6 py-8 md:px-10 md:py-12">
             <div className="mb-6 flex flex-wrap gap-3">

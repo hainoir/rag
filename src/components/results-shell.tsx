@@ -10,6 +10,7 @@ import { ResultToolbar } from "@/components/result-toolbar";
 import { SearchBox } from "@/components/search-box";
 import { SourceList } from "@/components/source-list";
 import { StatusPanel } from "@/components/status-panel";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { DEFAULT_QUESTIONS } from "@/lib/search/default-questions";
 import type { SearchResponse, SourceType, ViewMode } from "@/lib/search/types";
 
@@ -140,6 +141,9 @@ export function ResultsShell({ initialQuery }: ResultsShellProps) {
   return (
     <main aria-labelledby="search-results-heading" className="page-shell">
       <div className="mx-auto max-w-7xl">
+        <div className="mb-4 flex justify-end">
+          <ThemeToggle />
+        </div>
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_340px]">
           <div className="space-y-6">
             <section className="surface rounded-[32px] p-6 md:p-8">

@@ -3,6 +3,12 @@ const { URL } = require("node:url");
 const { Pool } = require("pg");
 
 const { generateLlmAnswer } = require("./answer-generator.cjs");
+const {
+  formatVectorLiteral,
+  generateEmbedding,
+  readEmbeddingConfig,
+  shouldUseEmbeddings,
+} = require("./embedding-client.cjs");
 const { loadLocalEnv } = require("./load-env.cjs");
 const { defaultQuestions, seedCorpus } = require("./seed-corpus.cjs");
 
@@ -132,6 +138,52 @@ async function withPostgresClient(task) {
     return await task(client);
   } finally {
     client.release();
+  }
+}
+
+async function hasVectorColumn(client) {
+  const result = await client.query(
+    `
+      select exists (
+        select 1
+        from information_schema.columns
+        where table_schema = $1
+          and table_name = 'chunks'
+          and column_name = 'embedding'
+      ) as exists
+    `,
+    [getSearchSchema()],
+  );
+
+  return Boolean(result.rows[0]?.exists);
+}
+
+async function maybeBuildQueryEmbeddingLiteral(client, query) {
+  const embeddingConfig = readEmbeddingConfig();
+
+  if (!shouldUseEmbeddings(embeddingConfig)) {
+    return null;
+  }
+
+  if (!(await hasVectorColumn(client))) {
+    return null;
+  }
+
+  try {
+    const embedding = await generateEmbedding(query, embeddingConfig);
+
+    return {
+      literal: formatVectorLiteral(embedding),
+      model: embeddingConfig.model,
+    };
+  } catch (error) {
+    logSearchEvent("error", {
+      event: "embedding.query_failed",
+      model: embeddingConfig.model,
+      errorType: error instanceof Error ? error.name : "UnknownError",
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
+    return null;
   }
 }
 
@@ -668,6 +720,84 @@ async function searchPostgres(query, limit) {
   const candidateLimit = clamp(limit * 8, limit, DEFAULT_CANDIDATE_LIMIT);
 
   const rows = await withPostgresClient(async (client) => {
+    const vectorQuery = await maybeBuildQueryEmbeddingLiteral(client, trimmedQuery);
+
+    if (vectorQuery) {
+      const result = await client.query(
+        `
+          with latest_versions as (
+            select distinct on (document_id)
+              document_id,
+              id as version_id
+            from document_versions
+            order by document_id, version_no desc
+          ),
+          vector_candidates as (
+            select
+              c.id as chunk_id
+            from chunks c
+            join latest_versions lv on lv.version_id = c.document_version_id
+            join documents d on d.id = lv.document_id
+            where c.embedding is not null
+              and d.status = 'active'
+            order by c.embedding <=> $4::vector
+            limit $2
+          )
+          select
+            c.id::text as chunk_id,
+            c.chunk_index,
+            c.snippet,
+            c.full_snippet,
+            d.id::text as document_id,
+            d.source_id,
+            d.source_type,
+            d.source_name,
+            d.title,
+            d.url,
+            d.canonical_url,
+            d.published_at,
+            d.updated_at,
+            d.fetched_at,
+            d.last_verified_at,
+            d.dedup_key,
+            coalesce(sr.trust_weight, 0.72)::float as trust_score,
+            greatest(
+              similarity(d.title, $3),
+              similarity(c.snippet, $3),
+              similarity(c.full_snippet, $3)
+            )::float as trigram_score,
+            case
+              when c.embedding is null then 0
+              else greatest(0, 1 - (c.embedding <=> $4::vector))
+            end::float as vector_score
+          from chunks c
+          join latest_versions lv on lv.version_id = c.document_version_id
+          join documents d on d.id = lv.document_id
+          left join source_registry sr on sr.id = d.source_id
+          where d.status = 'active'
+            and (
+              d.title ilike any($1::text[])
+              or c.snippet ilike any($1::text[])
+              or c.full_snippet ilike any($1::text[])
+              or d.title % $3
+              or c.snippet % $3
+              or c.full_snippet % $3
+              or c.id in (select chunk_id from vector_candidates)
+            )
+          order by
+            vector_score desc,
+            trigram_score desc,
+            case when d.source_type = 'official' then 1 else 0 end desc,
+            coalesce(sr.trust_weight, 0.72) desc,
+            coalesce(d.last_verified_at, d.updated_at, d.published_at, d.fetched_at) desc nulls last
+          limit $2
+        `,
+        [patterns, candidateLimit, trimmedQuery, vectorQuery.literal],
+      );
+
+      return result.rows;
+    }
+
     const result = await client.query(
       `
         with latest_versions as (
@@ -694,7 +824,13 @@ async function searchPostgres(query, limit) {
           d.fetched_at,
           d.last_verified_at,
           d.dedup_key,
-          coalesce(sr.trust_weight, 0.72)::float as trust_score
+          coalesce(sr.trust_weight, 0.72)::float as trust_score,
+          greatest(
+            similarity(d.title, $3),
+            similarity(c.snippet, $3),
+            similarity(c.full_snippet, $3)
+          )::float as trigram_score,
+          0::float as vector_score
         from chunks c
         join latest_versions lv on lv.version_id = c.document_version_id
         join documents d on d.id = lv.document_id
@@ -704,14 +840,18 @@ async function searchPostgres(query, limit) {
             d.title ilike any($1::text[])
             or c.snippet ilike any($1::text[])
             or c.full_snippet ilike any($1::text[])
+            or d.title % $3
+            or c.snippet % $3
+            or c.full_snippet % $3
           )
         order by
+          trigram_score desc,
           case when d.source_type = 'official' then 1 else 0 end desc,
           coalesce(sr.trust_weight, 0.72) desc,
           coalesce(d.last_verified_at, d.updated_at, d.published_at, d.fetched_at) desc nulls last
         limit $2
       `,
-      [patterns, candidateLimit],
+      [patterns, candidateLimit, trimmedQuery],
     );
 
     return result.rows;
@@ -728,7 +868,10 @@ async function searchPostgres(query, limit) {
       return {
         row,
         source,
-        score: scorePostgresSource(source, trimmedQuery, terms),
+        score:
+          scorePostgresSource(source, trimmedQuery, terms) +
+          Math.round(Number(row.trigram_score ?? 0) * 20) +
+          Math.round(Number(row.vector_score ?? 0) * 24),
       };
     })
     .filter((item) => item.score >= 12)
@@ -764,26 +907,131 @@ async function searchPostgres(query, limit) {
   };
 }
 
-async function search(query, limit) {
-  const provider = normalizeProvider(process.env.SEARCH_SERVICE_PROVIDER);
-  let response;
+function logSearchEvent(level, payload) {
+  const event = {
+    level,
+    timestamp: new Date().toISOString(),
+    service: "search-service",
+    ...payload,
+  };
+  const line = JSON.stringify(event);
 
-  if (provider === "seed") {
-    response = searchSeed(query, limit);
-  } else if (provider === "postgres") {
-    response = await searchPostgres(query, limit);
-  } else if (getPostgresPool()) {
-    try {
-      response = await searchPostgres(query, limit);
-    } catch (error) {
-      console.error("Postgres search failed; falling back to seed corpus.", error);
-      response = searchSeed(query, limit);
-    }
-  } else {
-    response = searchSeed(query, limit);
+  if (level === "error") {
+    console.error(line);
+    return;
   }
 
-  return enhanceResponseWithLlmAnswer(response);
+  console.log(line);
+}
+
+function classifyServiceError(error) {
+  const name = error instanceof Error ? error.name : "UnknownError";
+  const message = error instanceof Error ? error.message : String(error);
+  const normalizedMessage = message.toLowerCase();
+
+  if (name === "SyntaxError") {
+    return {
+      code: "invalid_json",
+      statusCode: 400,
+      message: "The request body must be valid JSON.",
+    };
+  }
+
+  if (normalizedMessage.includes("database_url") || normalizedMessage.includes("econnrefused")) {
+    return {
+      code: "database_unavailable",
+      statusCode: 503,
+      message: "The configured Postgres database is unavailable.",
+    };
+  }
+
+  if (normalizedMessage.includes("timeout") || normalizedMessage.includes("etimedout")) {
+    return {
+      code: "upstream_timeout",
+      statusCode: 504,
+      message: "The upstream search operation timed out.",
+    };
+  }
+
+  return {
+    code: "search_service_error",
+    statusCode: 500,
+    message: "The upstream search service failed to process the request.",
+  };
+}
+
+async function search(query, limit) {
+  const startedAt = Date.now();
+  const provider = normalizeProvider(process.env.SEARCH_SERVICE_PROVIDER);
+  let resolvedProvider = provider;
+  let fallbackReason;
+  let response;
+
+  try {
+    if (provider === "seed") {
+      response = searchSeed(query, limit);
+    } else if (provider === "postgres") {
+      response = await searchPostgres(query, limit);
+    } else if (getPostgresPool()) {
+      resolvedProvider = "postgres";
+      response = await searchPostgres(query, limit);
+    } else {
+      resolvedProvider = "seed";
+      fallbackReason = "database_unconfigured";
+      response = searchSeed(query, limit);
+    }
+
+    const enhancedResponse = await enhanceResponseWithLlmAnswer(response);
+
+    logSearchEvent("info", {
+      event: "search.completed",
+      query,
+      requestedProvider: provider,
+      resolvedProvider,
+      fallbackReason,
+      status: enhancedResponse.status,
+      sourceCount: enhancedResponse.sources.length,
+      retrievedCount: enhancedResponse.retrievedCount,
+      durationMs: Date.now() - startedAt,
+    });
+
+    return enhancedResponse;
+  } catch (error) {
+    if (provider === "auto") {
+      const classifiedError = classifyServiceError(error);
+      console.error("Postgres search failed; falling back to seed corpus.", error);
+      resolvedProvider = "seed";
+      fallbackReason = classifiedError.code;
+      response = await enhanceResponseWithLlmAnswer(searchSeed(query, limit));
+
+      logSearchEvent("info", {
+        event: "search.completed",
+        query,
+        requestedProvider: provider,
+        resolvedProvider,
+        fallbackReason,
+        status: response.status,
+        sourceCount: response.sources.length,
+        retrievedCount: response.retrievedCount,
+        durationMs: Date.now() - startedAt,
+      });
+
+      return response;
+    }
+
+    logSearchEvent("error", {
+      event: "search.failed",
+      query,
+      requestedProvider: provider,
+      resolvedProvider,
+      errorType: error instanceof Error ? error.name : "UnknownError",
+      errorCode: classifyServiceError(error).code,
+      errorMessage: error instanceof Error ? error.message : String(error),
+      durationMs: Date.now() - startedAt,
+    });
+
+    throw error;
+  }
 }
 
 function sendJson(response, statusCode, payload) {
@@ -872,10 +1120,18 @@ function createServer() {
     try {
       await handleSearch(request, response, url);
     } catch (error) {
-      console.error("Upstream search service request failed.", error);
-      sendJson(response, 500, {
-        error: "Internal Server Error",
-        message: "The upstream search service failed to process the request.",
+      const classifiedError = classifyServiceError(error);
+      logSearchEvent("error", {
+        event: "request.failed",
+        method: request.method,
+        path: url.pathname,
+        errorCode: classifiedError.code,
+        errorType: error instanceof Error ? error.name : "UnknownError",
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
+      sendJson(response, classifiedError.statusCode, {
+        error: classifiedError.code,
+        message: classifiedError.message,
       });
     }
   });

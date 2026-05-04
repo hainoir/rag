@@ -37,10 +37,13 @@ jobs:
           cache: npm
 
       - run: npm ci
+      - run: npm run lint
+      - run: npm run format:check
       - run: npm run verify:search-contract
       - run: npm run verify:demo
       - run: npm run smoke:search-service
-      - run: npm run test:ingestion
+      - run: npm run test:unit
+      - run: npm run test:ingestion:postgres
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run e2e -- --reporter=line

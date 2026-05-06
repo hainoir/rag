@@ -19,6 +19,8 @@
 
 建议先只接 8 到 12 个高质量白名单来源，不要一开始就做全站抓取。当前自动摄取入口分两类：`ingest:official` 默认跑官方源；`ingest:community` 默认只跑低权重的 `tjcu-tieba`，其余社区来源需要显式指定。
 
+RSS / sitemap 来源的增量候选检测已经沉淀在 `search-service/ingest/discovery-feeds.ts`，可解析 `loc / lastmod`、`link / guid / pubDate`，并按 `lastSeenAt` 过滤旧内容。当前官方 HTML adapter 仍保持原路径，后续新增 feed 来源时再接入这套工具。
+
 ## 2. 清洗规则
 
 清洗规则模板位于 `src/lib/search/ingestion-contract.ts` 的 `CLEANING_RULES`。
@@ -150,3 +152,13 @@
    - 检查向量距离排序能返回已入库 chunk
 
 `search-service` 会检测 `chunks.embedding` 和 embedding key。满足条件时使用 lexical + vector hybrid retrieval；不满足时仍使用现有 lexical / pg_trgm 路径。
+
+## 9. Rerank 与观测
+
+cross-encoder rerank 是可选二阶段排序：
+
+- 环境变量：`RERANK_API_KEY / RERANK_BASE_URL / RERANK_MODEL / RERANK_TOP_K`
+- 请求形态：兼容常见 `/rerank` API，传入 `query` 和候选 `documents`
+- 失败策略：记录 `rerank.failed`，保留原 lexical / hybrid 排序
+
+搜索服务同时提供 `/metrics` JSON 端点，记录 provider、status、fallback reason、error code 和平均耗时。当前它是进程内计数器，适合本地调试和 demo，不替代生产监控。

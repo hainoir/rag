@@ -10,6 +10,7 @@ const {
   shouldUseEmbeddings,
 } = require("./embedding-client.cjs");
 const { loadLocalEnv } = require("./load-env.cjs");
+const { readRerankConfig, rerankDocuments, shouldUseRerank } = require("./rerank-client.cjs");
 const { defaultQuestions, seedCorpus } = require("./seed-corpus.cjs");
 
 loadLocalEnv();
@@ -49,6 +50,15 @@ const GENERIC_QUERY_TERMS = new Set([
 ]);
 
 let postgresPool = null;
+const searchMetrics = {
+  startedAt: new Date().toISOString(),
+  requestsTotal: 0,
+  durationMsTotal: 0,
+  byResolvedProvider: {},
+  byStatus: {},
+  byFallbackReason: {},
+  byErrorCode: {},
+};
 
 function parsePositiveInteger(value, fallback) {
   const parsed = Number.parseInt(String(value ?? ""), 10);
@@ -79,6 +89,34 @@ function summarizeSnippet(value) {
 
 function unique(values) {
   return [...new Set(values.filter(Boolean))];
+}
+
+function incrementMetric(bucket, key) {
+  if (!key) {
+    return;
+  }
+
+  bucket[key] = (bucket[key] ?? 0) + 1;
+}
+
+function recordSearchMetric({ resolvedProvider, status, fallbackReason, errorCode, durationMs }) {
+  searchMetrics.requestsTotal += 1;
+  searchMetrics.durationMsTotal += durationMs;
+  incrementMetric(searchMetrics.byResolvedProvider, resolvedProvider);
+  incrementMetric(searchMetrics.byStatus, status);
+  incrementMetric(searchMetrics.byFallbackReason, fallbackReason);
+  incrementMetric(searchMetrics.byErrorCode, errorCode);
+}
+
+function getMetricsSnapshot() {
+  return {
+    ...searchMetrics,
+    averageDurationMs:
+      searchMetrics.requestsTotal > 0
+        ? Number((searchMetrics.durationMsTotal / searchMetrics.requestsTotal).toFixed(2))
+        : 0,
+    timestamp: new Date().toISOString(),
+  };
 }
 
 function normalizeProvider(value) {
@@ -707,6 +745,63 @@ function scorePostgresSource(source, query, terms) {
   return score;
 }
 
+function buildRerankDocument(source) {
+  return [
+    `title: ${source.title}`,
+    `source: ${source.sourceName}`,
+    `type: ${source.type}`,
+    `snippet: ${source.snippet}`,
+    `fullSnippet: ${source.fullSnippet ?? source.snippet}`,
+  ]
+    .join("\n")
+    .slice(0, 4_000);
+}
+
+async function maybeRerankScoredItems(query, items, limit) {
+  const rerankConfig = readRerankConfig();
+
+  if (!shouldUseRerank(rerankConfig) || items.length <= 1) {
+    return items;
+  }
+
+  const rerankLimit = clamp(rerankConfig.topK, limit, Math.min(items.length, 50));
+  const head = items.slice(0, rerankLimit);
+  const tail = items.slice(rerankLimit);
+
+  try {
+    const reranked = await rerankDocuments(query, head.map((item) => buildRerankDocument(item.source)), rerankConfig);
+    const scoreByIndex = new Map(reranked.map((item) => [item.index, item.relevanceScore]));
+    const rerankedHead = head
+      .map((item, index) => ({
+        ...item,
+        rerankScore: scoreByIndex.get(index) ?? 0,
+      }))
+      .sort((left, right) => {
+        const rerankDelta = right.rerankScore - left.rerankScore;
+
+        return rerankDelta !== 0 ? rerankDelta : right.score - left.score;
+      });
+
+    logSearchEvent("info", {
+      event: "rerank.completed",
+      model: rerankConfig.model,
+      candidateCount: head.length,
+      returnedCount: reranked.length,
+    });
+
+    return [...rerankedHead, ...tail];
+  } catch (error) {
+    logSearchEvent("error", {
+      event: "rerank.failed",
+      model: rerankConfig.model,
+      errorType: error instanceof Error ? error.name : "UnknownError",
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
+
+    return items;
+  }
+}
+
 async function searchPostgres(query, limit) {
   const trimmedQuery = String(query ?? "").trim();
 
@@ -891,7 +986,8 @@ async function searchPostgres(query, limit) {
     }
   }
 
-  const selected = [...bestByDocument.values()].slice(0, limit);
+  const rerankedCandidates = await maybeRerankScoredItems(trimmedQuery, [...bestByDocument.values()], limit);
+  const selected = rerankedCandidates.slice(0, limit);
   const sources = selected.map((item) => item.source);
   const officialCount = sources.filter((source) => source.type === "official").length;
   const status = officialCount > 0 && sources.length >= Math.min(2, limit) ? "ok" : "partial";
@@ -995,6 +1091,13 @@ async function search(query, limit) {
       durationMs: Date.now() - startedAt,
     });
 
+    recordSearchMetric({
+      resolvedProvider,
+      status: enhancedResponse.status,
+      fallbackReason,
+      durationMs: Date.now() - startedAt,
+    });
+
     return enhancedResponse;
   } catch (error) {
     if (provider === "auto") {
@@ -1016,8 +1119,17 @@ async function search(query, limit) {
         durationMs: Date.now() - startedAt,
       });
 
+      recordSearchMetric({
+        resolvedProvider,
+        status: response.status,
+        fallbackReason,
+        durationMs: Date.now() - startedAt,
+      });
+
       return response;
     }
+
+    const classifiedError = classifyServiceError(error);
 
     logSearchEvent("error", {
       event: "search.failed",
@@ -1025,8 +1137,15 @@ async function search(query, limit) {
       requestedProvider: provider,
       resolvedProvider,
       errorType: error instanceof Error ? error.name : "UnknownError",
-      errorCode: classifyServiceError(error).code,
+      errorCode: classifiedError.code,
       errorMessage: error instanceof Error ? error.message : String(error),
+      durationMs: Date.now() - startedAt,
+    });
+
+    recordSearchMetric({
+      resolvedProvider,
+      status: "error",
+      errorCode: classifiedError.code,
       durationMs: Date.now() - startedAt,
     });
 
@@ -1107,6 +1226,11 @@ function createServer() {
         corpusSize: seedCorpus.length,
         timestamp: new Date().toISOString(),
       });
+      return;
+    }
+
+    if (url.pathname === "/metrics") {
+      sendJson(response, 200, getMetricsSnapshot());
       return;
     }
 

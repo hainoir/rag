@@ -144,9 +144,9 @@ export function ResultsShell({ initialQuery }: ResultsShellProps) {
         <div className="mb-4 flex justify-end">
           <ThemeToggle />
         </div>
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_340px]">
+        <div className="grid gap-5 md:gap-6 xl:grid-cols-[minmax(0,1.5fr)_340px]">
           <div className="space-y-6">
-            <section className="surface rounded-[32px] p-6 md:p-8">
+            <section className="surface rounded-[24px] p-4 sm:p-6 md:rounded-[32px] md:p-8">
               <div className="flex flex-wrap items-center gap-3">
                 <span className="highlight text-xs font-semibold tracking-[0.18em] uppercase">
                   结果页
@@ -160,7 +160,7 @@ export function ResultsShell({ initialQuery }: ResultsShellProps) {
               </div>
 
               <h1
-                className="mt-5 font-display text-3xl leading-tight md:text-5xl"
+                className="mt-5 font-display text-3xl leading-tight sm:text-4xl md:text-5xl"
                 id="search-results-heading"
               >
                 {queryHeading}

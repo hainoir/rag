@@ -26,8 +26,8 @@ export function HomePage() {
         <div className="flex justify-end">
           <ThemeToggle />
         </div>
-        <section className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_360px]">
-          <div className="surface rounded-[40px] px-6 py-8 md:px-10 md:py-12">
+        <section className="grid gap-5 md:gap-6 xl:grid-cols-[minmax(0,1.25fr)_360px]">
+          <div className="surface rounded-[26px] px-4 py-7 sm:px-6 md:rounded-[40px] md:px-10 md:py-12">
             <div className="mb-6 flex flex-wrap gap-3">
               <span className="highlight text-xs font-semibold tracking-[0.18em] uppercase">
                 校园信息检索产品
@@ -41,12 +41,12 @@ export function HomePage() {
             </div>
 
             <div className="max-w-4xl space-y-5">
-              <h1 className="font-display text-4xl leading-tight md:text-6xl">
+              <h1 className="font-display text-4xl leading-tight sm:text-5xl md:text-6xl">
                 校园信息检索与
                 <br />
                 可解释问答助手
               </h1>
-              <p className="max-w-3xl text-lg leading-8 muted">
+              <p className="max-w-3xl text-base leading-8 sm:text-lg muted">
                 查询校园办事流程、生活信息与公开讨论内容。这个项目强调的不是聊天壳子，
                 而是检索证据、来源分层和可验证的回答体验。
               </p>
@@ -65,14 +65,14 @@ export function HomePage() {
           </div>
 
           <div className="grid gap-4">
-            <div className="surface rounded-[32px] p-6">
+            <div className="surface rounded-[24px] p-4 sm:p-6 md:rounded-[32px]">
               <p className="text-sm font-semibold tracking-[0.18em] text-[var(--official)] uppercase">
                 产品重点
               </p>
               <div className="mt-5 space-y-4">
                 {HIGHLIGHTS.map((item) => (
                   <article
-                    className="rounded-[22px] border border-[var(--line)] bg-white/75 p-4"
+                    className="rounded-[18px] border border-[var(--line)] bg-white/75 p-4 md:rounded-[22px]"
                     key={item.title}
                   >
                     <h2 className="font-display text-2xl leading-tight">{item.title}</h2>
@@ -82,7 +82,7 @@ export function HomePage() {
               </div>
             </div>
 
-            <div className="surface rounded-[32px] p-6">
+            <div className="surface rounded-[24px] p-4 sm:p-6 md:rounded-[32px]">
               <p className="text-sm font-semibold tracking-[0.18em] text-[var(--official)] uppercase">
                 数据策略
               </p>
@@ -95,10 +95,10 @@ export function HomePage() {
           </div>
         </section>
 
-        <section className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
+        <section className="grid gap-5 md:gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
           <HistoryPanel />
 
-          <div className="surface rounded-[var(--radius-lg)] p-6">
+          <div className="surface rounded-[24px] p-4 sm:p-6 md:rounded-[var(--radius-lg)]">
             <p className="text-sm font-semibold tracking-[0.18em] text-[var(--official)] uppercase">
               为什么这个项目适合前端作品集
             </p>

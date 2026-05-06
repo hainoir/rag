@@ -34,16 +34,16 @@ export function ResultToolbar({
   return (
     <section
       aria-label="结果筛选和视图切换"
-      className="surface sticky top-4 z-20 rounded-[var(--radius-lg)] p-4"
+      className="surface z-20 rounded-[24px] p-3 md:sticky md:top-4 md:rounded-[var(--radius-lg)] md:p-4"
     >
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-col gap-3">
-          <div aria-label="来源类型筛选" className="flex flex-wrap gap-2" role="group">
+          <div aria-label="来源类型筛选" className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap" role="group">
             {FILTER_ITEMS.map((item) => (
               <button
                 aria-pressed={filter === item.value}
                 className={cn(
-                  "rounded-full px-4 py-2 text-sm transition",
+                  "min-h-10 rounded-full px-3 py-2 text-sm transition sm:px-4",
                   filter === item.value
                     ? "bg-[var(--official)] text-white"
                     : "border border-[var(--line)] bg-white/70 hover:border-[var(--official)]",
@@ -56,12 +56,12 @@ export function ResultToolbar({
               </button>
             ))}
           </div>
-          <div aria-label="结果视图切换" className="flex flex-wrap gap-2" role="group">
+          <div aria-label="结果视图切换" className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap" role="group">
             {VIEW_ITEMS.map((item) => (
               <button
                 aria-pressed={viewMode === item.value}
                 className={cn(
-                  "rounded-full px-4 py-2 text-sm transition",
+                  "min-h-10 rounded-full px-3 py-2 text-sm transition sm:px-4",
                   viewMode === item.value
                     ? "bg-[var(--accent)] text-white"
                     : "border border-[var(--line)] bg-white/70 hover:border-[var(--accent)]",
@@ -76,7 +76,7 @@ export function ResultToolbar({
           </div>
         </div>
 
-        <div className="rounded-full bg-white/75 px-4 py-2 text-sm text-[var(--muted)]">
+        <div className="rounded-[18px] bg-white/75 px-4 py-2 text-center text-sm text-[var(--muted)] sm:rounded-full">
           当前展示 {shownCount} / {totalCount} 条来源
         </div>
       </div>

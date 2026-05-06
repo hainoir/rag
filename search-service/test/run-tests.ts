@@ -6,6 +6,11 @@ import path from "node:path";
 
 import { getSourceAdapter } from "../ingest/adapters.ts";
 import { resolveSelectedSources } from "../ingest/config.ts";
+import {
+  filterIncrementalCandidates,
+  parseRssCandidates,
+  parseSitemapCandidates,
+} from "../ingest/discovery-feeds.ts";
 import { parseArticlePage } from "../ingest/html.ts";
 import { sanitizeCommunityMarkdown } from "../ingest/pipeline.ts";
 import { PostgresStore } from "../ingest/postgres-store.ts";
@@ -288,6 +293,62 @@ async function main() {
       assert.equal(detail.publishedAt, "2026-04-18T00:15:00.000Z");
       assert.equal(detail.cleanedMarkdown.match(/图书馆将于周末调整开放时间。/g)?.length, 1);
       assert.match(detail.cleanedMarkdown, /借阅规则 \(https:\/\/lib\.tjcu\.edu\.cn\/service\/rules\.html\)/);
+    }),
+  );
+
+  results.push(
+    await runCase("rss and sitemap incremental discovery", () => {
+      const sitemapCandidates = parseSitemapCandidates(
+        `
+          <urlset>
+            <url>
+              <loc>/info/1080/25515.htm</loc>
+              <lastmod>2026-04-22T08:30:00+08:00</lastmod>
+            </url>
+            <url>
+              <loc>https://www.tjcu.edu.cn/info/1080/25496.htm</loc>
+              <lastmod>2026-04-17</lastmod>
+            </url>
+          </urlset>
+        `,
+        "https://www.tjcu.edu.cn/sitemap.xml",
+      );
+      const rssCandidates = parseRssCandidates(
+        `
+          <rss>
+            <channel>
+              <item>
+                <link>https://www.tjcu.edu.cn/info/1080/25520.htm</link>
+                <pubDate>Wed, 22 Apr 2026 10:00:00 +0800</pubDate>
+              </item>
+              <item>
+                <guid>/info/1080/25521.htm</guid>
+              </item>
+            </channel>
+          </rss>
+        `,
+        "https://www.tjcu.edu.cn/rss.xml",
+      );
+      const incremental = filterIncrementalCandidates(
+        [...sitemapCandidates, ...rssCandidates],
+        "2026-04-21T00:00:00.000Z",
+      );
+
+      assert.deepEqual(
+        sitemapCandidates.map((candidate) => candidate.url),
+        [
+          "https://www.tjcu.edu.cn/info/1080/25515.htm",
+          "https://www.tjcu.edu.cn/info/1080/25496.htm",
+        ],
+      );
+      assert.deepEqual(
+        incremental.map((candidate) => candidate.url),
+        [
+          "https://www.tjcu.edu.cn/info/1080/25515.htm",
+          "https://www.tjcu.edu.cn/info/1080/25520.htm",
+          "https://www.tjcu.edu.cn/info/1080/25521.htm",
+        ],
+      );
     }),
   );
 

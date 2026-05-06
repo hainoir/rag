@@ -59,3 +59,16 @@ test("empty and error states remain distinct user-facing contracts", async ({ pa
   await expect(page.getByRole("heading", { exact: true, name: "本次检索未成功完成" })).toBeVisible();
   await expect(page.getByText("失败态不会伪装成“无答案”。")).toBeVisible();
 });
+
+test("mobile results layout keeps controls inside the viewport", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`/search?q=${encodeURIComponent(hitQuery)}`);
+
+  await expect(page.getByRole("heading", { name: hitQuery })).toBeVisible();
+  await expect(page.getByRole("button", { name: "仅官方" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "检索结果" })).toBeVisible();
+
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+
+  expect(overflow).toBeLessThanOrEqual(1);
+});

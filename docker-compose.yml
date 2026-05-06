@@ -16,5 +16,59 @@ services:
       timeout: 5s
       retries: 10
 
+  search-service:
+    build:
+      context: .
+      target: search-service
+    container_name: campus-rag-search-service
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/postgres
+      SEARCH_DATABASE_SCHEMA: ${SEARCH_DATABASE_SCHEMA:-public}
+      SEARCH_SERVICE_PROVIDER: ${SEARCH_SERVICE_PROVIDER:-auto}
+      SEARCH_ANSWER_MODE: ${SEARCH_ANSWER_MODE:-extractive}
+      HOST: 0.0.0.0
+      PORT: 8080
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.openai.com/v1}
+      LLM_MODEL: ${LLM_MODEL:-}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
+      EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-https://api.openai.com/v1}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+      EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-1536}
+      RERANK_API_KEY: ${RERANK_API_KEY:-}
+      RERANK_BASE_URL: ${RERANK_BASE_URL:-}
+      RERANK_MODEL: ${RERANK_MODEL:-}
+      RERANK_TOP_K: ${RERANK_TOP_K:-20}
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'node -e "fetch(''http://127.0.0.1:8080/health'').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  web:
+    build:
+      context: .
+      target: web
+    container_name: campus-rag-web
+    environment:
+      SEARCH_SERVICE_URL: http://search-service:8080/api/search
+      SEARCH_SERVICE_METHOD: POST
+      SEARCH_SERVICE_TIMEOUT_MS: 8000
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      search-service:
+        condition: service_healthy
+
 volumes:
   campus-rag-postgres:

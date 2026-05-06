@@ -27,7 +27,7 @@ export function SourceCard({ source, expanded, onToggle }: SourceCardProps) {
 
   return (
     <article
-      className="surface-strong rounded-[28px] p-5"
+      className="surface-strong rounded-[22px] p-4 md:rounded-[28px] md:p-5"
       data-testid="source-card"
       style={{
         borderColor: isOfficial ? "rgba(40,81,61,0.18)" : "rgba(122,74,37,0.18)",
@@ -64,7 +64,7 @@ export function SourceCard({ source, expanded, onToggle }: SourceCardProps) {
       <div className="mt-4 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex-1">
           <h3 className="text-lg font-semibold leading-8">{source.title}</h3>
-          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          <div className="mt-3 grid gap-2 md:grid-cols-2">
             {metadata.map((item) => (
               <div
                 className="rounded-[18px] border border-[var(--line)] bg-white/70 px-3 py-2"
@@ -83,11 +83,11 @@ export function SourceCard({ source, expanded, onToggle }: SourceCardProps) {
         </div>
       </div>
 
-      <div className="mt-4 flex flex-wrap gap-3">
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
         {source.url ? (
           <a
             aria-label={`查看原文：${source.title}`}
-            className="rounded-full border border-[var(--line)] bg-white/80 px-4 py-2 text-sm transition hover:border-[var(--official)]"
+            className="rounded-full border border-[var(--line)] bg-white/80 px-4 py-2 text-center text-sm transition hover:border-[var(--official)]"
             href={source.url}
             rel="noreferrer"
             target="_blank"
@@ -98,7 +98,7 @@ export function SourceCard({ source, expanded, onToggle }: SourceCardProps) {
         {canonicalUrl ? (
           <a
             aria-label={`打开规范链接：${source.title}`}
-            className="rounded-full border border-[var(--line)] bg-white/80 px-4 py-2 text-sm transition hover:border-[var(--official)]"
+            className="rounded-full border border-[var(--line)] bg-white/80 px-4 py-2 text-center text-sm transition hover:border-[var(--official)]"
             href={canonicalUrl}
             rel="noreferrer"
             target="_blank"

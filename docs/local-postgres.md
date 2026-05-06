@@ -26,6 +26,26 @@ SEARCH_ANSWER_MODE=extractive
 
 Next.js、`search-service` 和 ingestion CLI 都会读取 `.env.local`；命令行显式设置的环境变量优先级更高。
 
+## 一键本地编排
+
+`docker-compose.yml` 现在包含 `postgres`、`search-service` 和 `web` 三个服务。需要完整本地部署时：
+
+```bash
+npm run compose:up
+```
+
+服务端口：
+
+- `web`：`http://localhost:3000`
+- `search-service`：`http://localhost:8080`
+- `postgres`：`127.0.0.1:5432`
+
+容器内前端通过 `http://search-service:8080/api/search` 调用搜索服务，仍然不直连数据库。停止和清理容器时：
+
+```bash
+npm run compose:down
+```
+
 ## 初始化、摄取和检查
 
 ```bash
@@ -84,6 +104,29 @@ EMBEDDING_DIMENSIONS=1536
 `vector:init` 会创建 `vector` extension，并给 `chunks` 增加 `embedding / embedding_model / embedded_at` 字段与向量索引。`embed:chunks` 只处理最新 active document version 中尚未写入 embedding 的 chunk。没有 `EMBEDDING_API_KEY` 时，它会输出 skip/dry-run 信息，不会伪装成已完成 embedding。
 
 搜索服务会自动检测 `chunks.embedding` 字段和 embedding key。条件满足时走 lexical + vector hybrid retrieval；条件不满足或 query embedding 失败时，Postgres 搜索继续回到 lexical / pg_trgm 路径。
+
+## 可选 rerank
+
+如果配置了兼容 `/rerank` 的 cross-encoder 服务，Postgres 候选会进入二阶段重排：
+
+```bash
+RERANK_API_KEY=...
+RERANK_BASE_URL=https://your-rerank-provider.example.com/v1
+RERANK_MODEL=your-rerank-model
+RERANK_TOP_K=20
+```
+
+没有这些环境变量时，rerank 默认关闭。rerank 失败只会记录 `rerank.failed`，不会让搜索请求失败。
+
+## Metrics
+
+搜索服务提供轻量 JSON metrics：
+
+```bash
+curl http://localhost:8080/metrics
+```
+
+当前记录请求总数、平均耗时、resolved provider、结果状态、fallback 原因和错误分类。它适合本地 smoke 和后续接监控前的轻量排查，不替代生产监控系统。
 
 ## 运行查询链路
 

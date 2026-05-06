@@ -41,6 +41,20 @@ docker run --rm -p 8080:8080 campus-rag-search-service
 docker run --rm -p 3000:3000 -e SEARCH_SERVICE_URL=http://host.docker.internal:8080/api/search campus-rag-web
 ```
 
+## Docker Compose
+
+完整本地编排使用 `docker-compose.yml`：
+
+```bash
+npm run compose:up
+```
+
+它会启动 `postgres`、`search-service` 和 `web`。前端容器通过 Compose 内部 DNS 访问 `http://search-service:8080/api/search`，宿主机访问 `http://localhost:3000`。停止服务：
+
+```bash
+npm run compose:down
+```
+
 ## 部署边界
 
 生产部署时不要让前端直接读数据库。前端仍然只访问 `/api/search`，由 Route Handler 调用 `SEARCH_SERVICE_URL`。搜索服务负责读取 Postgres、排序 chunks、生成 extractive answer；如果配置了 LLM，也只在检索命中后基于 evidence 生成回答，并继续返回同一个 `SearchResponse`。
@@ -81,10 +95,24 @@ EMBEDDING_DIMENSIONS=1536
 
 启用 pgvector 后，search-service 会把 lexical / pg_trgm 候选和 vector 候选合并排序；前端仍只消费同一个 `SearchResponse`。未配置 embedding key 或数据库没有 `chunks.embedding` 时，服务不会调用 embedding API。
 
+可选 rerank 环境变量：
+
+```bash
+RERANK_API_KEY=...
+RERANK_BASE_URL=https://your-rerank-provider.example.com/v1
+RERANK_MODEL=your-rerank-model
+RERANK_TOP_K=20
+RERANK_TIMEOUT_MS=8000
+```
+
+rerank 只重排 Postgres 候选来源，失败时会记录结构化日志并保留原排序。
+
 ## 发布前检查
 
 ```bash
 npm run smoke:search-service
+npm run test:embedding-client
+npm run test:rerank-client
 npm run verify:demo
 npm run verify:search-contract
 npm run test:unit
@@ -114,6 +142,15 @@ npm run e2e
 上游 search-service 的 HTTP 错误 payload 会返回稳定 `error` code，例如 `invalid_json`、`database_unavailable`、`upstream_timeout` 和 `search_service_error`。Next.js 搜索代理不会把这些字段扩展进 `SearchResponse`，而是记录结构化日志并继续给前端返回既有 `status: "error"`。
 
 `SEARCH_SERVICE_PROVIDER=auto` 时，Postgres 失败会按错误分类记录 `fallbackReason`，然后回退 seed corpus；`SEARCH_SERVICE_PROVIDER=postgres` 时不会回退，适合验证真实数据链路。
+
+## 观测入口
+
+`search-service` 暴露两个本地排查端点：
+
+- `/health`：服务存活、provider、数据库配置状态
+- `/metrics`：请求总数、平均耗时、状态分布、provider 分布、fallback 和错误分类计数
+
+当前 metrics 是进程内 JSON 计数器，适合本地和 demo 排查；生产环境仍应接入日志聚合、告警和持久化指标平台。
 
 E2E 默认会启动 seed 搜索服务和 Next.js dev server，覆盖首页搜索、结果页渲染、来源展开、无结果和错误态。首次运行如果本机没有浏览器二进制，需要先执行：
 

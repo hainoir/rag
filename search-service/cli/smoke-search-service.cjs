@@ -85,6 +85,13 @@ async function main() {
     assert.equal(emptyResponse.status, "empty");
     assert.equal(emptyResponse.sources.length, 0);
 
+    const metrics = await requestJson(`${baseUrl}/metrics`);
+
+    assert.equal(metrics.requestsTotal >= 2, true);
+    assert.equal(metrics.byResolvedProvider.seed >= 2, true);
+    assert.equal(metrics.byStatus.ok >= 1, true);
+    assert.equal(metrics.byStatus.empty >= 1, true);
+
     console.log(
       [
         "Search service smoke passed:",

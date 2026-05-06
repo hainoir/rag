@@ -19,6 +19,7 @@
 - 仓库内已经补齐来源注册表、清洗规则、去重规则和入库表结构骨架，方便接真实数据链路
 - 搜索服务可选接入 OpenAI-compatible LLM，把检索片段升级为生成式回答；未配置 key 时自动保持 extractive answer
 - Postgres 检索默认走 lexical / pg_trgm；配置 pgvector 与 embedding key 后可启用可选 hybrid retrieval
+- 可选接入 cross-encoder rerank；默认关闭，不影响 seed demo 和 Postgres lexical 路径
 
 这个项目适合作为：
 
@@ -47,7 +48,7 @@
 这条链路已经具备“前端只消费统一结果结构”的边界。当前仓库已经包含最小官方来源摄取、保守社区来源摄取、Postgres chunk 检索和可选 pgvector embedding 扩展；但它仍然**不等同于生产级 RAG 平台**，下面这些能力仍需要继续完善：
 
 - 大规模稳定抓取、失败重试和来源合规审计
-- BM25 / rerank / 评估集驱动的检索质量优化
+- BM25 / 评估集驱动的检索质量优化，以及 rerank 效果的真实评估
 - 线上监控、告警、限流和缓存策略
 - 社区内容的长期质量治理与人工复核流程
 
@@ -106,6 +107,26 @@ npm run dev
 
 然后访问 [http://localhost:3000](http://localhost:3000)。
 
+### Docker Compose 本地编排
+
+需要一键启动本地 web、search-service 和 Postgres 时：
+
+```bash
+npm run compose:up
+```
+
+启动后访问：
+
+- 前端：[http://localhost:3000](http://localhost:3000)
+- 搜索服务 health：[http://localhost:8080/health](http://localhost:8080/health)
+- 搜索服务 metrics：[http://localhost:8080/metrics](http://localhost:8080/metrics)
+
+停止服务：
+
+```bash
+npm run compose:down
+```
+
 ### 可选 LLM 回答
 
 默认回答模式是 `SEARCH_ANSWER_MODE=extractive`，只根据命中的 chunk 片段拼接摘要，不需要任何模型密钥。需要演示生成式 RAG 回答时，可以配置 OpenAI-compatible Chat Completions：
@@ -140,6 +161,19 @@ EMBEDDING_DIMENSIONS=1536
 
 未配置 `EMBEDDING_API_KEY` 时，`embed:chunks` 会保持 skip/dry-run 边界，`search-service` 继续使用 lexical retrieval，不会破坏现有 `SearchResponse`。
 
+### 可选 cross-encoder rerank
+
+需要对 Postgres 候选结果做二阶段重排时，可以配置兼容 `/rerank` 的 cross-encoder 服务：
+
+```bash
+RERANK_API_KEY=...
+RERANK_BASE_URL=https://your-rerank-provider.example.com/v1
+RERANK_MODEL=your-rerank-model
+RERANK_TOP_K=20
+```
+
+search-service 会把候选 chunk 文本发送给 rerank API，并只重排服务端候选顺序；如果 rerank API 失败，会记录 `rerank.failed` 日志并保留原 lexical / hybrid 排序。
+
 ## 真实来源 Ingestion v1
 
 仓库现在额外提供了一套 CLI ingestion 闭环，运行在 `search-service/` 下的 TypeScript runtime 中，不改前端查询链路。默认官方同步 5 个官方源，运行时已支持主站、图书馆、教务处、学生处、后勤、就业网、本科招生网和研究生招生网。社区摄取目前只默认启用 `tjcu-tieba`，`tjcu-zhihu` 作为可指定来源，定位是经验补充而不是权威事实来源。
@@ -162,6 +196,8 @@ INGEST_USER_AGENT=campus-rag-ingestion/1.0 (+https://www.tjcu.edu.cn/)
 ```bash
 npm run smoke:search-service
 npm run test:unit
+npm run test:embedding-client
+npm run test:rerank-client
 npm run lint
 npm run format:check
 npm run verify:demo
@@ -194,6 +230,7 @@ npm run test:ingestion:postgres
 1. 固化本地真实闭环复验：`db:init -> ingest:official -> inspect:ingestion -> smoke:postgres -> /api/search`
 2. 配置 `SEARCH_ANSWER_MODE=llm` 做生成式回答演示，并保留无 key 时的 extractive fallback
 3. 配置 pgvector embedding，复验 `vector:init -> embed:chunks -> smoke:vector -> hybrid search`
-4. 扩大官方来源 adapter 的实站验证范围，优先保证 3-5 个来源稳定重复同步
-5. 对社区来源补合规策略、质量阈值和人工复核记录，再扩大自动摄取范围
-6. 再补 rerank、评估集、埋点、监控和生产调度
+4. 配置 rerank 服务，用固定 query 对比 rerank 前后的命中顺序和答案依据
+5. 扩大官方来源 adapter 的实站验证范围，优先保证 3-5 个来源稳定重复同步
+6. 对社区来源补合规策略、质量阈值和人工复核记录，再扩大自动摄取范围
+7. 再补评估集、告警、缓存、限流和生产调度

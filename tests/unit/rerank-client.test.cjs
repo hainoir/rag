@@ -1,0 +1,104 @@
+const assert = require("node:assert/strict");
+
+const {
+  readRerankConfig,
+  rerankDocuments,
+  shouldUseRerank,
+} = require("../../search-service/rerank-client.cjs");
+
+async function runCase(name, task) {
+  try {
+    await task();
+    console.log(`PASS ${name}`);
+    return true;
+  } catch (error) {
+    console.error(`FAIL ${name}`);
+    console.error(error instanceof Error ? error.stack ?? error.message : String(error));
+    return false;
+  }
+}
+
+async function main() {
+  const results = [];
+
+  results.push(
+    await runCase("reads rerank config and keeps default off", () => {
+      const config = readRerankConfig({
+        RERANK_API_KEY: "key",
+        RERANK_MODEL: "cross-encoder",
+        RERANK_BASE_URL: "https://rerank.example.test/v1",
+        RERANK_TOP_K: "12",
+        RERANK_TIMEOUT_MS: "3000",
+      });
+
+      assert.deepEqual(config, {
+        apiKey: "key",
+        model: "cross-encoder",
+        baseUrl: "https://rerank.example.test/v1",
+        topK: 12,
+        timeoutMs: 3000,
+      });
+      assert.equal(shouldUseRerank(config), true);
+      assert.equal(shouldUseRerank({ ...config, apiKey: "" }), false);
+    }),
+  );
+
+  results.push(
+    await runCase("reranks documents through a cross-encoder endpoint", async () => {
+      const previousFetch = globalThis.fetch;
+      const calls = [];
+
+      globalThis.fetch = async (url, init) => {
+        calls.push({
+          url,
+          init,
+          body: JSON.parse(init.body),
+        });
+
+        return new Response(
+          JSON.stringify({
+            results: [
+              { index: 1, relevance_score: 0.92 },
+              { index: 0, relevance_score: 0.41 },
+            ],
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+            },
+          },
+        );
+      };
+
+      try {
+        const results = await rerankDocuments("图书馆借书", ["doc-a", "doc-b"], {
+          apiKey: "key",
+          model: "cross-encoder",
+          baseUrl: "https://rerank.example.test/v1",
+          topK: 20,
+          timeoutMs: 1000,
+        });
+
+        assert.deepEqual(results, [
+          { index: 1, relevanceScore: 0.92 },
+          { index: 0, relevanceScore: 0.41 },
+        ]);
+        assert.equal(calls[0].url, "https://rerank.example.test/v1/rerank");
+        assert.deepEqual(calls[0].body.documents, ["doc-a", "doc-b"]);
+        assert.equal(calls[0].body.top_n, 2);
+      } finally {
+        globalThis.fetch = previousFetch;
+      }
+    }),
+  );
+
+  if (results.some((passed) => !passed)) {
+    process.exitCode = 1;
+  }
+}
+
+main().catch((error) => {
+  console.error(error instanceof Error ? error.stack ?? error.message : String(error));
+  process.exitCode = 1;
+});

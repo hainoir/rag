@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { SearchProvider } from "@/lib/search/types";
+import type { SearchErrorCode, SearchProvider, SearchProviderOptions } from "@/lib/search/types";
 import {
   buildEmptyResponse,
   buildErrorResponse,
@@ -26,7 +26,7 @@ function logSearchProviderEvent(level: "info" | "error", payload: Record<string,
   console.log(line);
 }
 
-function classifySearchProviderError(error: unknown) {
+function classifySearchProviderError(error: unknown): SearchErrorCode {
   if (error instanceof DOMException && error.name === "AbortError") {
     return "upstream_timeout";
   }
@@ -38,7 +38,7 @@ function classifySearchProviderError(error: unknown) {
   return "upstream_error";
 }
 
-function classifyHttpStatus(status: number) {
+function classifyHttpStatus(status: number): SearchErrorCode {
   if (status === 400) {
     return "upstream_bad_request";
   }
@@ -137,12 +137,43 @@ function buildSearchServiceRequest(query: string) {
   };
 }
 
-async function callSearchService(query: string) {
+async function readUpstreamErrorCode(response: Response) {
+  const contentType = response.headers.get("content-type") ?? "";
+
+  if (!contentType.includes("application/json")) {
+    return null;
+  }
+
+  try {
+    const payload = (await response.clone().json()) as unknown;
+
+    if (typeof payload === "object" && payload !== null && "error" in payload) {
+      const value = (payload as { error?: unknown }).error;
+
+      return typeof value === "string" && value.trim() ? value.trim() : null;
+    }
+
+    if (typeof payload === "object" && payload !== null && "errorCode" in payload) {
+      const value = (payload as { errorCode?: unknown }).errorCode;
+
+      return typeof value === "string" && value.trim() ? value.trim() : null;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+async function callSearchService(query: string, options: SearchProviderOptions = {}) {
   const request = buildSearchServiceRequest(query);
 
   if (!request) {
     console.error("SEARCH_SERVICE_URL is not configured.");
-    return buildErrorResponse(query);
+    return buildErrorResponse(query, {
+      requestId: options.requestId,
+      errorCode: "missing_search_service_url",
+    });
   }
 
   const timeoutMs = parsePositiveInteger(process.env.SEARCH_SERVICE_TIMEOUT_MS, DEFAULT_TIMEOUT_MS);
@@ -156,38 +187,53 @@ async function callSearchService(query: string) {
     });
 
     if (!response.ok) {
+      const upstreamErrorCode = await readUpstreamErrorCode(response);
+      const errorCode = upstreamErrorCode ?? classifyHttpStatus(response.status);
+
       logSearchProviderEvent("error", {
         event: "search.upstream_failed",
-        errorCode: classifyHttpStatus(response.status),
+        errorCode,
         status: response.status,
         statusText: response.statusText,
       });
-      return buildErrorResponse(query);
+      return buildErrorResponse(query, {
+        requestId: options.requestId,
+        errorCode: errorCode as SearchErrorCode,
+      });
     }
 
     const payload = (await response.json()) as unknown;
-    return normalizeUpstreamResponse(query, payload);
+    return normalizeUpstreamResponse(query, payload, {
+      requestId: options.requestId,
+    });
   } catch (error) {
+    const errorCode = classifySearchProviderError(error);
+
     logSearchProviderEvent("error", {
       event: "search.upstream_failed",
-      errorCode: classifySearchProviderError(error),
+      errorCode,
       errorType: error instanceof Error ? error.name : "UnknownError",
       errorMessage: error instanceof Error ? error.message : String(error),
     });
-    return buildErrorResponse(query);
+    return buildErrorResponse(query, {
+      requestId: options.requestId,
+      errorCode,
+    });
   } finally {
     clearTimeout(timeout);
   }
 }
 
 export const searchServiceProvider: SearchProvider = {
-  async search(query: string) {
+  async search(query: string, options?: SearchProviderOptions) {
     const trimmedQuery = query.trim();
 
     if (!trimmedQuery) {
-      return buildEmptyResponse("");
+      return buildEmptyResponse("", {
+        requestId: options?.requestId,
+      });
     }
 
-    return callSearchService(trimmedQuery);
+    return callSearchService(trimmedQuery, options);
   },
 };

@@ -1,7 +1,10 @@
 import { DEFAULT_QUESTIONS } from "./default-questions.ts";
 import type {
   SearchAnswer,
+  SearchCacheStatus,
+  SearchErrorCode,
   SearchResponse,
+  SearchResponseMeta,
   SearchSource,
   SearchStatus,
   SourceFreshness,
@@ -12,10 +15,31 @@ const DEFAULT_DISCLAIMER = "如果问题涉及时间、费用、资格或办理�
 
 type JsonRecord = Record<string, unknown>;
 
-type ResponseInput = Omit<SearchResponse, "resultGeneratedAt" | "retrievedCount"> & {
+type ResponseInput = Omit<SearchResponse, "resultGeneratedAt" | "retrievedCount" | "meta"> & {
   resultGeneratedAt?: string;
   retrievedCount?: number;
+  meta?: Partial<SearchResponseMeta>;
 };
+
+const ALLOWED_ERROR_CODES = new Set<SearchErrorCode>([
+  "missing_search_service_url",
+  "upstream_bad_request",
+  "upstream_unauthorized",
+  "upstream_timeout",
+  "upstream_rate_limited",
+  "upstream_unavailable",
+  "upstream_unreachable",
+  "upstream_http_error",
+  "upstream_error",
+  "invalid_upstream_response",
+  "rate_limited",
+  "search_service_error",
+  "database_unavailable",
+  "invalid_feedback",
+  "feedback_store_unavailable",
+]);
+
+const ALLOWED_CACHE_STATUSES = new Set<SearchCacheStatus>(["hit", "miss", "bypass"]);
 
 function isRecord(value: unknown): value is JsonRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -70,6 +94,56 @@ function clampConfidence(value: unknown, fallback: number) {
   }
 
   return Math.min(Math.max(value, 0), 1);
+}
+
+function normalizeErrorCode(value: unknown) {
+  if (!isNonEmptyString(value)) {
+    return undefined;
+  }
+
+  const normalized = value.trim().toLowerCase();
+
+  return ALLOWED_ERROR_CODES.has(normalized as SearchErrorCode)
+    ? (normalized as SearchErrorCode)
+    : "search_service_error";
+}
+
+function normalizeCacheStatus(value: unknown) {
+  if (!isNonEmptyString(value)) {
+    return undefined;
+  }
+
+  const normalized = value.trim().toLowerCase();
+
+  return ALLOWED_CACHE_STATUSES.has(normalized as SearchCacheStatus)
+    ? (normalized as SearchCacheStatus)
+    : undefined;
+}
+
+function normalizeResponseMeta(value: unknown, fallback?: Partial<SearchResponseMeta>) {
+  const record = isRecord(value) ? value : {};
+  const requestId =
+    pickString(record, ["requestId", "request_id", "traceId", "trace_id"]) ?? fallback?.requestId;
+
+  if (!requestId?.trim()) {
+    return undefined;
+  }
+
+  const durationValue = pickFirst(record, ["durationMs", "duration_ms", "latencyMs", "latency_ms"]);
+  const durationMs =
+    typeof durationValue === "number" && Number.isFinite(durationValue) && durationValue >= 0
+      ? Math.round(durationValue)
+      : fallback?.durationMs;
+  const errorCode = normalizeErrorCode(pickFirst(record, ["errorCode", "error_code", "code"])) ?? fallback?.errorCode;
+  const cacheStatus =
+    normalizeCacheStatus(pickFirst(record, ["cacheStatus", "cache_status"])) ?? fallback?.cacheStatus;
+
+  return {
+    requestId: requestId.trim(),
+    ...(errorCode ? { errorCode } : {}),
+    ...(cacheStatus ? { cacheStatus } : {}),
+    ...(durationMs !== undefined ? { durationMs } : {}),
+  } satisfies SearchResponseMeta;
 }
 
 function normalizeTimestamp(value: unknown, fallback: string) {
@@ -275,8 +349,10 @@ function buildResponse({
   sources,
   resultGeneratedAt,
   retrievedCount,
+  meta,
 }: ResponseInput): SearchResponse {
   const generatedAt = normalizeTimestamp(resultGeneratedAt, new Date().toISOString());
+  const normalizedMeta = normalizeResponseMeta(meta, meta);
 
   return {
     query,
@@ -286,26 +362,29 @@ function buildResponse({
     sources,
     retrievedCount: typeof retrievedCount === "number" && retrievedCount >= 0 ? retrievedCount : sources.length,
     resultGeneratedAt: generatedAt,
+    ...(normalizedMeta ? { meta: normalizedMeta } : {}),
   };
 }
 
-export function buildEmptyResponse(query: string) {
+export function buildEmptyResponse(query: string, meta?: Partial<SearchResponseMeta>) {
   return buildResponse({
     query,
     status: "empty",
     answer: null,
     sources: [],
     relatedQuestions: DEFAULT_QUESTIONS,
+    meta,
   });
 }
 
-export function buildErrorResponse(query: string) {
+export function buildErrorResponse(query: string, meta?: Partial<SearchResponseMeta>) {
   return buildResponse({
     query,
     status: "error",
     answer: null,
     sources: [],
     relatedQuestions: DEFAULT_QUESTIONS,
+    meta,
   });
 }
 
@@ -469,13 +548,24 @@ function unwrapPayload(payload: unknown) {
   return payload;
 }
 
-export function normalizeUpstreamResponse(query: string, payload: unknown) {
+export function normalizeUpstreamResponse(
+  query: string,
+  payload: unknown,
+  fallbackMeta?: Partial<SearchResponseMeta>,
+) {
   const body = unwrapPayload(payload);
 
   if (!body) {
-    return buildErrorResponse(query);
+    return buildErrorResponse(query, {
+      ...fallbackMeta,
+      errorCode: fallbackMeta?.errorCode ?? "invalid_upstream_response",
+    });
   }
 
+  const meta = normalizeResponseMeta(pickFirst(body, ["meta", "_meta"]), {
+    ...fallbackMeta,
+    errorCode: normalizeErrorCode(pickFirst(body, ["errorCode", "error_code", "code"])) ?? fallbackMeta?.errorCode,
+  });
   const generatedAt = normalizeTimestamp(
     pickFirst(body, ["resultGeneratedAt", "generatedAt", "timestamp"]),
     new Date().toISOString(),
@@ -492,11 +582,11 @@ export function normalizeUpstreamResponse(query: string, payload: unknown) {
   let status = normalizeStatus(pickFirst(body, ["status", "state"]), sources, answer);
 
   if (status === "error") {
-    return buildErrorResponse(query);
+    return buildErrorResponse(query, meta);
   }
 
   if (status === "empty" || sources.length === 0) {
-    return buildEmptyResponse(query);
+    return buildEmptyResponse(query, meta);
   }
 
   if (!answer) {
@@ -517,5 +607,6 @@ export function normalizeUpstreamResponse(query: string, payload: unknown) {
         ? (pickFirst(body, ["retrievedCount", "total", "totalHits"]) as number)
         : sources.length,
     resultGeneratedAt: generatedAt,
+    meta,
   });
 }

@@ -103,6 +103,8 @@ export const DEDUP_RULES: DedupRule[] = [
 
 export type IngestionStage = "fetch" | "clean" | "dedup" | "chunk" | "index" | "publish";
 export type IngestionRunStatus = "queued" | "running" | "succeeded" | "failed" | "partial";
+export type SearchDocumentStatus = "active" | "superseded" | "filtered" | "stale";
+export type IngestionRunItemStatus = "succeeded" | "failed" | "skipped" | "retried";
 
 export type SearchDocumentRecord = {
   id: string;
@@ -118,6 +120,7 @@ export type SearchDocumentRecord = {
   lastVerifiedAt?: string;
   dedupKey: string;
   contentHash: string;
+  status?: SearchDocumentStatus;
 };
 
 export type SearchChunkRecord = {
@@ -142,4 +145,17 @@ export type IngestionRunRecord = {
   dedupedCount: number;
   chunkCount: number;
   errorMessage?: string;
+};
+
+export type IngestionRunItemRecord = {
+  id: string;
+  runId: string;
+  sourceId: string;
+  stage: IngestionStage;
+  itemUrl?: string;
+  status: IngestionRunItemStatus;
+  attempt: number;
+  errorMessage?: string;
+  startedAt: string;
+  endedAt?: string;
 };

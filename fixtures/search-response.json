@@ -74,5 +74,10 @@
     "借阅到期后还能续借吗？"
   ],
   "retrievedCount": 2,
-  "resultGeneratedAt": "2026-04-20T08:30:00.000Z"
+  "resultGeneratedAt": "2026-04-20T08:30:00.000Z",
+  "meta": {
+    "requestId": "eval-20260420-library",
+    "cacheStatus": "miss",
+    "durationMs": 128
+  }
 }

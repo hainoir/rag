@@ -95,6 +95,7 @@ export type SourceRunSummary = {
   fetchedCount: number;
   storedCount: number;
   dedupedCount: number;
+  staleCount: number;
   skippedCount: number;
   chunkCount: number;
   errorCount: number;

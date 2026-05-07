@@ -36,6 +36,34 @@ function summarizeErrors(errors: string[]) {
   return errors.join("\n").slice(0, 4_000);
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+async function runWithRetry<T>(
+  task: () => Promise<T>,
+  config: ReturnType<typeof readIngestRuntimeConfig>,
+  onRetry?: (attempt: number, error: unknown) => Promise<void> | void,
+) {
+  let attempt = 1;
+
+  while (true) {
+    try {
+      return await task();
+    } catch (error) {
+      if (attempt >= config.retryAttempts) {
+        throw error;
+      }
+
+      attempt += 1;
+      await onRetry?.(attempt, error);
+      await sleep(config.retryDelayMs * (attempt - 1));
+    }
+  }
+}
+
 export function sanitizeCommunityMarkdown(markdown: string) {
   return markdown
     .replace(/\b1[3-9]\d{9}\b/g, "[手机号已隐藏]")
@@ -64,7 +92,15 @@ async function discoverDetailUrls(
     visited.add(pageUrl);
 
     try {
-      const html = await fetchHtml(pageUrl, config);
+      const html = await runWithRetry(
+        () => fetchHtml(pageUrl, config),
+        config,
+        (attempt, error) => {
+          errors.push(
+            `List page retry ${attempt} for ${pageUrl}: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        },
+      );
       const parsed = adapter.parseListPage(source, pageUrl, html);
 
       parsed.detailUrls.forEach((url) => {
@@ -94,42 +130,51 @@ async function prepareArticle(
   sourceId: SupportedSourceId,
   config: ReturnType<typeof readIngestRuntimeConfig>,
   detailUrl: string,
+  onRetry?: (attempt: number, error: unknown) => Promise<void> | void,
 ): Promise<PreparedArticleResult> {
   const source = resolveSelectedSources([sourceId])[0];
   const adapter = getSourceAdapter(sourceId);
   let html = "";
 
   try {
-    html = await fetchHtml(detailUrl, config);
-    const parsed = adapter.parseDetailPage(detailUrl, html);
-    const canonicalUrl = normalizeCanonicalUrl(detailUrl);
-    const cleanedMarkdown =
-      source.cleaningProfile === "community_thread"
-        ? sanitizeCommunityMarkdown(parsed.cleanedMarkdown)
-        : parsed.cleanedMarkdown;
-    const chunks = buildChunksFromMarkdown(cleanedMarkdown);
+    const article = await runWithRetry(
+      async () => {
+        html = await fetchHtml(detailUrl, config);
+        const parsed = adapter.parseDetailPage(detailUrl, html);
+        const canonicalUrl = normalizeCanonicalUrl(detailUrl);
+        const cleanedMarkdown =
+          source.cleaningProfile === "community_thread"
+            ? sanitizeCommunityMarkdown(parsed.cleanedMarkdown)
+            : parsed.cleanedMarkdown;
+        const chunks = buildChunksFromMarkdown(cleanedMarkdown);
 
-    if (chunks.length === 0) {
-      throw new Error("No chunks generated from cleaned markdown.");
-    }
+        if (chunks.length === 0) {
+          throw new Error("No chunks generated from cleaned markdown.");
+        }
+
+        return {
+          source,
+          url: detailUrl,
+          canonicalUrl,
+          externalId: extractExternalIdFromUrl(canonicalUrl),
+          title: parsed.title,
+          publishedAt: parsed.publishedAt,
+          updatedAt: parsed.updatedAt,
+          fetchedAt: new Date().toISOString(),
+          rawHtml: html,
+          cleanedMarkdown,
+          dedupKey: buildDedupKey(source.id, parsed.title, parsed.publishedAt),
+          contentHash: buildContentHash(cleanedMarkdown),
+          chunks,
+        };
+      },
+      config,
+      onRetry,
+    );
 
     return {
       ok: true,
-      article: {
-        source,
-        url: detailUrl,
-        canonicalUrl,
-        externalId: extractExternalIdFromUrl(canonicalUrl),
-        title: parsed.title,
-        publishedAt: parsed.publishedAt,
-        updatedAt: parsed.updatedAt,
-        fetchedAt: new Date().toISOString(),
-        rawHtml: html,
-        cleanedMarkdown,
-        dedupKey: buildDedupKey(source.id, parsed.title, parsed.publishedAt),
-        contentHash: buildContentHash(cleanedMarkdown),
-        chunks,
-      },
+      article,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -168,6 +213,7 @@ export async function runIngestionPipeline(sourceIds: string[]) {
         storedCount: 0,
         dedupedCount: 0,
         skippedCount: 0,
+        staleCount: 0,
         chunkCount: 0,
         errorCount: 0,
         errors: [],
@@ -191,8 +237,29 @@ export async function runIngestionPipeline(sourceIds: string[]) {
           errorMessage: summarizeErrors(summary.errors),
         });
 
-        const preparedResults = await runWithConcurrency(discovery.detailUrls, config.concurrency, (detailUrl) =>
-          prepareArticle(source.id, config, detailUrl)
+        const preparedResults = await runWithConcurrency(discovery.detailUrls, config.concurrency, async (detailUrl) =>
+          prepareArticle(source.id, config, detailUrl, async (attempt, error) => {
+            await store.recordRunItem({
+              runId,
+              sourceId: source.id,
+              stage: "clean",
+              itemUrl: detailUrl,
+              status: "retried",
+              attempt,
+              errorMessage: error instanceof Error ? error.message : String(error),
+            });
+          }).then(async (result) => {
+            await store.recordRunItem({
+              runId,
+              sourceId: source.id,
+              stage: "clean",
+              itemUrl: detailUrl,
+              status: result.ok ? "succeeded" : result.skipped ? "skipped" : "failed",
+              errorMessage: result.ok ? null : result.skipped ? result.reason : result.error,
+            });
+
+            return result;
+          })
         );
 
         await store.updateRun(runId, {
@@ -221,6 +288,14 @@ export async function runIngestionPipeline(sourceIds: string[]) {
           } else {
             summary.dedupedCount += 1;
           }
+        }
+
+        if (summary.fetchedCount > 0) {
+          const activeCanonicalUrls = preparedResults
+            .filter((result): result is Extract<PreparedArticleResult, { ok: true }> => result.ok)
+            .map((result) => result.article.canonicalUrl);
+
+          summary.staleCount = await store.markSourceDocumentsStale(source.id, activeCanonicalUrls);
         }
 
         const status =

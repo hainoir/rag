@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 
 import type { SearchAnswer, SearchStatus } from "@/lib/search/types";
 
+type FeedbackState = "idle" | "submitting" | "sent" | "failed";
+
 type AnswerPanelProps =
   | {
       loading: true;
@@ -14,12 +16,16 @@ type AnswerPanelProps =
       loading?: false;
       answer: SearchAnswer;
       status: SearchStatus;
+      query?: string;
+      requestId?: string;
+      sourceIds?: string[];
     };
 
 export function AnswerPanel(props: AnswerPanelProps) {
   const [visibleCount, setVisibleCount] = useState(
     props.loading ? 0 : props.answer.summary.length,
   );
+  const [feedbackState, setFeedbackState] = useState<FeedbackState>("idle");
   const summaryText = props.loading ? "" : props.answer.summary;
 
   useEffect(() => {
@@ -46,6 +52,10 @@ export function AnswerPanel(props: AnswerPanelProps) {
       window.clearInterval(timer);
     };
   }, [props.loading, summaryText]);
+
+  useEffect(() => {
+    setFeedbackState("idle");
+  }, [props.loading ? "" : props.requestId]);
 
   if (props.loading) {
     return (
@@ -74,6 +84,35 @@ export function AnswerPanel(props: AnswerPanelProps) {
 
   const badgeText = props.status === "partial" ? "信息不完整" : "高置信回答";
   const evidence = props.answer.evidence ?? [];
+  const { query, requestId, sourceIds } = props;
+  const canSendFeedback = Boolean(requestId && query);
+
+  async function submitFeedback(rating: "up" | "down") {
+    if (!canSendFeedback || feedbackState === "submitting") {
+      return;
+    }
+
+    setFeedbackState("submitting");
+
+    try {
+      const response = await fetch("/api/feedback", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          requestId,
+          query,
+          rating,
+          sourceIds: sourceIds ?? evidence.map((item) => item.sourceId),
+        }),
+      });
+
+      setFeedbackState(response.ok ? "sent" : "failed");
+    } catch {
+      setFeedbackState("failed");
+    }
+  }
 
   return (
     <section className="surface rounded-[var(--radius-lg)] p-6">
@@ -137,6 +176,34 @@ export function AnswerPanel(props: AnswerPanelProps) {
           </div>
         </div>
       ) : null}
+
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-[20px] border border-[var(--line)] bg-white/78 p-4">
+        <p className="text-sm leading-6 muted">
+          {feedbackState === "sent"
+            ? "反馈已记录。"
+            : feedbackState === "failed"
+              ? "反馈暂未提交成功。"
+              : "这次回答是否有帮助？"}
+        </p>
+        <div className="flex items-center gap-2">
+          <button
+            className="rounded-full border border-[var(--line)] bg-white px-4 py-2 text-sm font-semibold text-[var(--official)] transition hover:border-[var(--official)] disabled:cursor-not-allowed disabled:opacity-55"
+            disabled={!canSendFeedback || feedbackState === "submitting"}
+            onClick={() => void submitFeedback("up")}
+            type="button"
+          >
+            有帮助
+          </button>
+          <button
+            className="rounded-full border border-[var(--line)] bg-white px-4 py-2 text-sm font-semibold text-[var(--muted)] transition hover:border-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-55"
+            disabled={!canSendFeedback || feedbackState === "submitting"}
+            onClick={() => void submitFeedback("down")}
+            type="button"
+          >
+            不准确
+          </button>
+        </div>
+      </div>
     </section>
   );
 }

@@ -37,6 +37,11 @@ function buildErrorResponse(query: string): SearchResponse {
     relatedQuestions: DEFAULT_QUESTIONS,
     retrievedCount: 0,
     resultGeneratedAt: new Date().toISOString(),
+    meta: {
+      requestId: crypto.randomUUID(),
+      errorCode: "search_service_error",
+      cacheStatus: "bypass",
+    },
   };
 }
 
@@ -209,7 +214,13 @@ export function ResultsShell({ initialQuery }: ResultsShellProps) {
                 ) : (
                   <>
                     {viewMode === "answer" ? (
-                      <AnswerPanel answer={response!.answer!} status={response!.status} />
+                      <AnswerPanel
+                        answer={response!.answer!}
+                        query={response!.query}
+                        requestId={response!.meta?.requestId}
+                        sourceIds={response!.sources.map((source) => source.id)}
+                        status={response!.status}
+                      />
                     ) : null}
 
                     <SourceList

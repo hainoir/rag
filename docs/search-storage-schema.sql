@@ -31,7 +31,7 @@ create table if not exists documents (
   last_verified_at timestamptz,
   dedup_key text not null,
   content_hash text not null,
-  status text not null default 'active' check (status in ('active', 'superseded', 'filtered')),
+  status text not null default 'active' check (status in ('active', 'superseded', 'filtered', 'stale')),
   created_at timestamptz not null default now(),
   updated_at_db timestamptz not null default now(),
   unique (canonical_url),
@@ -74,6 +74,45 @@ create table if not exists ingestion_runs (
   error_message text
 );
 
+create table if not exists ingestion_run_items (
+  id uuid primary key default gen_random_uuid(),
+  run_id uuid not null references ingestion_runs(id) on delete cascade,
+  source_id text not null references source_registry(id),
+  stage text not null check (stage in ('fetch', 'clean', 'dedup', 'chunk', 'index', 'publish')),
+  item_url text,
+  status text not null check (status in ('succeeded', 'failed', 'skipped', 'retried')),
+  attempt integer not null default 1,
+  error_message text,
+  started_at timestamptz not null default now(),
+  ended_at timestamptz
+);
+
+create table if not exists search_feedback (
+  id uuid primary key default gen_random_uuid(),
+  request_id text not null,
+  query text not null,
+  rating text not null check (rating in ('up', 'down')),
+  reason text,
+  source_ids text[] not null default '{}',
+  created_at timestamptz not null default now()
+);
+
+create table if not exists search_query_logs (
+  id uuid primary key default gen_random_uuid(),
+  request_id text not null,
+  query text not null,
+  status text not null check (status in ('ok', 'partial', 'empty', 'error')),
+  retrieved_count integer not null default 0,
+  source_count integer not null default 0,
+  official_source_count integer not null default 0,
+  community_source_count integer not null default 0,
+  cache_status text check (cache_status in ('hit', 'miss', 'bypass')),
+  error_code text,
+  duration_ms integer,
+  client_hash text,
+  created_at timestamptz not null default now()
+);
+
 create index if not exists documents_source_id_idx on documents (source_id);
 create index if not exists documents_published_at_idx on documents (published_at desc);
 create index if not exists documents_last_verified_at_idx on documents (last_verified_at desc);
@@ -82,3 +121,9 @@ create index if not exists chunks_document_version_id_idx on chunks (document_ve
 create index if not exists chunks_snippet_trgm_idx on chunks using gin (snippet gin_trgm_ops);
 create index if not exists chunks_full_snippet_trgm_idx on chunks using gin (full_snippet gin_trgm_ops);
 create index if not exists ingestion_runs_source_id_idx on ingestion_runs (source_id, started_at desc);
+create index if not exists ingestion_run_items_run_id_idx on ingestion_run_items (run_id);
+create index if not exists search_feedback_request_id_idx on search_feedback (request_id);
+create index if not exists search_feedback_created_at_idx on search_feedback (created_at desc);
+create index if not exists search_query_logs_request_id_idx on search_query_logs (request_id);
+create index if not exists search_query_logs_created_at_idx on search_query_logs (created_at desc);
+create index if not exists search_query_logs_status_idx on search_query_logs (status, created_at desc);

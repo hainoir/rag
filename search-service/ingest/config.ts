@@ -9,6 +9,8 @@ import {
 const DEFAULT_FETCH_LIMIT = 12;
 const DEFAULT_HTTP_TIMEOUT_MS = 15_000;
 const DEFAULT_CONCURRENCY = 4;
+const DEFAULT_RETRY_ATTEMPTS = 2;
+const DEFAULT_RETRY_DELAY_MS = 500;
 const DEFAULT_USER_AGENT = "campus-rag-ingestion/1.0 (+https://www.tjcu.edu.cn/)";
 
 const SUPPORTED_SOURCE_IDS = new Set<string>(SUPPORTED_INGEST_SOURCE_IDS);
@@ -18,6 +20,8 @@ export type IngestRuntimeConfig = {
   fetchLimit: number;
   httpTimeoutMs: number;
   concurrency: number;
+  retryAttempts: number;
+  retryDelayMs: number;
   userAgent: string;
 };
 
@@ -98,6 +102,8 @@ export function readIngestRuntimeConfig(env = process.env): IngestRuntimeConfig 
     fetchLimit: parsePositiveInteger(env.INGEST_FETCH_LIMIT, DEFAULT_FETCH_LIMIT),
     httpTimeoutMs: parsePositiveInteger(env.INGEST_HTTP_TIMEOUT_MS, DEFAULT_HTTP_TIMEOUT_MS),
     concurrency: parsePositiveInteger(env.INGEST_CONCURRENCY, DEFAULT_CONCURRENCY),
+    retryAttempts: parsePositiveInteger(env.INGEST_RETRY_ATTEMPTS, DEFAULT_RETRY_ATTEMPTS),
+    retryDelayMs: parsePositiveInteger(env.INGEST_RETRY_DELAY_MS, DEFAULT_RETRY_DELAY_MS),
     userAgent: String(env.INGEST_USER_AGENT ?? DEFAULT_USER_AGENT).trim() || DEFAULT_USER_AGENT,
   };
 }

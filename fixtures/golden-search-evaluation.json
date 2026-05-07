@@ -1,0 +1,102 @@
+[
+  {
+    "id": "library-borrow-basic",
+    "query": "图书馆借书需要什么证件",
+    "expectedSourceIds": ["official-library-borrow-guide"]
+  },
+  {
+    "id": "library-renew",
+    "query": "图书馆怎么续借图书",
+    "expectedSourceIds": ["official-library-borrow-guide"]
+  },
+  {
+    "id": "library-seat-booking",
+    "query": "自习座位怎么预约",
+    "expectedSourceIds": ["official-library-seat-booking"]
+  },
+  {
+    "id": "library-seat-cancel",
+    "query": "预约了图书馆座位不能去怎么办",
+    "expectedSourceIds": ["official-library-seat-booking"]
+  },
+  {
+    "id": "dorm-repair",
+    "query": "宿舍水电报修在哪里提交",
+    "expectedSourceIds": ["official-dorm-repair-service"]
+  },
+  {
+    "id": "dorm-repair-progress",
+    "query": "公寓报修后怎么查看进度",
+    "expectedSourceIds": ["official-dorm-repair-service"]
+  },
+  {
+    "id": "student-leave",
+    "query": "学生请假离校需要走什么审批",
+    "expectedSourceIds": ["official-student-leave-process"]
+  },
+  {
+    "id": "leave-materials",
+    "query": "请假需要上传哪些材料",
+    "expectedSourceIds": ["official-student-leave-process"]
+  },
+  {
+    "id": "scholarship-aid",
+    "query": "奖助学金申请材料怎么交",
+    "expectedSourceIds": ["official-scholarship-aid-guide"]
+  },
+  {
+    "id": "aid-review",
+    "query": "助学金评审需要注意什么",
+    "expectedSourceIds": ["official-scholarship-aid-guide"]
+  },
+  {
+    "id": "club-recruitment",
+    "query": "社团纳新活动什么时候开始",
+    "expectedSourceIds": ["official-club-recruitment-plan"]
+  },
+  {
+    "id": "club-booth",
+    "query": "社团招新摊位怎么安排",
+    "expectedSourceIds": ["official-club-recruitment-plan"]
+  },
+  {
+    "id": "canteen-hours",
+    "query": "食堂营业时间是什么",
+    "expectedSourceIds": ["official-canteen-service-hours"]
+  },
+  {
+    "id": "holiday-canteen",
+    "query": "节假日食堂还供餐吗",
+    "expectedSourceIds": ["official-canteen-service-hours"]
+  },
+  {
+    "id": "course-selection",
+    "query": "补退选课程怎么操作",
+    "expectedSourceIds": ["official-course-selection-guide"]
+  },
+  {
+    "id": "course-adjustment",
+    "query": "选课调整时间以哪里为准",
+    "expectedSourceIds": ["official-course-selection-guide"]
+  },
+  {
+    "id": "dorm-life-community",
+    "query": "新生宿舍生活有哪些经验",
+    "expectedSourceIds": ["community-dorm-life-tips"]
+  },
+  {
+    "id": "dorm-items-community",
+    "query": "宿舍需要准备哪些生活用品",
+    "expectedSourceIds": ["community-dorm-life-tips"]
+  },
+  {
+    "id": "canteen-recommendation",
+    "query": "食堂有哪些窗口推荐",
+    "expectedSourceIds": ["community-canteen-recommendations"]
+  },
+  {
+    "id": "late-canteen-community",
+    "query": "晚上还有哪些食堂窗口开着",
+    "expectedSourceIds": ["community-canteen-recommendations"]
+  }
+]

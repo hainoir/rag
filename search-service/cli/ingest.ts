@@ -20,6 +20,7 @@ async function main() {
         `fetched=${summary.fetchedCount}`,
         `stored=${summary.storedCount}`,
         `deduped=${summary.dedupedCount}`,
+        `stale=${summary.staleCount}`,
         `skipped=${summary.skippedCount}`,
         `chunks=${summary.chunkCount}`,
         `errors=${summary.errorCount}`,

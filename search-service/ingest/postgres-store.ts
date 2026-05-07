@@ -17,6 +17,20 @@ type RunProgressPatch = {
   errorMessage?: string | null;
 };
 
+type RunItemStatus = "succeeded" | "failed" | "skipped" | "retried";
+
+type RunItemInput = {
+  runId: string;
+  sourceId: string;
+  stage: IngestionStage;
+  itemUrl?: string;
+  status: RunItemStatus;
+  attempt?: number;
+  errorMessage?: string | null;
+  startedAt?: string;
+  endedAt?: string;
+};
+
 type InspectRow = {
   sourceId: string;
   sourceName: string;
@@ -216,6 +230,60 @@ export class PostgresStore {
     });
   }
 
+  async recordRunItem(item: RunItemInput) {
+    await this.withClient(async (client) => {
+      await client.query(
+        `
+          insert into ingestion_run_items (
+            run_id,
+            source_id,
+            stage,
+            item_url,
+            status,
+            attempt,
+            error_message,
+            started_at,
+            ended_at
+          )
+          values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        `,
+        [
+          item.runId,
+          item.sourceId,
+          item.stage,
+          item.itemUrl ?? null,
+          item.status,
+          item.attempt ?? 1,
+          item.errorMessage ?? null,
+          item.startedAt ?? new Date().toISOString(),
+          item.endedAt ?? new Date().toISOString(),
+        ],
+      );
+    });
+  }
+
+  async markSourceDocumentsStale(sourceId: string, activeCanonicalUrls: string[]) {
+    if (activeCanonicalUrls.length === 0) {
+      return 0;
+    }
+
+    return this.withClient(async (client) => {
+      const result = await client.query<{ id: string }>(
+        `
+          update documents
+          set status = 'stale', updated_at_db = now()
+          where source_id = $1
+            and status = 'active'
+            and not (canonical_url = any($2::text[]))
+          returning id
+        `,
+        [sourceId, activeCanonicalUrls],
+      );
+
+      return result.rowCount ?? 0;
+    });
+  }
+
   async persistArticle(article: ParsedArticle): Promise<PersistOutcome> {
     return this.withClient(async (client) => {
       await client.query("begin");
@@ -373,6 +441,7 @@ export class PostgresStore {
       `
         update documents
         set
+          status = 'active',
           title = $2,
           url = $3,
           canonical_url = $4,

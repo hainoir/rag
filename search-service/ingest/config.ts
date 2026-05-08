@@ -12,6 +12,9 @@ const DEFAULT_CONCURRENCY = 4;
 const DEFAULT_RETRY_ATTEMPTS = 2;
 const DEFAULT_RETRY_DELAY_MS = 500;
 const DEFAULT_USER_AGENT = "campus-rag-ingestion/1.0 (+https://www.tjcu.edu.cn/)";
+const DEFAULT_MODERATION_BASE_URL = "https://api.openai.com/v1";
+const DEFAULT_MODERATION_MODEL = "omni-moderation-latest";
+const DEFAULT_MODERATION_TIMEOUT_MS = 8_000;
 
 const SUPPORTED_SOURCE_IDS = new Set<string>(SUPPORTED_INGEST_SOURCE_IDS);
 
@@ -23,6 +26,11 @@ export type IngestRuntimeConfig = {
   retryAttempts: number;
   retryDelayMs: number;
   userAgent: string;
+  moderationMode: "off" | "report" | "enforce";
+  moderationApiKey: string;
+  moderationBaseUrl: string;
+  moderationModel: string;
+  moderationTimeoutMs: number;
 };
 
 function parsePositiveInteger(value: string | undefined, fallback: number) {
@@ -97,6 +105,8 @@ export function resolveCliSourceIds(argv: string[], env = process.env) {
 }
 
 export function readIngestRuntimeConfig(env = process.env): IngestRuntimeConfig {
+  const moderationMode = String(env.CONTENT_MODERATION_MODE ?? "off").trim();
+
   return {
     databaseUrl: String(env.DATABASE_URL ?? "").trim(),
     fetchLimit: parsePositiveInteger(env.INGEST_FETCH_LIMIT, DEFAULT_FETCH_LIMIT),
@@ -105,6 +115,13 @@ export function readIngestRuntimeConfig(env = process.env): IngestRuntimeConfig 
     retryAttempts: parsePositiveInteger(env.INGEST_RETRY_ATTEMPTS, DEFAULT_RETRY_ATTEMPTS),
     retryDelayMs: parsePositiveInteger(env.INGEST_RETRY_DELAY_MS, DEFAULT_RETRY_DELAY_MS),
     userAgent: String(env.INGEST_USER_AGENT ?? DEFAULT_USER_AGENT).trim() || DEFAULT_USER_AGENT,
+    moderationMode: moderationMode === "report" || moderationMode === "enforce" ? moderationMode : "off",
+    moderationApiKey: String(env.CONTENT_MODERATION_API_KEY ?? "").trim(),
+    moderationBaseUrl:
+      String(env.CONTENT_MODERATION_BASE_URL ?? DEFAULT_MODERATION_BASE_URL).trim() || DEFAULT_MODERATION_BASE_URL,
+    moderationModel:
+      String(env.CONTENT_MODERATION_MODEL ?? DEFAULT_MODERATION_MODEL).trim() || DEFAULT_MODERATION_MODEL,
+    moderationTimeoutMs: parsePositiveInteger(env.CONTENT_MODERATION_TIMEOUT_MS, DEFAULT_MODERATION_TIMEOUT_MS),
   };
 }
 

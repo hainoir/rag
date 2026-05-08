@@ -1,6 +1,7 @@
 import { getSourceAdapter } from "./adapters.ts";
 import { readIngestRuntimeConfig, resolveSelectedSources } from "./config.ts";
 import { fetchHtml } from "./http.ts";
+import { moderateCommunityMarkdown } from "./moderation.ts";
 import { PostgresStore } from "./postgres-store.ts";
 import type { ParsedArticle, SourceRunSummary, SupportedSourceId } from "./types.ts";
 import {
@@ -42,6 +43,10 @@ function sleep(ms: number) {
   });
 }
 
+function buildModerationBlockedError(detailUrl: string, reason: string | undefined) {
+  return new Error(`MODERATION_BLOCKED:${detailUrl}:${reason ?? "flagged"}`);
+}
+
 async function runWithRetry<T>(
   task: () => Promise<T>,
   config: ReturnType<typeof readIngestRuntimeConfig>,
@@ -71,10 +76,7 @@ export function sanitizeCommunityMarkdown(markdown: string) {
     .replace(/((?:微信|vx|QQ|qq)[:：\s]*)[A-Za-z0-9_-]{5,}/g, "$1[联系方式已隐藏]");
 }
 
-async function discoverDetailUrls(
-  sourceId: SupportedSourceId,
-  config: ReturnType<typeof readIngestRuntimeConfig>,
-) {
+async function discoverDetailUrls(sourceId: SupportedSourceId, config: ReturnType<typeof readIngestRuntimeConfig>) {
   const source = resolveSelectedSources([sourceId])[0];
   const adapter = getSourceAdapter(sourceId);
   const pending = [...adapter.seedListUrls(source)];
@@ -146,6 +148,29 @@ async function prepareArticle(
           source.cleaningProfile === "community_thread"
             ? sanitizeCommunityMarkdown(parsed.cleanedMarkdown)
             : parsed.cleanedMarkdown;
+        const moderation =
+          source.cleaningProfile === "community_thread"
+            ? await moderateCommunityMarkdown(cleanedMarkdown, config)
+            : { allowed: true, flagged: false };
+
+        if (!moderation.allowed) {
+          throw buildModerationBlockedError(detailUrl, moderation.reason);
+        }
+
+        if (moderation.flagged) {
+          console.log(
+            JSON.stringify({
+              level: "info",
+              timestamp: new Date().toISOString(),
+              service: "ingestion",
+              event: "community_content.flagged",
+              sourceId,
+              detailUrl,
+              reason: moderation.reason ?? "flagged",
+            }),
+          );
+        }
+
         const chunks = buildChunksFromMarkdown(cleanedMarkdown);
 
         if (chunks.length === 0) {
@@ -184,6 +209,14 @@ async function prepareArticle(
         ok: false,
         skipped: true,
         reason: `Skipped redirect-only article shell for ${detailUrl}`,
+      };
+    }
+
+    if (message.startsWith("MODERATION_BLOCKED:")) {
+      return {
+        ok: false,
+        skipped: true,
+        reason: `Community content blocked by moderation for ${detailUrl}: ${message.split(":").slice(2).join(":")}`,
       };
     }
 
@@ -259,7 +292,7 @@ export async function runIngestionPipeline(sourceIds: string[]) {
             });
 
             return result;
-          })
+          }),
         );
 
         await store.updateRun(runId, {

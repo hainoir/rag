@@ -3,19 +3,26 @@ name: Scheduled Ingestion
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 20 * * *"
+    - cron: "0 18 * * *"
+    - cron: "0 * * * *"
 
 jobs:
   ingest:
     runs-on: ubuntu-latest
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      REDIS_URL: ${{ secrets.REDIS_URL }}
+      CONTENT_MODERATION_API_KEY: ${{ secrets.CONTENT_MODERATION_API_KEY }}
+      CONTENT_MODERATION_MODE: ${{ vars.CONTENT_MODERATION_MODE || 'enforce' }}
+      CONTENT_MODERATION_BASE_URL: ${{ vars.CONTENT_MODERATION_BASE_URL || 'https://api.openai.com/v1' }}
+      CONTENT_MODERATION_MODEL: ${{ vars.CONTENT_MODERATION_MODEL || 'omni-moderation-latest' }}
       SEARCH_DATABASE_SCHEMA: ${{ vars.SEARCH_DATABASE_SCHEMA || 'public' }}
       SEARCH_SERVICE_PROVIDER: postgres
       SEARCH_ANSWER_MODE: extractive
       INGEST_SOURCE_IDS: ${{ vars.INGEST_SOURCE_IDS || 'tjcu-main-notices,tjcu-library,tjcu-academic-affairs,tjcu-undergrad-admissions,tjcu-grad-admissions' }}
       RUN_COMMUNITY_INGESTION: ${{ vars.RUN_COMMUNITY_INGESTION || 'false' }}
       INGEST_COMMUNITY_SOURCE_IDS: ${{ vars.INGEST_COMMUNITY_SOURCE_IDS || 'tjcu-tieba' }}
+      INGEST_QUEUE_NAME: ${{ vars.INGEST_QUEUE_NAME || 'campus-rag:ingestion' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -31,10 +38,14 @@ jobs:
         if: ${{ env.DATABASE_URL == '' }}
         run: echo "DATABASE_URL secret is not configured; scheduled ingestion skipped."
 
+      - name: Skip queued ingestion when REDIS_URL is not configured
+        if: ${{ env.DATABASE_URL != '' && env.REDIS_URL == '' }}
+        run: echo "REDIS_URL secret is not configured; queued scheduled ingestion skipped."
+
       - name: Run official ingestion
-        if: ${{ env.DATABASE_URL != '' }}
-        run: npm run verify:real-data
+        if: ${{ env.DATABASE_URL != '' && env.REDIS_URL != '' && (github.event_name == 'workflow_dispatch' || github.event.schedule == '0 18 * * *') }}
+        run: npm run ingest:scheduled:official
 
       - name: Run community ingestion
-        if: ${{ env.DATABASE_URL != '' && env.RUN_COMMUNITY_INGESTION == 'true' }}
-        run: npm run ingest:community
+        if: ${{ env.DATABASE_URL != '' && env.REDIS_URL != '' && env.RUN_COMMUNITY_INGESTION == 'true' && (github.event_name == 'workflow_dispatch' || github.event.schedule == '0 * * * *') }}
+        run: npm run ingest:scheduled:community

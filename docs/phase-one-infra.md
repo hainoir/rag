@@ -112,8 +112,8 @@ CONTENT_MODERATION_TIMEOUT_MS=8000
 生产建议：
 
 - 官方源可不走文本审核。
-- 社区源上线初期使用 `CONTENT_MODERATION_MODE=enforce`。
-- 如果审核服务不稳定，先切回 `report`，同时保持社区来源低权重。
+- 社区源首次接入建议先使用 `CONTENT_MODERATION_MODE=report`，先观察风险命中和误杀情况。
+- 官方同步和审核接口稳定后，再切到 `enforce`，同时保持社区来源低权重。
 
 ## 5. 阶段一验收清单
 

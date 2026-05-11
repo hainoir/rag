@@ -132,8 +132,14 @@ RSS / sitemap 来源的增量候选检测已经沉淀在 `search-service/ingest/
 - `document_versions`
 - `chunks`
 - `ingestion_runs`
+- `ingestion_run_items`
 
-如果后续要做失败重试或调试回放，再补 `ingestion_run_items`。
+当前 schema 还已经包含：
+
+- `search_feedback`
+- `search_query_logs`
+
+前者用于收集用户反馈，后者用于记录查询状态与基础性能日志。
 
 ## 8. 向量检索扩展
 

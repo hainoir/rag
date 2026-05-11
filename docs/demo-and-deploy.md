@@ -128,14 +128,19 @@ npm run e2e
 
 ## 定时摄取
 
-仓库内置 `.github/workflows/scheduled-ingestion.yml`。它每天 UTC 20:00 运行，也支持手动触发；只有配置了 `DATABASE_URL` secret 时才执行 `npm run verify:real-data`。可用 GitHub Actions variables 覆盖：
+仓库内置 `.github/workflows/scheduled-ingestion.yml`。它支持手动触发，并配置了两类定时任务：
+
+- 官方源：每天 UTC 18:00 执行 `npm run ingest:scheduled:official`
+- 社区源：每小时检查一次；只有 `RUN_COMMUNITY_INGESTION=true` 时才执行 `npm run ingest:scheduled:community`
+
+这条 workflow 只有在 `DATABASE_URL` 和 `REDIS_URL` 都已配置时才会真正执行队列化 ingestion。可用 GitHub Actions variables 覆盖：
 
 - `SEARCH_DATABASE_SCHEMA`
 - `INGEST_SOURCE_IDS`
 - `RUN_COMMUNITY_INGESTION`
 - `INGEST_COMMUNITY_SOURCE_IDS`
 
-默认不在定时任务里自动跑社区来源；把 `RUN_COMMUNITY_INGESTION=true` 后，workflow 才会额外执行 `npm run ingest:community`。这样可以先把官方来源作为稳定基线，社区来源按合规和质量策略逐步打开。
+默认不在定时任务里自动跑社区来源；把 `RUN_COMMUNITY_INGESTION=true` 后，workflow 才会额外执行 `npm run ingest:scheduled:community`。这样可以先把官方来源作为稳定基线，社区来源按合规和质量策略逐步打开。
 
 ## 错误分类与降级
 

@@ -157,18 +157,17 @@ async function runRedisCommand(args: Array<string | number>, env = process.env) 
       buffer = Buffer.concat([buffer, Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)]);
 
       try {
-        let cursor = 0;
         let lastValue: RedisValue = null;
 
         while (expectedReplies > 0) {
-          const parsed = parseRedisValue(buffer, cursor);
+          const parsed = parseRedisValue(buffer, 0);
 
           if (!parsed) {
             return;
           }
 
           lastValue = parsed.value;
-          cursor = parsed.offset;
+          buffer = buffer.subarray(parsed.offset);
           expectedReplies -= 1;
         }
 

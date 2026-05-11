@@ -44,6 +44,7 @@
   },
   "dependencies": {
     "cheerio": "1.2.0",
+    "gh": "2.8.9",
     "iconv-lite": "0.7.2",
     "next": "16.2.4",
     "pg": "8.20.0",

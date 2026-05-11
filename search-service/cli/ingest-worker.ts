@@ -45,6 +45,10 @@ async function processOneJob() {
         `errors=${summary.errorCount}`,
       ].join(" "),
     );
+
+    if (summary.errors.length > 0) {
+      summary.errors.forEach((error) => console.log(`  - ${error}`));
+    }
   }
 
   if (summaries.some((summary) => summary.errorCount > 0)) {

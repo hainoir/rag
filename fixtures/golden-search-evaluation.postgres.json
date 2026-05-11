@@ -1,0 +1,177 @@
+[
+  {
+    "id": "grad-brochure",
+    "query": "研究生招生简章在哪里查",
+    "category": "招生",
+    "sourceScope": "official",
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "8e30f20637dd1e0ee06fe6f9a9d0fa916c950555f994ada3a7a05dfeda5f0450",
+        "title": "天津商业大学2026年硕士研究生招生简章",
+        "sourceName": "天津商业大学研究生招生网",
+        "canonicalUrl": "https://yz.tjcu.edu.cn/info/1041/3349.htm"
+      }
+    ],
+    "expectedEmpty": false,
+    "notes": "Postgres 真值使用稳定键匹配，不依赖 chunk UUID。"
+  },
+  {
+    "id": "grad-directory",
+    "query": "研究生专业目录和报考条件怎么看",
+    "category": "招生",
+    "sourceScope": "official",
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "43e9467edb2c88f4564b67d1ea03ec5e20ff5602789bf7a7575f4409e8b10135",
+        "title": "天津商业大学2026年硕士研究生招生专业目录",
+        "sourceName": "天津商业大学研究生招生网",
+        "canonicalUrl": "https://yz.tjcu.edu.cn/info/1041/3350.htm"
+      }
+    ],
+    "expectedEmpty": false
+  },
+  {
+    "id": "grad-readjustment",
+    "query": "研究生调剂公告一般在哪里看",
+    "category": "招生",
+    "sourceScope": "official",
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "3b71153c207472eaefc512f71d24a95fcc7c31d600a104314f15349e05086d8a",
+        "title": "2025年硕士研究生招生调剂公告",
+        "sourceName": "天津商业大学研究生招生网",
+        "canonicalUrl": "https://yz.tjcu.edu.cn/info/1040/3328.htm"
+      }
+    ],
+    "expectedEmpty": false
+  },
+  {
+    "id": "grad-retest",
+    "query": "复试通知和研招最新安排去哪里找",
+    "category": "招生",
+    "sourceScope": "official",
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "d1f6af93060845e9b215d69ce0dac94b7308059fc254afd271ab27d45c750231",
+        "title": "各学院2025年复试细则和调剂办法（实时更新）",
+        "sourceName": "天津商业大学研究生招生网",
+        "canonicalUrl": "https://yz.tjcu.edu.cn/info/1040/3322.htm"
+      }
+    ],
+    "expectedEmpty": false
+  },
+  {
+    "id": "library-seat-booking",
+    "query": "图书馆自习座位怎么预约",
+    "category": "图书馆",
+    "sourceScope": "official",
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "c55d4b6dce96b714f7c8c3647f9c517f3df97d4128c432419c5e788b935b212d",
+        "title": "座位预约系统使用说明",
+        "sourceName": "天津商业大学图书馆",
+        "canonicalUrl": "https://lib.tjcu.edu.cn/info/1001/2521.htm"
+      }
+    ],
+    "expectedEmpty": false
+  },
+  {
+    "id": "library-seat-signin",
+    "query": "预约了图书馆座位后还要签到吗",
+    "category": "图书馆",
+    "sourceScope": "official",
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "c55d4b6dce96b714f7c8c3647f9c517f3df97d4128c432419c5e788b935b212d",
+        "title": "座位预约系统使用说明",
+        "sourceName": "天津商业大学图书馆",
+        "canonicalUrl": "https://lib.tjcu.edu.cn/info/1001/2521.htm"
+      }
+    ],
+    "expectedEmpty": false
+  },
+  {
+    "id": "library-seat-timeout",
+    "query": "图书馆座位预约超时会怎样",
+    "category": "图书馆",
+    "sourceScope": "official",
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "c55d4b6dce96b714f7c8c3647f9c517f3df97d4128c432419c5e788b935b212d",
+        "title": "座位预约系统使用说明",
+        "sourceName": "天津商业大学图书馆",
+        "canonicalUrl": "https://lib.tjcu.edu.cn/info/1001/2521.htm"
+      }
+    ],
+    "expectedEmpty": false
+  },
+  {
+    "id": "library-seat-exam",
+    "query": "考试周图书馆座位预约规则会变化吗",
+    "category": "图书馆",
+    "sourceScope": "official",
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "c55d4b6dce96b714f7c8c3647f9c517f3df97d4128c432419c5e788b935b212d",
+        "title": "座位预约系统使用说明",
+        "sourceName": "天津商业大学图书馆",
+        "canonicalUrl": "https://lib.tjcu.edu.cn/info/1001/2521.htm"
+      }
+    ],
+    "expectedEmpty": false
+  },
+  {
+    "id": "admissions-negative",
+    "query": "本科新生军训服可以在线退换吗",
+    "category": "招生",
+    "sourceScope": "official",
+    "expectedSourceIds": [],
+    "expectedEmpty": true,
+    "notes": "官方负样本，用于验证无答案准确率。"
+  },
+  {
+    "id": "academic-negative",
+    "query": "四六级准考证下载入口在哪里",
+    "category": "教务",
+    "sourceScope": "official",
+    "expectedSourceIds": [],
+    "expectedEmpty": true,
+    "notes": "官方负样本，用于验证无答案准确率。"
+  },
+  {
+    "id": "library-negative",
+    "query": "图书馆打印店会员卡怎么办",
+    "category": "图书馆",
+    "sourceScope": "official",
+    "expectedSourceIds": [],
+    "expectedEmpty": true,
+    "notes": "官方负样本，用于验证无答案准确率。"
+  },
+  {
+    "id": "logistics-negative",
+    "query": "校内共享单车月卡多少钱",
+    "category": "后勤",
+    "sourceScope": "official",
+    "expectedSourceIds": [],
+    "expectedEmpty": true,
+    "notes": "官方负样本，用于验证无答案准确率。"
+  },
+  {
+    "id": "student-service-negative",
+    "query": "学生医保报销进度短信多久收到",
+    "category": "学生服务",
+    "sourceScope": "official",
+    "expectedSourceIds": [],
+    "expectedEmpty": true,
+    "notes": "官方负样本，用于验证无答案准确率。"
+  },
+  {
+    "id": "student-service-negative-two",
+    "query": "毕业纪念册领取点在哪里查询",
+    "category": "学生服务",
+    "sourceScope": "official",
+    "expectedSourceIds": [],
+    "expectedEmpty": true,
+    "notes": "官方负样本，用于验证无答案准确率。"
+  }
+]

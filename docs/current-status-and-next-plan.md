@@ -10,18 +10,18 @@
 
 ## 1. 一句话结论
 
-当前项目已经完成了可演示 MVP，且第一阶段里的 PostgreSQL / Redis 接入开发已经完成；当前还没有被仓库内现有证据完全确认的，是基于真实云资源环境的闭环验收结果。
+当前项目已经完成了可演示 MVP，且第一阶段已于 2026-05-11 完成真实 PostgreSQL / Redis / GitHub Actions 的闭环验收。
 
 更准确地说：
 
 - 前端主流程、统一搜索契约、上游搜索服务边界、官方来源 ingestion CLI、Postgres 检索、Redis 队列化 ingestion、社区审核接入口、基础 CI 和文档体系都已经具备。
-- 但“项目已经可上线”这句话仍然缺最后一层证据：真实 PostgreSQL、真实 Redis、真实 GitHub Actions 定时任务和真实来源同步结果，需要有可复查的验收记录。
+- 真实云资源验收已经留档：本地真实数据链路、真实 Redis 队列链路、本地 `search-service` 的 Postgres provider 查询，以及 GitHub Actions 官方定时同步都已跑通。
 
 因此，当前阶段判断应是：
 
 - 可以稳定描述为 demo-ready / explainable RAG MVP
 - 不应描述为 production-grade RAG platform
-- P0 开发主体已经接近完成，其中 PostgreSQL / Redis 接入已完成；但 P0 最关键的真实资源验收还没有正式关单
+- P0 开发主体已经完成第一阶段关单；下一阶段重点转向检索质量评估和线上可靠性
 
 ## 2. 当前开发进度
 
@@ -32,11 +32,11 @@
 - 搜索服务基线：`search-service/` 已支持 `seed / postgres / auto` provider、extractive answer、可选 LLM answer、可选 pgvector、可选 rerank、`/health` 与 `/metrics`。
 - 数据摄取基础：官方来源与社区来源 CLI、来源注册表、清洗规则、去重规则、分块入库、Postgres schema、inspection 和 smoke 命令都已具备。
 - 阶段一基建接入：Redis 队列、worker、scheduled ingestion 包装脚本、社区文本审核接入口、GitHub Actions 定时工作流都已存在。
+- 真实数据闭环验收：本地已跑通 `db:init -> ingest:official -> inspect:ingestion -> smoke:postgres -> test:ingestion:postgres -> ingest:scheduled:official`，并确认 `search-service` 能用 Postgres provider 返回真实来源；GitHub Actions `Scheduled Ingestion` 已在 2026-05-11 的 run `25659617695` 通过。
 - 基础工程保障：`lint`、`format:check`、contract verify、demo verify、unit、build、e2e、evaluation 脚本与 CI 流程已存在。
 
 ### 2.2 已有代码或脚手架，但还不能算完成的部分
 
-- 真实数据闭环验收：文档、schema、脚本和 workflow 都已到位，但是否已经在真实 PostgreSQL / Redis / Secrets / Variables 环境里完整跑通，仍需要看验收记录。
 - pgvector 检索：`vector:init`、`embed:chunks`、`smoke:vector` 已存在，但需要真实 embedding key、pgvector 扩展和固定 query 对比结果。
 - rerank：接口和客户端已接入，但需要真实 cross-encoder 服务与评估对比。
 - evidence-bound LLM answer：具备接入点和回退路径，但还需要更系统的效果验证和错误观测。
@@ -56,7 +56,7 @@
 
 ### 第一阶段：真实数据闭环稳定化
 
-当前状态：PostgreSQL / Redis 接入开发已完成，真实环境下的阶段验收结果未在当前仓库证据里完整沉淀。
+当前状态：已完成，并已有真实环境验收记录。
 
 已经具备：
 
@@ -66,16 +66,17 @@
 - `smoke:postgres`
 - `test:ingestion:postgres`
 - `ingest:scheduled:official`
-- 官方来源白名单与最小默认源集合
+- 本地 `search-service` 用 `postgres` provider 返回真实 sources
+- GitHub Actions `Scheduled Ingestion` 成功 run：`25659617695`
+- 当前远端稳定官方源集合：`tjcu-main-notices,tjcu-library,tjcu-academic-affairs,tjcu-undergrad-admissions`
 
-还差：
+验收结果：
 
-- 在真实 PostgreSQL 上验证至少 3 到 5 个官方源稳定同步
-- 在真实 Redis 上验证 queued ingestion 能入队并被 worker 消费
-- 在 GitHub Actions 上验证官方定时同步可以稳定跑通
-- 证明 search-service 返回的确实是 Postgres 真实 sources，而不是 seed fallback
+- 阶段一要求的真实 PostgreSQL、真实 Redis、真实 GitHub Actions 官方同步已经跑通。
+- GitHub Actions 当前使用 4 个已验证稳定的官方源；社区同步保持 `RUN_COMMUNITY_INGESTION=false`。
+- `tjcu-undergrad-admissions` 仍可能出现个别 detail page 抓取失败，但 source 整体可以完成发现、去重和入库统计，不影响“稳定 3 到 5 个官方源”的阶段目标。
 
-结论：第一阶段的 PostgreSQL / Redis 开发工作已经完成；剩下差的不是“再做接入”，而是把真实环境验收跑完并留档。不建议跳过这一步直接继续做更多 UI 或后台功能。
+结论：第一阶段已经完成。后续不再需要围绕 PostgreSQL / Redis 做“是否接通”的收尾，而应把重点切换到第二阶段检索质量和第三阶段可靠性。
 
 ### 第二阶段：检索质量与 RAG 答案增强
 
@@ -95,7 +96,7 @@
 - 验证 evidence 是否始终绑定到当前 `sources`
 - 用真实环境生成可复现报告
 
-结论：第二阶段可以开始，但前提是第一阶段先完成真实数据闭环。
+结论：第二阶段现在可以正式开始。
 
 ### 第三阶段：线上可靠性与运维能力
 
@@ -128,37 +129,22 @@
 
 建议严格按下面顺序推进，不要跳步：
 
-1. 完成真实资源接入
-   - 准备托管 PostgreSQL、托管 Redis、GitHub Actions Secrets / Variables
-   - 本地 `.env.local` 指向真实资源
+1. 固化第一阶段验收记录
+   - 在运行手册和项目报告中记录 2026-05-11 的本地与 GitHub Actions 验收结果
+   - 记录当前稳定官方源集合与社区关闭策略
 
-2. 完成第一阶段最终验收
-   - 依次执行：
-   - `npm run db:init`
-   - `npm run ingest:official`
-   - `npm run inspect:ingestion`
-   - `npm run smoke:postgres`
-   - `npm run test:ingestion:postgres`
-   - `npm run ingest:scheduled:official`
-   - 手动触发 GitHub Actions 的 `Scheduled Ingestion`
-
-3. 固化第一阶段验收记录
-   - 记录成功 source 数、documents 数、chunks 数
-   - 记录 smoke 结果、workflow run 链接、审核模式
-   - 明确哪些 query 命中了真实来源
-
-4. 再做第二阶段质量增强
+2. 启动第二阶段质量增强
    - 扩充固定 query 集
    - 跑 `vector:init -> embed:chunks -> smoke:vector`
    - 接真实 rerank 服务
    - 产出 lexical / hybrid / rerank 对比报告
 
-5. 再补第三阶段可靠性
+3. 再补第三阶段可靠性
    - 校验缓存、限流、超时和降级策略
    - 把 query logs / feedback / metrics 从“存在接入口”推进到“可观测、可排查”
    - 增加备份、恢复和回滚说明
 
-6. 最后再做后台与发布物料
+4. 最后再做后台与发布物料
    - 来源状态看板
    - 社区审核与人工复核流程
    - 上线 README、验收报告、release checklist
@@ -167,9 +153,9 @@
 
 下一个真正应该完成的里程碑不是“再补 PostgreSQL / Redis 接入功能”，而是：
 
-> 在真实 PostgreSQL + Redis + GitHub Actions 环境下，完成阶段一闭环验收，并留下可复查的结果记录。
+> 以当前已验证的真实数据链路为基础，完成第二阶段的固定评估集、vector / rerank 对比和检索质量报告。
 
-只有这个里程碑完成后，项目状态才能从“代码侧已准备”升级为“真实数据链路已验证”。
+阶段一已经把项目状态从“代码侧已准备”推进到了“真实数据链路已验证”；下一步要解决的是“检索质量是否持续可评估”。
 
 ## 6. 当前建议的文档阅读顺序
 

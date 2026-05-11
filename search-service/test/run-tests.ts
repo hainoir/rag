@@ -27,11 +27,22 @@ const fixtureDir = path.resolve(process.cwd(), "search-service/test/fixtures");
 const require = createRequire(import.meta.url);
 const {
   closePostgresPool,
+  normalizeRerankMode,
+  normalizeRetrievalMode,
   searchPostgres,
   searchSeed,
 }: {
   closePostgresPool: () => Promise<void>;
-  searchPostgres: (query: string, limit: number) => Promise<{
+  normalizeRerankMode: (value?: string) => string;
+  normalizeRetrievalMode: (value?: string) => string;
+  searchPostgres: (
+    query: string,
+    limit: number,
+    options?: {
+      retrievalMode?: string;
+      rerankMode?: string;
+    },
+  ) => Promise<{
     status: string;
     answer: { evidence?: Array<{ sourceId: string }> } | null;
     sources: Array<{ id: string; title: string }>;
@@ -353,6 +364,17 @@ async function main() {
   );
 
   results.push(
+    await runCase("retrieval and rerank experiment modes normalize safely", () => {
+      assert.equal(normalizeRetrievalMode("lexical"), "lexical");
+      assert.equal(normalizeRetrievalMode("HYBRID"), "hybrid");
+      assert.equal(normalizeRetrievalMode("unknown"), "auto");
+      assert.equal(normalizeRerankMode("off"), "off");
+      assert.equal(normalizeRerankMode("ON"), "on");
+      assert.equal(normalizeRerankMode("bad"), "auto");
+    }),
+  );
+
+  results.push(
     await runCase("seed search returns answer evidence", () => {
       const response = searchSeed("图书馆借书", 2);
 
@@ -519,11 +541,18 @@ async function main() {
 
           try {
             const searchResponse = await searchPostgres("校园网升级", 3);
+            const lexicalResponse = await searchPostgres("校园网升级", 3, {
+              retrievalMode: "lexical",
+              rerankMode: "off",
+            });
 
             assert.equal(searchResponse.status, "partial");
             assert.equal(searchResponse.sources.length, 1);
             assert.match(searchResponse.sources[0].title, /校园网断网升级/);
             assert.ok(searchResponse.answer?.evidence?.length);
+            assert.equal(lexicalResponse.status, "partial");
+            assert.equal(lexicalResponse.sources.length, 1);
+            assert.match(lexicalResponse.sources[0].title, /校园网断网升级/);
 
             const emptyResponse = await searchPostgres("明天校园集市几点开始", 3);
 

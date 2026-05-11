@@ -4,6 +4,7 @@ const {
   formatVectorLiteral,
   generateEmbedding,
   generateEmbeddings,
+  isConfiguredValue,
   readEmbeddingConfig,
   shouldUseEmbeddings,
 } = require("../../search-service/embedding-client.cjs");
@@ -44,6 +45,8 @@ async function main() {
 
       assert.equal(shouldUseEmbeddings({ apiKey: "", model: "embed-test" }), false);
       assert.equal(shouldUseEmbeddings({ apiKey: "key", model: "embed-test" }), true);
+      assert.equal(isConfiguredValue("your-embedding-api-key"), false);
+      assert.equal(shouldUseEmbeddings({ apiKey: "your-embedding-api-key", model: "embed-test" }), false);
     }),
   );
 

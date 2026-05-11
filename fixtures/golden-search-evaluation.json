@@ -1,102 +1,448 @@
 [
   {
-    "id": "library-borrow-basic",
-    "query": "图书馆借书需要什么证件",
-    "expectedSourceIds": ["official-library-borrow-guide"]
+    "id": "undergrad-charter",
+    "query": "本科招生章程去哪里看",
+    "category": "招生",
+    "sourceScope": "official",
+    "expectedSourceIds": ["official-undergrad-admissions-guide"],
+    "expectedEmpty": false
   },
   {
-    "id": "library-renew",
-    "query": "图书馆怎么续借图书",
-    "expectedSourceIds": ["official-library-borrow-guide"]
+    "id": "undergrad-rules",
+    "query": "报考天津商业大学要先看哪些官方招生材料",
+    "category": "招生",
+    "sourceScope": "official",
+    "expectedSourceIds": ["official-undergrad-admissions-guide"],
+    "expectedEmpty": false
+  },
+  {
+    "id": "undergrad-consulting",
+    "query": "本科招生咨询方式一般在哪里查",
+    "category": "招生",
+    "sourceScope": "official",
+    "expectedSourceIds": ["official-undergrad-admissions-guide"],
+    "expectedEmpty": false
+  },
+  {
+    "id": "undergrad-major-intro",
+    "query": "专业介绍和录取规则从哪里看",
+    "category": "招生",
+    "sourceScope": "official",
+    "expectedSourceIds": ["official-undergrad-admissions-guide"],
+    "expectedEmpty": false
+  },
+  {
+    "id": "grad-brochure",
+    "query": "研究生招生简章在哪里查",
+    "category": "招生",
+    "sourceScope": "official",
+    "expectedSourceIds": ["official-grad-admissions-guide"],
+    "expectedEmpty": false
+  },
+  {
+    "id": "grad-directory",
+    "query": "研究生专业目录和报考条件怎么看",
+    "category": "招生",
+    "sourceScope": "official",
+    "expectedSourceIds": ["official-grad-admissions-guide"],
+    "expectedEmpty": false
+  },
+  {
+    "id": "grad-readjustment",
+    "query": "研究生调剂公告一般在哪里看",
+    "category": "招生",
+    "sourceScope": "official",
+    "expectedSourceIds": ["official-grad-admissions-guide"],
+    "expectedEmpty": false
+  },
+  {
+    "id": "grad-retest",
+    "query": "复试通知和研招最新安排去哪里找",
+    "category": "招生",
+    "sourceScope": "official",
+    "expectedSourceIds": ["official-grad-admissions-guide"],
+    "expectedEmpty": false
+  },
+  {
+    "id": "course-add-drop-basic",
+    "query": "补退选课程怎么操作",
+    "category": "教务",
+    "sourceScope": "official",
+    "expectedSourceIds": ["official-course-selection-guide"],
+    "expectedEmpty": false
+  },
+  {
+    "id": "course-window",
+    "query": "补退选开放时间一般是什么时候",
+    "category": "教务",
+    "sourceScope": "official",
+    "expectedSourceIds": ["official-course-selection-guide"],
+    "expectedEmpty": false
+  },
+  {
+    "id": "course-after-window",
+    "query": "错过系统补退选窗口还能改课吗",
+    "category": "教务",
+    "sourceScope": "official",
+    "expectedSourceIds": ["official-course-selection-guide"],
+    "expectedEmpty": false
+  },
+  {
+    "id": "course-conflict",
+    "query": "课程冲突后怎么提交调整申请",
+    "category": "教务",
+    "sourceScope": "official",
+    "expectedSourceIds": ["official-course-selection-guide"],
+    "expectedEmpty": false
+  },
+  {
+    "id": "course-retake",
+    "query": "重修课需要走什么调整流程",
+    "category": "教务",
+    "sourceScope": "official",
+    "expectedSourceIds": ["official-course-selection-guide"],
+    "expectedEmpty": false
+  },
+  {
+    "id": "course-system-close",
+    "query": "教务系统关闭后还能补交选课申请吗",
+    "category": "教务",
+    "sourceScope": "official",
+    "expectedSourceIds": ["official-course-selection-guide"],
+    "expectedEmpty": false
+  },
+  {
+    "id": "course-authority",
+    "query": "课程调整时间以哪里发布的信息为准",
+    "category": "教务",
+    "sourceScope": "official",
+    "expectedSourceIds": ["official-course-selection-guide"],
+    "expectedEmpty": false
+  },
+  {
+    "id": "course-review-chain",
+    "query": "补退选申请一般要经过学院和教务处审核吗",
+    "category": "教务",
+    "sourceScope": "official",
+    "expectedSourceIds": ["official-course-selection-guide"],
+    "expectedEmpty": false
+  },
+  {
+    "id": "library-borrow-card",
+    "query": "图书馆借书需要什么证件",
+    "category": "图书馆",
+    "sourceScope": "official",
+    "expectedSourceIds": ["official-library-borrow-guide"],
+    "expectedEmpty": false
+  },
+  {
+    "id": "library-borrow-status",
+    "query": "借书前要先确认什么状态",
+    "category": "图书馆",
+    "sourceScope": "official",
+    "expectedSourceIds": ["official-library-borrow-guide"],
+    "expectedEmpty": false
+  },
+  {
+    "id": "library-renew-online",
+    "query": "图书馆怎么在线续借图书",
+    "category": "图书馆",
+    "sourceScope": "official",
+    "expectedSourceIds": ["official-library-borrow-guide"],
+    "expectedEmpty": false
+  },
+  {
+    "id": "library-overdue",
+    "query": "借阅逾期会影响后续借书吗",
+    "category": "图书馆",
+    "sourceScope": "official",
+    "expectedSourceIds": ["official-library-borrow-guide"],
+    "expectedEmpty": false
   },
   {
     "id": "library-seat-booking",
-    "query": "自习座位怎么预约",
-    "expectedSourceIds": ["official-library-seat-booking"]
+    "query": "图书馆自习座位怎么预约",
+    "category": "图书馆",
+    "sourceScope": "official",
+    "expectedSourceIds": ["official-library-seat-booking"],
+    "expectedEmpty": false
   },
   {
-    "id": "library-seat-cancel",
-    "query": "预约了图书馆座位不能去怎么办",
-    "expectedSourceIds": ["official-library-seat-booking"]
+    "id": "library-seat-signin",
+    "query": "预约了图书馆座位后还要签到吗",
+    "category": "图书馆",
+    "sourceScope": "official",
+    "expectedSourceIds": ["official-library-seat-booking"],
+    "expectedEmpty": false
   },
   {
-    "id": "dorm-repair",
+    "id": "library-seat-timeout",
+    "query": "图书馆座位预约超时会怎样",
+    "category": "图书馆",
+    "sourceScope": "official",
+    "expectedSourceIds": ["official-library-seat-booking"],
+    "expectedEmpty": false
+  },
+  {
+    "id": "library-seat-exam",
+    "query": "考试周图书馆座位预约规则会变化吗",
+    "category": "图书馆",
+    "sourceScope": "official",
+    "expectedSourceIds": ["official-library-seat-booking"],
+    "expectedEmpty": false
+  },
+  {
+    "id": "dorm-repair-entry",
     "query": "宿舍水电报修在哪里提交",
-    "expectedSourceIds": ["official-dorm-repair-service"]
+    "category": "后勤",
+    "sourceScope": "official",
+    "expectedSourceIds": ["official-dorm-repair-service"],
+    "expectedEmpty": false
+  },
+  {
+    "id": "dorm-repair-fields",
+    "query": "报修工单一般要填写哪些信息",
+    "category": "后勤",
+    "sourceScope": "official",
+    "expectedSourceIds": ["official-dorm-repair-service"],
+    "expectedEmpty": false
   },
   {
     "id": "dorm-repair-progress",
-    "query": "公寓报修后怎么查看进度",
-    "expectedSourceIds": ["official-dorm-repair-service"]
+    "query": "宿舍报修后怎么跟进处理进度",
+    "category": "后勤",
+    "sourceScope": "official",
+    "expectedSourceIds": ["official-dorm-repair-service"],
+    "expectedEmpty": false
   },
   {
-    "id": "student-leave",
+    "id": "dorm-repair-emergency",
+    "query": "停水停电这类紧急问题怎么升级报修",
+    "category": "后勤",
+    "sourceScope": "official",
+    "expectedSourceIds": ["official-dorm-repair-service"],
+    "expectedEmpty": false
+  },
+  {
+    "id": "canteen-hours-basic",
+    "query": "食堂营业时间一般怎么安排",
+    "category": "后勤",
+    "sourceScope": "official",
+    "expectedSourceIds": ["official-canteen-service-hours"],
+    "expectedEmpty": false
+  },
+  {
+    "id": "canteen-night",
+    "query": "晚上还有哪些值班窗口供餐",
+    "category": "后勤",
+    "sourceScope": "official",
+    "expectedSourceIds": ["official-canteen-service-hours"],
+    "expectedEmpty": false
+  },
+  {
+    "id": "canteen-holiday",
+    "query": "节假日食堂还会正常供餐吗",
+    "category": "后勤",
+    "sourceScope": "official",
+    "expectedSourceIds": ["official-canteen-service-hours"],
+    "expectedEmpty": false
+  },
+  {
+    "id": "canteen-exam",
+    "query": "考试周和寒暑假食堂营业会调整吗",
+    "category": "后勤",
+    "sourceScope": "official",
+    "expectedSourceIds": ["official-canteen-service-hours"],
+    "expectedEmpty": false
+  },
+  {
+    "id": "leave-approval-chain",
     "query": "学生请假离校需要走什么审批",
-    "expectedSourceIds": ["official-student-leave-process"]
+    "category": "学生服务",
+    "sourceScope": "official",
+    "expectedSourceIds": ["official-student-leave-process"],
+    "expectedEmpty": false
   },
   {
-    "id": "leave-materials",
-    "query": "请假需要上传哪些材料",
-    "expectedSourceIds": ["official-student-leave-process"]
+    "id": "leave-system",
+    "query": "请假一般先在哪个系统里发起申请",
+    "category": "学生服务",
+    "sourceScope": "official",
+    "expectedSourceIds": ["official-student-leave-process"],
+    "expectedEmpty": false
   },
   {
-    "id": "scholarship-aid",
-    "query": "奖助学金申请材料怎么交",
-    "expectedSourceIds": ["official-scholarship-aid-guide"]
+    "id": "leave-return-time",
+    "query": "离校申请需要填返校时间和去向吗",
+    "category": "学生服务",
+    "sourceScope": "official",
+    "expectedSourceIds": ["official-student-leave-process"],
+    "expectedEmpty": false
   },
   {
-    "id": "aid-review",
-    "query": "助学金评审需要注意什么",
-    "expectedSourceIds": ["official-scholarship-aid-guide"]
+    "id": "aid-materials",
+    "query": "奖助学金申请一般要交哪些材料",
+    "category": "学生服务",
+    "sourceScope": "official",
+    "expectedSourceIds": ["official-scholarship-aid-guide"],
+    "expectedEmpty": false
   },
   {
-    "id": "club-recruitment",
-    "query": "社团纳新活动什么时候开始",
-    "expectedSourceIds": ["official-club-recruitment-plan"]
+    "id": "aid-timing",
+    "query": "奖助学金通常按什么时间节点申报",
+    "category": "学生服务",
+    "sourceScope": "official",
+    "expectedSourceIds": ["official-scholarship-aid-guide"],
+    "expectedEmpty": false
   },
   {
-    "id": "club-booth",
-    "query": "社团招新摊位怎么安排",
-    "expectedSourceIds": ["official-club-recruitment-plan"]
+    "id": "aid-difference",
+    "query": "不同资助类型的评审材料会有差异吗",
+    "category": "学生服务",
+    "sourceScope": "official",
+    "expectedSourceIds": ["official-scholarship-aid-guide"],
+    "expectedEmpty": false
   },
   {
-    "id": "canteen-hours",
-    "query": "食堂营业时间是什么",
-    "expectedSourceIds": ["official-canteen-service-hours"]
+    "id": "club-when",
+    "query": "社团纳新一般什么时候开始",
+    "category": "学生服务",
+    "sourceScope": "official",
+    "expectedSourceIds": ["official-club-recruitment-plan"],
+    "expectedEmpty": false
   },
   {
-    "id": "holiday-canteen",
-    "query": "节假日食堂还供餐吗",
-    "expectedSourceIds": ["official-canteen-service-hours"]
+    "id": "club-signup",
+    "query": "社团招新报名通常是线下展位还是线上表单",
+    "category": "学生服务",
+    "sourceScope": "official",
+    "expectedSourceIds": ["official-club-recruitment-plan"],
+    "expectedEmpty": false
   },
   {
-    "id": "course-selection",
-    "query": "补退选课程怎么操作",
-    "expectedSourceIds": ["official-course-selection-guide"]
+    "id": "admissions-negative",
+    "query": "本科新生军训服可以在线退换吗",
+    "category": "招生",
+    "sourceScope": "official",
+    "expectedSourceIds": [],
+    "expectedEmpty": true,
+    "notes": "官方负样本，用于验证无答案准确率。"
   },
   {
-    "id": "course-adjustment",
-    "query": "选课调整时间以哪里为准",
-    "expectedSourceIds": ["official-course-selection-guide"]
+    "id": "academic-negative",
+    "query": "四六级准考证下载入口在哪里",
+    "category": "教务",
+    "sourceScope": "official",
+    "expectedSourceIds": [],
+    "expectedEmpty": true,
+    "notes": "官方负样本，用于验证无答案准确率。"
   },
   {
-    "id": "dorm-life-community",
-    "query": "新生宿舍生活有哪些经验",
-    "expectedSourceIds": ["community-dorm-life-tips"]
+    "id": "library-negative",
+    "query": "图书馆打印店会员卡怎么办",
+    "category": "图书馆",
+    "sourceScope": "official",
+    "expectedSourceIds": [],
+    "expectedEmpty": true,
+    "notes": "官方负样本，用于验证无答案准确率。"
   },
   {
-    "id": "dorm-items-community",
-    "query": "宿舍需要准备哪些生活用品",
-    "expectedSourceIds": ["community-dorm-life-tips"]
+    "id": "logistics-negative",
+    "query": "校内共享单车月卡多少钱",
+    "category": "后勤",
+    "sourceScope": "official",
+    "expectedSourceIds": [],
+    "expectedEmpty": true,
+    "notes": "官方负样本，用于验证无答案准确率。"
   },
   {
-    "id": "canteen-recommendation",
-    "query": "食堂有哪些窗口推荐",
-    "expectedSourceIds": ["community-canteen-recommendations"]
+    "id": "student-service-negative",
+    "query": "学生医保报销进度短信多久收到",
+    "category": "学生服务",
+    "sourceScope": "official",
+    "expectedSourceIds": [],
+    "expectedEmpty": true,
+    "notes": "官方负样本，用于验证无答案准确率。"
   },
   {
-    "id": "late-canteen-community",
-    "query": "晚上还有哪些食堂窗口开着",
-    "expectedSourceIds": ["community-canteen-recommendations"]
+    "id": "student-service-negative-two",
+    "query": "毕业纪念册领取点在哪里查询",
+    "category": "学生服务",
+    "sourceScope": "official",
+    "expectedSourceIds": [],
+    "expectedEmpty": true,
+    "notes": "官方负样本，用于验证无答案准确率。"
+  },
+  {
+    "id": "community-dorm-progress",
+    "query": "宿舍报修后联系楼管确认进度靠谱吗",
+    "category": "学生服务",
+    "sourceScope": "community",
+    "expectedSourceIds": ["community-dorm-life-tips"],
+    "expectedEmpty": false,
+    "notes": "社区补充样本，不进入主指标。"
+  },
+  {
+    "id": "community-dorm-screenshot",
+    "query": "宿舍报修要不要保留工单截图",
+    "category": "学生服务",
+    "sourceScope": "community",
+    "expectedSourceIds": ["community-dorm-life-tips"],
+    "expectedEmpty": false,
+    "notes": "社区补充样本，不进入主指标。"
+  },
+  {
+    "id": "community-dorm-freshman",
+    "query": "新生宿舍生活有哪些经验建议",
+    "category": "学生服务",
+    "sourceScope": "community",
+    "expectedSourceIds": ["community-dorm-life-tips"],
+    "expectedEmpty": false,
+    "notes": "社区补充样本，不进入主指标。"
+  },
+  {
+    "id": "community-dorm-roommate",
+    "query": "宿舍维修高峰期一般怎么和舍友协调时间",
+    "category": "学生服务",
+    "sourceScope": "community",
+    "expectedSourceIds": ["community-dorm-life-tips"],
+    "expectedEmpty": false,
+    "notes": "社区补充样本，不进入主指标。"
+  },
+  {
+    "id": "community-canteen-night",
+    "query": "晚饭后一般还有哪些值班窗口开着",
+    "category": "后勤",
+    "sourceScope": "community",
+    "expectedSourceIds": ["community-canteen-recommendations"],
+    "expectedEmpty": false,
+    "notes": "社区补充样本，不进入主指标。"
+  },
+  {
+    "id": "community-canteen-weekend",
+    "query": "周末食堂晚间供餐变化会很大吗",
+    "category": "后勤",
+    "sourceScope": "community",
+    "expectedSourceIds": ["community-canteen-recommendations"],
+    "expectedEmpty": false,
+    "notes": "社区补充样本，不进入主指标。"
+  },
+  {
+    "id": "community-canteen-queue",
+    "query": "食堂晚高峰排队和窗口体验有什么经验",
+    "category": "后勤",
+    "sourceScope": "community",
+    "expectedSourceIds": ["community-canteen-recommendations"],
+    "expectedEmpty": false,
+    "notes": "社区补充样本，不进入主指标。"
+  },
+  {
+    "id": "community-canteen-exam",
+    "query": "考试周晚上食堂窗口通常会怎么变",
+    "category": "后勤",
+    "sourceScope": "community",
+    "expectedSourceIds": ["community-canteen-recommendations"],
+    "expectedEmpty": false,
+    "notes": "社区补充样本，不进入主指标。"
   }
 ]

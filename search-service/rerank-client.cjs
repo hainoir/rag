@@ -1,5 +1,6 @@
 const DEFAULT_TIMEOUT_MS = 8_000;
 const DEFAULT_TOP_K = 20;
+const PLACEHOLDER_VALUE_PATTERNS = [/^your[-_]/i, /^replace[-_]?me/i, /^example[-_]?/i];
 
 function parsePositiveInteger(value, fallback) {
   const parsed = Number.parseInt(String(value ?? ""), 10);
@@ -21,8 +22,23 @@ function readRerankConfig(env = process.env) {
   };
 }
 
+function isConfiguredValue(value) {
+  const normalized = String(value ?? "").trim();
+
+  if (!normalized) {
+    return false;
+  }
+
+  return !PLACEHOLDER_VALUE_PATTERNS.some((pattern) => pattern.test(normalized));
+}
+
 function shouldUseRerank(config = readRerankConfig()) {
-  return Boolean(config.apiKey && config.model && config.baseUrl);
+  return (
+    isConfiguredValue(config.apiKey) &&
+    isConfiguredValue(config.model) &&
+    isConfiguredValue(config.baseUrl) &&
+    !config.baseUrl.includes(".example.com")
+  );
 }
 
 function resolveRerankEndpoint(baseUrl) {
@@ -90,5 +106,6 @@ async function rerankDocuments(query, documents, config = readRerankConfig()) {
 module.exports = {
   readRerankConfig,
   rerankDocuments,
+  isConfiguredValue,
   shouldUseRerank,
 };

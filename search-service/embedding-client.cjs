@@ -2,6 +2,7 @@ const DEFAULT_BASE_URL = "https://api.openai.com/v1";
 const DEFAULT_MODEL = "text-embedding-3-small";
 const DEFAULT_DIMENSIONS = 1536;
 const DEFAULT_TIMEOUT_MS = 15_000;
+const PLACEHOLDER_VALUE_PATTERNS = [/^your[-_]/i, /^replace[-_]?me/i, /^example[-_]?/i];
 
 function parsePositiveInteger(value, fallback) {
   const parsed = Number.parseInt(String(value ?? ""), 10);
@@ -27,8 +28,18 @@ function readEmbeddingConfig(env = process.env) {
   };
 }
 
+function isConfiguredValue(value) {
+  const normalized = String(value ?? "").trim();
+
+  if (!normalized) {
+    return false;
+  }
+
+  return !PLACEHOLDER_VALUE_PATTERNS.some((pattern) => pattern.test(normalized));
+}
+
 function shouldUseEmbeddings(config = readEmbeddingConfig()) {
-  return Boolean(config.apiKey && config.model);
+  return isConfiguredValue(config.apiKey) && isConfiguredValue(config.model);
 }
 
 function resolveEmbeddingEndpoint(baseUrl) {
@@ -108,5 +119,6 @@ module.exports = {
   generateEmbedding,
   generateEmbeddings,
   readEmbeddingConfig,
+  isConfiguredValue,
   shouldUseEmbeddings,
 };

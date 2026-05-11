@@ -1,6 +1,7 @@
 const assert = require("node:assert/strict");
 
 const {
+  isConfiguredValue,
   readRerankConfig,
   rerankDocuments,
   shouldUseRerank,
@@ -40,6 +41,17 @@ async function main() {
       });
       assert.equal(shouldUseRerank(config), true);
       assert.equal(shouldUseRerank({ ...config, apiKey: "" }), false);
+      assert.equal(isConfiguredValue("your-rerank-model"), false);
+      assert.equal(
+        shouldUseRerank({
+          apiKey: "your-rerank-api-key",
+          model: "your-rerank-model",
+          baseUrl: "https://your-rerank-provider.example.com/v1",
+          topK: 12,
+          timeoutMs: 3000,
+        }),
+        false,
+      );
     }),
   );
 

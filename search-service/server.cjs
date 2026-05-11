@@ -1,6 +1,5 @@
 const http = require("node:http");
 const { URL } = require("node:url");
-const { Pool } = require("pg");
 
 const { generateLlmAnswer } = require("./answer-generator.cjs");
 const {
@@ -22,6 +21,8 @@ const MAX_LIMIT = 10;
 const DEFAULT_CANDIDATE_LIMIT = 80;
 const DEFAULT_DISCLAIMER = "如果问题涉及时间、费用、资格或办理流程，请以来源原文和最新公告为准。";
 const ALLOWED_PROVIDERS = new Set(["auto", "postgres", "seed"]);
+const ALLOWED_RETRIEVAL_MODES = new Set(["auto", "lexical", "hybrid"]);
+const ALLOWED_RERANK_MODES = new Set(["auto", "off", "on"]);
 const GENERIC_QUERY_TERMS = new Set([
   "今天",
   "明天",
@@ -50,6 +51,7 @@ const GENERIC_QUERY_TERMS = new Set([
 ]);
 
 let postgresPool = null;
+let PostgresPoolCtor = null;
 const searchMetrics = {
   startedAt: new Date().toISOString(),
   requestsTotal: 0,
@@ -124,6 +126,24 @@ function normalizeProvider(value) {
   return ALLOWED_PROVIDERS.has(provider) ? provider : "auto";
 }
 
+function normalizeRetrievalMode(value) {
+  const mode = String(value ?? "auto").trim().toLowerCase();
+  return ALLOWED_RETRIEVAL_MODES.has(mode) ? mode : "auto";
+}
+
+function normalizeRerankMode(value) {
+  const mode = String(value ?? "auto").trim().toLowerCase();
+  return ALLOWED_RERANK_MODES.has(mode) ? mode : "auto";
+}
+
+function resolvePostgresPoolCtor() {
+  if (!PostgresPoolCtor) {
+    ({ Pool: PostgresPoolCtor } = require("pg"));
+  }
+
+  return PostgresPoolCtor;
+}
+
 function quoteIdentifier(identifier) {
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(identifier)) {
     throw new Error(`Invalid schema identifier: ${identifier}`);
@@ -144,6 +164,7 @@ function getPostgresPool() {
   }
 
   if (!postgresPool) {
+    const Pool = resolvePostgresPoolCtor();
     postgresPool = new Pool({
       connectionString: databaseUrl,
     });
@@ -196,7 +217,11 @@ async function hasVectorColumn(client) {
   return Boolean(result.rows[0]?.exists);
 }
 
-async function maybeBuildQueryEmbeddingLiteral(client, query) {
+async function maybeBuildQueryEmbeddingLiteral(client, query, retrievalMode = normalizeRetrievalMode()) {
+  if (retrievalMode === "lexical") {
+    return null;
+  }
+
   const embeddingConfig = readEmbeddingConfig();
 
   if (!shouldUseEmbeddings(embeddingConfig)) {
@@ -757,10 +782,21 @@ function buildRerankDocument(source) {
     .slice(0, 4_000);
 }
 
-async function maybeRerankScoredItems(query, items, limit) {
+async function maybeRerankScoredItems(query, items, limit, rerankMode = normalizeRerankMode()) {
   const rerankConfig = readRerankConfig();
 
-  if (!shouldUseRerank(rerankConfig) || items.length <= 1) {
+  if (rerankMode === "off" || items.length <= 1) {
+    return items;
+  }
+
+  if (!shouldUseRerank(rerankConfig)) {
+    if (rerankMode === "on") {
+      logSearchEvent("info", {
+        event: "rerank.skipped",
+        reason: "unconfigured",
+      });
+    }
+
     return items;
   }
 
@@ -802,7 +838,7 @@ async function maybeRerankScoredItems(query, items, limit) {
   }
 }
 
-async function searchPostgres(query, limit) {
+async function searchPostgres(query, limit, options = {}) {
   const trimmedQuery = String(query ?? "").trim();
 
   if (!trimmedQuery) {
@@ -813,9 +849,11 @@ async function searchPostgres(query, limit) {
   const terms = buildTerms(trimmedQuery);
   const patterns = buildSearchPatterns(trimmedQuery, terms);
   const candidateLimit = clamp(limit * 8, limit, DEFAULT_CANDIDATE_LIMIT);
+  const retrievalMode = normalizeRetrievalMode(options.retrievalMode ?? process.env.SEARCH_RETRIEVAL_MODE);
+  const rerankMode = normalizeRerankMode(options.rerankMode ?? process.env.SEARCH_RERANK_MODE);
 
   const rows = await withPostgresClient(async (client) => {
-    const vectorQuery = await maybeBuildQueryEmbeddingLiteral(client, trimmedQuery);
+    const vectorQuery = await maybeBuildQueryEmbeddingLiteral(client, trimmedQuery, retrievalMode);
 
     if (vectorQuery) {
       const result = await client.query(
@@ -986,7 +1024,12 @@ async function searchPostgres(query, limit) {
     }
   }
 
-  const rerankedCandidates = await maybeRerankScoredItems(trimmedQuery, [...bestByDocument.values()], limit);
+  const rerankedCandidates = await maybeRerankScoredItems(
+    trimmedQuery,
+    [...bestByDocument.values()],
+    limit,
+    rerankMode,
+  );
   const selected = rerankedCandidates.slice(0, limit);
   const sources = selected.map((item) => item.source);
   const officialCount = sources.filter((source) => source.type === "official").length;
@@ -1004,6 +1047,10 @@ async function searchPostgres(query, limit) {
 }
 
 function logSearchEvent(level, payload) {
+  if (process.env.SEARCH_SERVICE_SILENT_LOGS === "1" && level === "info") {
+    return;
+  }
+
   const event = {
     level,
     timestamp: new Date().toISOString(),
@@ -1033,7 +1080,11 @@ function classifyServiceError(error) {
     };
   }
 
-  if (normalizedMessage.includes("database_url") || normalizedMessage.includes("econnrefused")) {
+  if (
+    normalizedMessage.includes("database_url") ||
+    normalizedMessage.includes("econnrefused") ||
+    normalizedMessage.includes("eacces")
+  ) {
     return {
       code: "database_unavailable",
       statusCode: 503,
@@ -1292,6 +1343,8 @@ module.exports = {
   buildTerms,
   closePostgresPool,
   createServer,
+  normalizeRetrievalMode,
+  normalizeRerankMode,
   search,
   searchPostgres,
   searchSeed,

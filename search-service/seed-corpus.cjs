@@ -7,6 +7,54 @@ const defaultQuestions = [
 
 const seedCorpus = [
   {
+    id: "official-undergrad-admissions-guide",
+    title: "本科招生章程与报考咨询说明",
+    type: "official",
+    sourceName: "天津商业大学本科招生网",
+    sourceDomain: "zs.tjcu.edu.cn",
+    url: "https://zs.tjcu.edu.cn/info/undergrad-admissions-guide.html",
+    canonicalUrl: "https://zs.tjcu.edu.cn/info/undergrad-admissions-guide.html",
+    publishedAt: "2026-03-08T02:00:00.000Z",
+    updatedAt: "2026-04-06T02:00:00.000Z",
+    fetchedAt: "2026-04-20T02:00:00.000Z",
+    lastVerifiedAt: "2026-04-20T02:00:00.000Z",
+    freshnessLabel: "recent",
+    trustScore: 0.99,
+    dedupKey: "undergrad-admissions-guide",
+    snippet:
+      "本科招生信息通常以招生章程、招生问答和专业介绍页面为准，报考前需重点查看录取规则、报名节点和咨询方式。",
+    fullSnippet:
+      "本科招生信息一般集中在招生章程、招生问答和专业介绍页面。考生在填报志愿前应重点查看录取规则、招生计划、咨询电话、招生简章与专业介绍，涉及报名节点和录取安排时以招生网最新公告为准。",
+    answer:
+      "本科报考前通常要先看招生章程、招生问答和专业介绍页面，重点确认录取规则、招生计划和咨询方式；具体节点仍以招生网最新公告为准。",
+    keywords: ["本科招生", "招生章程", "报考", "录取规则", "专业介绍", "招生问答", "志愿填报", "招生咨询"],
+    relatedQuestions: ["招生简章一般去哪里看？", "录取规则和专业介绍在哪查？"],
+  },
+  {
+    id: "official-grad-admissions-guide",
+    title: "研究生招生简章与调剂信息说明",
+    type: "official",
+    sourceName: "天津商业大学研究生招生网",
+    sourceDomain: "yz.tjcu.edu.cn",
+    url: "https://yz.tjcu.edu.cn/info/grad-admissions-guide.html",
+    canonicalUrl: "https://yz.tjcu.edu.cn/info/grad-admissions-guide.html",
+    publishedAt: "2026-03-15T02:00:00.000Z",
+    updatedAt: "2026-04-09T02:00:00.000Z",
+    fetchedAt: "2026-04-20T02:00:00.000Z",
+    lastVerifiedAt: "2026-04-20T02:00:00.000Z",
+    freshnessLabel: "recent",
+    trustScore: 0.99,
+    dedupKey: "grad-admissions-guide",
+    snippet:
+      "研究生招生通常通过招生简章、专业目录和调剂公告发布报名、复试和调剂安排，考生需同时关注招生网最新通知。",
+    fullSnippet:
+      "研究生招生信息一般集中在招生简章、专业目录、复试通知和调剂公告中。考生需要重点查看报考条件、专业目录、初复试安排、调剂要求与联系方式，后续节点以研究生招生网最新通知为准。",
+    answer:
+      "研究生报考通常先看招生简章和专业目录，再关注复试通知和调剂公告；具体报考条件、调剂要求和时间节点都应以研究生招生网最新通知为准。",
+    keywords: ["研究生招生", "招生简章", "专业目录", "调剂", "复试", "报考条件", "研招", "硕士招生"],
+    relatedQuestions: ["研究生调剂公告在哪里查？", "专业目录和复试通知怎么找？"],
+  },
+  {
     id: "official-library-borrow-guide",
     title: "图书馆借阅与续借办理说明",
     type: "official",

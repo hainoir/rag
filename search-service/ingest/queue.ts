@@ -116,6 +116,13 @@ function getRedisUrl(env = process.env) {
   return redisUrl;
 }
 
+function splitCsv(value: string | undefined) {
+  return String(value ?? "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
 async function runRedisCommand(args: Array<string | number>, env = process.env) {
   const parsedUrl = new URL(getRedisUrl(env));
   const useTls = parsedUrl.protocol === "rediss:";
@@ -197,20 +204,24 @@ export function buildIngestionQueueJob(kind: IngestionQueueJobKind, sourceIds: s
   };
 }
 
-export function resolveQueuedSourceIds(kind: IngestionQueueJobKind, sourceIds: string[]) {
+export function resolveQueuedSourceIds(kind: IngestionQueueJobKind, sourceIds: string[], env = process.env) {
   if (sourceIds.length > 0) {
     return sourceIds;
   }
 
   if (kind === "community") {
-    return [...DEFAULT_COMMUNITY_SOURCE_IDS];
+    const communitySourceIds = splitCsv(env.INGEST_COMMUNITY_SOURCE_IDS);
+
+    return communitySourceIds.length > 0 ? communitySourceIds : [...DEFAULT_COMMUNITY_SOURCE_IDS];
   }
 
-  return [...DEFAULT_OFFICIAL_SOURCE_IDS];
+  const officialSourceIds = splitCsv(env.INGEST_SOURCE_IDS);
+
+  return officialSourceIds.length > 0 ? officialSourceIds : [...DEFAULT_OFFICIAL_SOURCE_IDS];
 }
 
 export async function enqueueIngestionJob(kind: IngestionQueueJobKind, sourceIds: string[], env = process.env) {
-  const job = buildIngestionQueueJob(kind, resolveQueuedSourceIds(kind, sourceIds));
+  const job = buildIngestionQueueJob(kind, resolveQueuedSourceIds(kind, sourceIds, env));
   await runRedisCommand(["LPUSH", getQueueName(env), JSON.stringify(job)], env);
 
   return job;

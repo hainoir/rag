@@ -51,7 +51,11 @@ async function processOneJob() {
     }
   }
 
-  if (summaries.some((summary) => summary.errorCount > 0)) {
+  if (
+    summaries.some(
+      (summary) => summary.errorCount > 0 && summary.storedCount === 0 && summary.dedupedCount === 0,
+    )
+  ) {
     process.exitCode = 1;
   }
 

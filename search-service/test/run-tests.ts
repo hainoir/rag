@@ -27,21 +27,75 @@ const fixtureDir = path.resolve(process.cwd(), "search-service/test/fixtures");
 const require = createRequire(import.meta.url);
 const {
   buildTerms,
+  collectPostgresSignals,
   countSpecificTermHits,
   closePostgresPool,
+  evaluateEmptyGate,
   getGenericTitlePenalty,
   normalizeRerankMode,
   normalizeRetrievalMode,
+  pickRerankCandidates,
   searchPostgres,
   searchSeed,
   scorePostgresSource,
 }: {
   buildTerms: (query: string) => string[];
+  collectPostgresSignals: (
+    source: {
+      title: string;
+      snippet: string;
+      fullSnippet?: string;
+      sourceName: string;
+      type: string;
+      trustScore?: number;
+      freshnessLabel?: string;
+    },
+    query: string,
+    terms: string[],
+  ) => {
+    titleIntentCoverage: number;
+    queryIntentCoverage: number;
+    noiseTags: string[];
+  };
   countSpecificTermHits: (haystack: string, terms: string[]) => number;
   closePostgresPool: () => Promise<void>;
+  evaluateEmptyGate: (
+    query: string,
+    items: Array<{
+      score: number;
+      searchSignals: {
+        intentTermCount: number;
+        hasExactQueryIntent: boolean;
+        titleIntentCoverage: number;
+        queryIntentCoverage: number;
+        bodyIntentCoverage: number;
+        noiseTags: string[];
+      };
+    }>,
+  ) => {
+    shouldEmpty: boolean;
+    reason: string | null;
+    summary?: { topNoiseTags?: string[] };
+  };
   getGenericTitlePenalty: (title: string, titleSpecificHits: number) => number;
   normalizeRerankMode: (value?: string) => string;
   normalizeRetrievalMode: (value?: string) => string;
+  pickRerankCandidates: (
+    items: Array<{
+      score: number;
+      source: { id: string };
+      searchSignals?: {
+        hasExactQueryIntent: boolean;
+        titleIntentCoverage: number;
+        queryIntentCoverage: number;
+        noiseTags: string[];
+      };
+    }>,
+    limit: number,
+    rerankTopK: number,
+  ) => {
+    head: Array<{ source: { id: string } }>;
+  };
   scorePostgresSource: (
     source: {
       title: string;
@@ -441,6 +495,161 @@ async function main() {
       assert.ok(targetedScore > 0);
       assert.ok(countSpecificTermHits("座位预约系统使用说明", buildTerms("图书馆自习座位怎么预约")) > 0);
       assert.ok(getGenericTitlePenalty("通知", 0) > getGenericTitlePenalty("座位预约系统使用说明", 2));
+    }),
+  );
+
+  results.push(
+    await runCase("postgres empty gating suppresses weak noisy head without blocking targeted intent", () => {
+      const weakNoisyGate = evaluateEmptyGate("学生医保报销进度短信多久收到", [
+        {
+          score: 46,
+          searchSignals: {
+            intentTermCount: 3,
+            hasExactQueryIntent: false,
+            titleIntentCoverage: 0,
+            queryIntentCoverage: 0,
+            bodyIntentCoverage: 0,
+            noiseTags: ["library_system_page", "generic_notice"],
+          },
+        },
+        {
+          score: 39,
+          searchSignals: {
+            intentTermCount: 3,
+            hasExactQueryIntent: false,
+            titleIntentCoverage: 0,
+            queryIntentCoverage: 0.2,
+            bodyIntentCoverage: 0.1,
+            noiseTags: ["generic_notice"],
+          },
+        },
+      ]);
+      const targetedGate = evaluateEmptyGate("图书馆自习座位怎么预约", [
+        {
+          score: 86,
+          searchSignals: {
+            intentTermCount: 3,
+            hasExactQueryIntent: true,
+            titleIntentCoverage: 0.66,
+            queryIntentCoverage: 1,
+            bodyIntentCoverage: 0.66,
+            noiseTags: [],
+          },
+        },
+        {
+          score: 65,
+          searchSignals: {
+            intentTermCount: 3,
+            hasExactQueryIntent: false,
+            titleIntentCoverage: 0.33,
+            queryIntentCoverage: 0.66,
+            bodyIntentCoverage: 0.66,
+            noiseTags: [],
+          },
+        },
+      ]);
+      const timelyNoticeGate = evaluateEmptyGate("复试通知和研招最新安排去哪里找", [
+        {
+          score: 57,
+          source: {
+            title: "各学院2025年调剂复试名单（实时更新）",
+          },
+          searchSignals: {
+            intentTermCount: 3,
+            hasExactQueryIntent: false,
+            titleIntentCoverage: 0.125,
+            queryIntentCoverage: 0.125,
+            bodyIntentCoverage: 0.2,
+            noiseTags: ["generic_notice", "year_heavy_title"],
+          },
+        },
+      ]);
+
+      assert.equal(weakNoisyGate.shouldEmpty, true);
+      assert.equal(weakNoisyGate.reason, "weak_noisy_head");
+      assert.deepEqual(weakNoisyGate.summary?.topNoiseTags, ["library_system_page", "generic_notice"]);
+      assert.equal(targetedGate.shouldEmpty, false);
+      assert.equal(timelyNoticeGate.shouldEmpty, false);
+    }),
+  );
+
+  results.push(
+    await runCase("rerank candidate picking drops noisy tail when higher quality items exist", () => {
+      const picked = pickRerankCandidates(
+        [
+          {
+            score: 90,
+            source: { id: "good-a" },
+            searchSignals: {
+              hasExactQueryIntent: true,
+              titleIntentCoverage: 1,
+              queryIntentCoverage: 1,
+              noiseTags: [],
+            },
+          },
+          {
+            score: 84,
+            source: { id: "good-b" },
+            searchSignals: {
+              hasExactQueryIntent: false,
+              titleIntentCoverage: 0.5,
+              queryIntentCoverage: 0.6,
+              noiseTags: [],
+            },
+          },
+          {
+            score: 72,
+            source: { id: "noise-a" },
+            searchSignals: {
+              hasExactQueryIntent: false,
+              titleIntentCoverage: 0,
+              queryIntentCoverage: 0.2,
+              noiseTags: ["generic_notice"],
+            },
+          },
+          {
+            score: 70,
+            source: { id: "noise-b" },
+            searchSignals: {
+              hasExactQueryIntent: false,
+              titleIntentCoverage: 0,
+              queryIntentCoverage: 0.15,
+              noiseTags: ["academic_notice_page"],
+            },
+          },
+        ],
+        3,
+        3,
+      );
+
+      assert.deepEqual(
+        picked.head.map((item) => item.source.id),
+        ["good-a", "good-b"],
+      );
+    }),
+  );
+
+  results.push(
+    await runCase("postgres search signals mark generic library system pages as noisy", () => {
+      const query = "图书馆打印店会员卡怎么办";
+      const terms = buildTerms(query);
+      const signals = collectPostgresSignals(
+        {
+          title: "图书馆智能存包柜管理系统",
+          snippet: "可通过系统完成存包柜使用和管理。",
+          fullSnippet: "可通过系统完成存包柜使用和管理，查看状态和入口说明。",
+          sourceName: "天津商业大学图书馆",
+          type: "official",
+          trustScore: 0.8,
+          freshnessLabel: "recent",
+        },
+        query,
+        terms,
+      );
+
+      assert.ok(signals.titleIntentCoverage < 0.34);
+      assert.ok(signals.noiseTags.includes("library_system_page"));
+      assert.ok(signals.queryIntentCoverage < 0.34);
     }),
   );
 

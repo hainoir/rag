@@ -178,6 +178,72 @@ test("scores retrieval cases and summarizes primary metrics", () => {
           },
         ],
       },
+      __debug: {
+        retrieval: {
+          mode: "hybrid",
+          rerankMode: "on",
+          candidateCount: 4,
+          selectedTopSources: [
+            {
+              rank: 1,
+              id: "postgres-uuid-1",
+              title: "座位预约系统使用说明",
+              sourceName: "天津商业大学图书馆",
+              dedupKey: "seat-guide",
+              score: 88,
+              rerankScore: 0.97,
+              queryIntentCoverage: 1,
+              titleIntentCoverage: 1,
+              noiseTags: [],
+            },
+          ],
+          emptyGate: {
+            shouldEmpty: false,
+            reason: null,
+            summary: {
+              topNoiseTags: [],
+            },
+          },
+          rerank: {
+            applied: true,
+            reason: "filtered_high_quality_head",
+            candidateCount: 2,
+            beforeTopSources: [
+              {
+                rank: 1,
+                id: "postgres-uuid-2",
+                dedupKey: "other",
+                title: "其他结果",
+                sourceName: "天津商业大学图书馆",
+              },
+              {
+                rank: 2,
+                id: "postgres-uuid-1",
+                dedupKey: "seat-guide",
+                title: "座位预约系统使用说明",
+                sourceName: "天津商业大学图书馆",
+              },
+            ],
+            afterTopSources: [
+              {
+                rank: 1,
+                id: "postgres-uuid-1",
+                dedupKey: "seat-guide",
+                title: "座位预约系统使用说明",
+                sourceName: "天津商业大学图书馆",
+              },
+              {
+                rank: 2,
+                id: "postgres-uuid-2",
+                dedupKey: "other",
+                title: "其他结果",
+                sourceName: "天津商业大学图书馆",
+              },
+            ],
+            changedTopOrder: true,
+          },
+        },
+      },
     },
     90,
   );
@@ -207,6 +273,11 @@ test("scores retrieval cases and summarizes primary metrics", () => {
   assert.equal(matcherHit.evidenceCoverage, 1);
   assert.deepEqual(matcherHit.matchedExpectedIds, []);
   assert.deepEqual(matcherHit.matchedExpectedSources, ["天津商业大学图书馆 / 座位预约系统使用说明"]);
+  assert.equal(matcherHit.retrievalDiagnostics?.rerank?.applied, true);
+  assert.equal(matcherHit.retrievalDiagnostics?.rerank?.changedTopOrder, true);
+  assert.equal(matcherHit.retrievalDiagnostics?.rerank?.beforeFirstRelevantRank, 2);
+  assert.equal(matcherHit.retrievalDiagnostics?.rerank?.afterFirstRelevantRank, 1);
+  assert.equal(matcherHit.retrievalDiagnostics?.rerank?.improvedFirstRelevantRank, true);
   assert.deepEqual(matcherHit.returnedTopSources, [
     {
       rank: 1,

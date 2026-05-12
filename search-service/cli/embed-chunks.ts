@@ -43,6 +43,13 @@ function quoteIdentifier(identifier: string) {
   return `"${identifier}"`;
 }
 
+function isRetryablePostgresConnectionError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /connection terminated unexpectedly|connection terminated|server closed the connection unexpectedly|econnreset/i.test(
+    message,
+  );
+}
+
 function parsePositiveInteger(value: string | undefined, fallback: number) {
   const parsed = Number.parseInt(String(value ?? ""), 10);
 
@@ -88,90 +95,99 @@ async function main() {
   const limit = parsePositiveInteger(process.env.EMBEDDING_CHUNK_LIMIT, 200);
   const batchSize = Math.min(parsePositiveInteger(process.env.EMBEDDING_BATCH_SIZE, 16), 64);
   const dryRun = parseBooleanFlag("--dry-run") || !shouldUseEmbeddings(embeddingConfig);
-  const pool = new Pool({
-    connectionString: requireDatabaseUrl(runtimeConfig),
-  });
+  const connectionString = requireDatabaseUrl(runtimeConfig);
 
-  try {
-    await pool.query(`set search_path to ${quoteIdentifier(schema)}, public`);
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const pool = new Pool({
+      connectionString,
+    });
 
-    if (!(await hasEmbeddingColumn(pool, schema))) {
-      throw new Error(
-        `chunks.${embeddingConfig.vectorColumn} column is missing. Run npm run vector:init before embedding chunks.`,
-      );
-    }
+    try {
+      await pool.query(`set search_path to ${quoteIdentifier(schema)}, public`);
 
-    const pending = await pool.query<{
-      id: string;
-      title: string;
-      source_name: string;
-      full_snippet: string;
-    }>(
-      `
-        with latest_versions as (
-          select distinct on (document_id)
-            document_id,
-            id as version_id
-          from document_versions
-          order by document_id, version_no desc
-        )
-        select
-          c.id::text as id,
-          d.title,
-          d.source_name,
-          c.full_snippet
-        from chunks c
-        join latest_versions lv on lv.version_id = c.document_version_id
-        join documents d on d.id = lv.document_id
-        where c.${quoteIdentifier(embeddingConfig.vectorColumn)} is null
-          and d.status = 'active'
-        order by c.created_at asc
-        limit $1
-      `,
-      [limit],
-    );
-    const chunks: PendingChunk[] = pending.rows.map((row) => ({
-      id: row.id,
-      title: row.title,
-      sourceName: row.source_name,
-      fullSnippet: row.full_snippet,
-    }));
-
-    if (dryRun) {
-      console.log(
-        shouldUseEmbeddings(embeddingConfig)
-          ? `Embedding dry run: pendingChunks=${chunks.length} model=${embeddingConfig.model}`
-          : `SKIP embeddings: EMBEDDING_API_KEY is not configured. pendingChunks=${chunks.length}`,
-      );
-      return;
-    }
-
-    let embeddedCount = 0;
-
-    for (let index = 0; index < chunks.length; index += batchSize) {
-      const batch = chunks.slice(index, index + batchSize);
-      const embeddings = await generateEmbeddings(batch.map(toEmbeddingInput), embeddingConfig);
-
-      for (let batchIndex = 0; batchIndex < batch.length; batchIndex += 1) {
-        await pool.query(
-          `
-            update chunks
-            set
-              ${quoteIdentifier(embeddingConfig.vectorColumn)} = $2::vector,
-              embedding_ref = $3,
-              ${quoteIdentifier(embeddingConfig.modelColumn)} = $3,
-              ${quoteIdentifier(embeddingConfig.embeddedAtColumn)} = now()
-            where id = $1
-          `,
-          [batch[batchIndex].id, formatVectorLiteral(embeddings[batchIndex]), embeddingConfig.model],
+      if (!(await hasEmbeddingColumn(pool, schema))) {
+        throw new Error(
+          `chunks.${embeddingConfig.vectorColumn} column is missing. Run npm run vector:init before embedding chunks.`,
         );
-        embeddedCount += 1;
       }
-    }
 
-    console.log(`Embedding complete: embeddedChunks=${embeddedCount} model=${embeddingConfig.model}`);
-  } finally {
-    await pool.end();
+      const pending = await pool.query<{
+        id: string;
+        title: string;
+        source_name: string;
+        full_snippet: string;
+      }>(
+        `
+          with latest_versions as (
+            select distinct on (document_id)
+              document_id,
+              id as version_id
+            from document_versions
+            order by document_id, version_no desc
+          )
+          select
+            c.id::text as id,
+            d.title,
+            d.source_name,
+            c.full_snippet
+          from chunks c
+          join latest_versions lv on lv.version_id = c.document_version_id
+          join documents d on d.id = lv.document_id
+          where c.${quoteIdentifier(embeddingConfig.vectorColumn)} is null
+            and d.status = 'active'
+          order by c.created_at asc
+          limit $1
+        `,
+        [limit],
+      );
+      const chunks: PendingChunk[] = pending.rows.map((row) => ({
+        id: row.id,
+        title: row.title,
+        sourceName: row.source_name,
+        fullSnippet: row.full_snippet,
+      }));
+
+      if (dryRun) {
+        console.log(
+          shouldUseEmbeddings(embeddingConfig)
+            ? `Embedding dry run: pendingChunks=${chunks.length} model=${embeddingConfig.model}`
+            : `SKIP embeddings: EMBEDDING_API_KEY is not configured. pendingChunks=${chunks.length}`,
+        );
+        return;
+      }
+
+      let embeddedCount = 0;
+
+      for (let index = 0; index < chunks.length; index += batchSize) {
+        const batch = chunks.slice(index, index + batchSize);
+        const embeddings = await generateEmbeddings(batch.map(toEmbeddingInput), embeddingConfig);
+
+        for (let batchIndex = 0; batchIndex < batch.length; batchIndex += 1) {
+          await pool.query(
+            `
+              update chunks
+              set
+                ${quoteIdentifier(embeddingConfig.vectorColumn)} = $2::vector,
+                embedding_ref = $3,
+                ${quoteIdentifier(embeddingConfig.modelColumn)} = $3,
+                ${quoteIdentifier(embeddingConfig.embeddedAtColumn)} = now()
+              where id = $1
+            `,
+            [batch[batchIndex].id, formatVectorLiteral(embeddings[batchIndex]), embeddingConfig.model],
+          );
+          embeddedCount += 1;
+        }
+      }
+
+      console.log(`Embedding complete: embeddedChunks=${embeddedCount} model=${embeddingConfig.model}`);
+      return;
+    } catch (error) {
+      if (attempt === 2 || !isRetryablePostgresConnectionError(error)) {
+        throw error;
+      }
+    } finally {
+      await pool.end();
+    }
   }
 }
 

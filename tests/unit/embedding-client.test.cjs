@@ -42,6 +42,7 @@ async function main() {
           baseUrl: "https://proxy.example.test/v1",
           dimensions: 4,
           timeoutMs: 2500,
+          retryAttempts: 2,
           vectorColumn: "embedding",
           modelColumn: "embedding_model",
           embeddedAtColumn: "embedded_at",
@@ -74,6 +75,7 @@ async function main() {
         baseUrl: "https://api.siliconflow.com/v1",
         dimensions: 2048,
         timeoutMs: 15000,
+        retryAttempts: 2,
         vectorColumn: "embedding_qwen3_2048",
         modelColumn: "embedding_model_qwen3_2048",
         embeddedAtColumn: "embedded_at_qwen3_2048",
@@ -128,6 +130,7 @@ async function main() {
           baseUrl: "https://embedding.example.test/v1",
           dimensions: 3,
           timeoutMs: 1000,
+          retryAttempts: 2,
         });
 
         assert.deepEqual(embeddings, [
@@ -171,9 +174,53 @@ async function main() {
               baseUrl: "https://embedding.example.test/v1/embeddings",
               dimensions: 2,
               timeoutMs: 1000,
+              retryAttempts: 2,
             }),
           /non-finite value/,
         );
+      } finally {
+        globalThis.fetch = previousFetch;
+      }
+    }),
+  );
+
+  results.push(
+    await runCase("retries transient fetch failures once", async () => {
+      const previousFetch = globalThis.fetch;
+      let calls = 0;
+
+      globalThis.fetch = async () => {
+        calls += 1;
+
+        if (calls === 1) {
+          throw new TypeError("fetch failed");
+        }
+
+        return new Response(
+          JSON.stringify({
+            data: [{ embedding: [0.1, 0.2] }],
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+            },
+          },
+        );
+      };
+
+      try {
+        const embedding = await generateEmbedding("query", {
+          apiKey: "test-key",
+          model: "embed-test",
+          baseUrl: "https://embedding.example.test/v1",
+          dimensions: 2,
+          timeoutMs: 1000,
+          retryAttempts: 2,
+        });
+
+        assert.deepEqual(embedding, [0.1, 0.2]);
+        assert.equal(calls, 2);
       } finally {
         globalThis.fetch = previousFetch;
       }

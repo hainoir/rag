@@ -24,6 +24,42 @@ const DEFAULT_DISCLAIMER = "如果问题涉及时间、费用、资格或办理�
 const ALLOWED_PROVIDERS = new Set(["auto", "postgres", "seed"]);
 const ALLOWED_RETRIEVAL_MODES = new Set(["auto", "lexical", "hybrid"]);
 const ALLOWED_RERANK_MODES = new Set(["auto", "off", "on"]);
+const QUERY_INTENT_TERMS = new Set([
+  "申请",
+  "报销",
+  "预约",
+  "材料",
+  "审批",
+  "时间",
+  "地点",
+  "下载",
+  "系统",
+  "入口",
+  "流程",
+  "办理",
+  "条件",
+  "目录",
+  "借书",
+  "借阅",
+  "续借",
+  "请假",
+  "报修",
+  "窗口",
+  "营业",
+  "证件",
+  "返校",
+  "奖学金",
+  "资助",
+  "材料",
+  "规则",
+  "超时",
+  "座位",
+  "选课",
+  "成绩",
+  "缓考",
+  "转专业",
+  "答辩",
+]);
 const GENERIC_QUERY_TERMS = new Set([
   "今天",
   "明天",
@@ -50,6 +86,13 @@ const GENERIC_QUERY_TERMS = new Set([
   "相关",
   "问题",
 ]);
+const EMPTY_GATING = {
+  lowScoreThreshold: 58,
+  lowCoverageThreshold: 0.34,
+  lowBodyCoverageThreshold: 0.28,
+  weakHeadNoiseThreshold: 2,
+  minTopScoreMargin: 10,
+};
 const POSTGRES_SCORING = {
   titleExactMatch: 30,
   fullSnippetExactMatch: 24,
@@ -185,6 +228,13 @@ function getPostgresPool() {
     const Pool = resolvePostgresPoolCtor();
     postgresPool = new Pool({
       connectionString: databaseUrl,
+    });
+    postgresPool.on("error", (error) => {
+      logSearchEvent("error", {
+        event: "postgres.pool_error",
+        errorType: error instanceof Error ? error.name : "UnknownError",
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
     });
   }
 
@@ -334,6 +384,17 @@ function pickScoringTerms(terms) {
   return specificTerms.length > 0 ? specificTerms : terms;
 }
 
+function pickIntentTerms(query, terms) {
+  const normalizedQuery = normalizeText(query);
+  const explicitIntentTerms = [...QUERY_INTENT_TERMS].filter((term) => normalizedQuery.includes(term));
+
+  if (explicitIntentTerms.length > 0) {
+    return unique(explicitIntentTerms);
+  }
+
+  return unique(pickSpecificTerms(terms)).slice(0, 8);
+}
+
 function buildSearchPatterns(query, terms) {
   const specificTerms = pickSpecificTerms(terms);
   const candidates = unique([
@@ -363,6 +424,26 @@ function countMatches(haystack, terms, weight) {
   }
 
   return score;
+}
+
+function countMatchedTerms(haystack, terms) {
+  const normalizedHaystack = normalizeText(haystack);
+
+  return unique(
+    terms
+      .map((term) => normalizeText(term))
+      .filter((term) => isSpecificTerm(term) && normalizedHaystack.includes(term)),
+  ).length;
+}
+
+function computeCoverageRatio(haystack, terms) {
+  const normalizedTerms = unique(terms.map((term) => normalizeText(term)).filter(isSpecificTerm));
+
+  if (normalizedTerms.length === 0) {
+    return 0;
+  }
+
+  return countMatchedTerms(haystack, normalizedTerms) / normalizedTerms.length;
 }
 
 function hasSpecificTermMatch(haystack, terms) {
@@ -405,6 +486,99 @@ function getGenericTitlePenalty(title, titleSpecificHits) {
   }
 
   return penalty;
+}
+
+function collectNoiseTags(source, signals) {
+  const normalizedTitle = normalizeText(source.title);
+  const normalizedSourceName = normalizeText(source.sourceName);
+  const tags = [];
+
+  if (signals.titleIntentCoverage < EMPTY_GATING.lowCoverageThreshold) {
+    if (
+      normalizedTitle.endsWith("通知") ||
+      normalizedTitle.endsWith("公告") ||
+      normalizedTitle.endsWith("公示")
+    ) {
+      tags.push("generic_notice");
+    }
+
+    if (normalizedTitle.includes("动态")) {
+      tags.push("dynamic_page");
+    }
+  }
+
+  if (normalizedTitle === "招生动态" || normalizedTitle.includes("招生动态")) {
+    tags.push("admissions_dynamic_page");
+  }
+
+  if (
+    normalizedSourceName.includes("图书馆") &&
+    /(系统|平台|数据库|存包柜)/.test(normalizedTitle) &&
+    signals.titleIntentCoverage < EMPTY_GATING.lowCoverageThreshold
+  ) {
+    tags.push("library_system_page");
+  }
+
+  if (
+    normalizedSourceName.includes("教务") &&
+    /(通知|公告|公示)/.test(normalizedTitle) &&
+    signals.titleIntentCoverage < EMPTY_GATING.lowCoverageThreshold
+  ) {
+    tags.push("academic_notice_page");
+  }
+
+  if (
+    normalizedSourceName.includes("招生") &&
+    /(通知|公告|动态)/.test(normalizedTitle) &&
+    signals.titleIntentCoverage < EMPTY_GATING.lowCoverageThreshold
+  ) {
+    tags.push("admissions_notice_page");
+  }
+
+  if (
+    (/202[0-9]/.test(normalizedTitle) || /^\d{4}$/.test(normalizedTitle)) &&
+    signals.titleIntentCoverage < EMPTY_GATING.lowCoverageThreshold
+  ) {
+    tags.push("year_heavy_title");
+  }
+
+  return unique(tags);
+}
+
+function collectPostgresSignals(source, query, terms) {
+  const normalizedQuery = normalizeText(query);
+  const scoringTerms = pickScoringTerms(terms);
+  const intentTerms = pickIntentTerms(query, terms);
+  const title = normalizeText(source.title);
+  const snippet = normalizeText(source.snippet);
+  const fullSnippet = normalizeText(source.fullSnippet ?? source.snippet);
+  const sourceName = normalizeText(source.sourceName);
+  const lexicalText = `${title} ${snippet} ${fullSnippet}`;
+  const titleSpecificHits = countSpecificTermHits(title, scoringTerms);
+  const bodySpecificHits = countSpecificTermHits(`${snippet} ${fullSnippet}`, scoringTerms);
+  const hasExactQueryIntent = title.includes(normalizedQuery) || fullSnippet.includes(normalizedQuery);
+  const titleIntentCoverage = computeCoverageRatio(title, intentTerms);
+  const bodyIntentCoverage = computeCoverageRatio(`${snippet} ${fullSnippet}`, intentTerms);
+  const queryIntentCoverage = computeCoverageRatio(lexicalText, intentTerms);
+  const titlePenalty = getGenericTitlePenalty(title, titleSpecificHits);
+  const signals = {
+    scoringTerms,
+    intentTerms,
+    specificTermCount: unique(scoringTerms.map((term) => normalizeText(term)).filter(isSpecificTerm)).length,
+    intentTermCount: unique(intentTerms.map((term) => normalizeText(term)).filter(isSpecificTerm)).length,
+    titleSpecificHits,
+    bodySpecificHits,
+    hasExactQueryIntent,
+    titleIntentCoverage,
+    bodyIntentCoverage,
+    queryIntentCoverage,
+    titlePenalty,
+  };
+
+  return {
+    ...signals,
+    noiseTags: collectNoiseTags(source, signals),
+  };
 }
 
 function scoreRecord(record, query, terms) {
@@ -817,22 +991,18 @@ function searchSeed(query, limit) {
 
 function scorePostgresSource(source, query, terms) {
   const normalizedQuery = normalizeText(query);
-  const scoringTerms = pickScoringTerms(terms);
   const title = normalizeText(source.title);
   const snippet = normalizeText(source.snippet);
   const fullSnippet = normalizeText(source.fullSnippet ?? source.snippet);
   const sourceName = normalizeText(source.sourceName);
   const lexicalText = `${title} ${snippet} ${fullSnippet}`;
+  const signals = collectPostgresSignals(source, query, terms);
 
   if (!hasSpecificTermMatch(lexicalText, terms)) {
     return 0;
   }
 
-  const titleSpecificHits = countSpecificTermHits(title, scoringTerms);
-  const bodySpecificHits = countSpecificTermHits(`${snippet} ${fullSnippet}`, scoringTerms);
-  const hasExactQueryIntent = title.includes(normalizedQuery) || fullSnippet.includes(normalizedQuery);
-
-  if (!hasExactQueryIntent && titleSpecificHits === 0 && bodySpecificHits < 2) {
+  if (!signals.hasExactQueryIntent && signals.titleSpecificHits === 0 && signals.bodySpecificHits < 2) {
     return 0;
   }
 
@@ -846,17 +1016,17 @@ function scorePostgresSource(source, query, terms) {
     score += POSTGRES_SCORING.fullSnippetExactMatch;
   }
 
-  score += countMatches(title, scoringTerms, POSTGRES_SCORING.titleTermWeight);
-  score += countMatches(snippet, scoringTerms, POSTGRES_SCORING.snippetTermWeight);
-  score += countMatches(fullSnippet, scoringTerms, POSTGRES_SCORING.fullSnippetTermWeight);
-  score += countMatches(sourceName, scoringTerms, POSTGRES_SCORING.sourceNameTermWeight);
-  score += titleSpecificHits * POSTGRES_SCORING.titleIntentCoverageWeight;
+  score += countMatches(title, signals.scoringTerms, POSTGRES_SCORING.titleTermWeight);
+  score += countMatches(snippet, signals.scoringTerms, POSTGRES_SCORING.snippetTermWeight);
+  score += countMatches(fullSnippet, signals.scoringTerms, POSTGRES_SCORING.fullSnippetTermWeight);
+  score += countMatches(sourceName, signals.scoringTerms, POSTGRES_SCORING.sourceNameTermWeight);
+  score += signals.titleSpecificHits * POSTGRES_SCORING.titleIntentCoverageWeight;
 
-  if (titleSpecificHits > 0 && bodySpecificHits > 0) {
+  if (signals.titleSpecificHits > 0 && signals.bodySpecificHits > 0) {
     score += POSTGRES_SCORING.titleIntentCoverageBonus;
   }
 
-  score -= getGenericTitlePenalty(title, titleSpecificHits);
+  score -= signals.titlePenalty;
 
   if (source.type === "official") {
     score += POSTGRES_SCORING.officialBonus;
@@ -885,11 +1055,171 @@ function buildRerankDocument(source) {
     .slice(0, 4_000);
 }
 
+function summarizeDiagnosticSources(items, count = 3) {
+  return items.slice(0, count).map((item, index) => ({
+    rank: index + 1,
+    id: item.source.id,
+    title: item.source.title,
+    sourceName: item.source.sourceName,
+    dedupKey: item.source.dedupKey ?? null,
+    score: roundMetricValue(item.score, 4),
+    rerankScore: typeof item.rerankScore === "number" ? roundMetricValue(item.rerankScore, 4) : null,
+    queryIntentCoverage: roundMetricValue(item.searchSignals?.queryIntentCoverage ?? 0, 4),
+    titleIntentCoverage: roundMetricValue(item.searchSignals?.titleIntentCoverage ?? 0, 4),
+    noiseTags: item.searchSignals?.noiseTags ?? [],
+  }));
+}
+
+function roundMetricValue(value, digits = 4) {
+  if (!Number.isFinite(value)) {
+    return null;
+  }
+
+  return Number(value.toFixed(digits));
+}
+
+function shouldIncludeInRerank(item, topScore) {
+  const signals = item.searchSignals;
+
+  if (!signals) {
+    return true;
+  }
+
+  if (signals.hasExactQueryIntent || signals.titleIntentCoverage > 0 || signals.queryIntentCoverage >= 0.34) {
+    return true;
+  }
+
+  if (item.score >= topScore * 0.82 && signals.noiseTags.length === 0) {
+    return true;
+  }
+
+  return false;
+}
+
+function pickRerankCandidates(items, limit, rerankTopK) {
+  const rerankLimit = clamp(rerankTopK, limit, Math.min(items.length, 50));
+  const topScore = items[0]?.score ?? 0;
+  const initialHead = items.slice(0, Math.min(items.length, Math.max(rerankLimit * 2, limit)));
+  const filteredHead = initialHead.filter((item) => shouldIncludeInRerank(item, topScore)).slice(0, rerankLimit);
+  const head = filteredHead.length >= Math.min(2, rerankLimit) ? filteredHead : initialHead.slice(0, rerankLimit);
+  const headIds = new Set(head.map((item) => item.source.id));
+  const tail = items.filter((item) => !headIds.has(item.source.id));
+
+  return {
+    head,
+    tail,
+    rerankLimit,
+    usedFilteredHead: filteredHead.length >= Math.min(2, rerankLimit),
+  };
+}
+
+function isTimelyNoticeIntentQuery(query, title = "") {
+  const normalizedQuery = normalizeText(query);
+  const normalizedTitle = normalizeText(title);
+  const queryLooksTimely = /(最新|安排|调剂|复试|名单|更新)/.test(normalizedQuery);
+  const titleLooksTimely = /(通知|公告|安排|调剂|复试|名单|更新)/.test(normalizedTitle);
+
+  return queryLooksTimely && titleLooksTimely;
+}
+
+function evaluateEmptyGate(query, selectedItems) {
+  const head = selectedItems.slice(0, 3);
+  const top = head[0];
+
+  if (!top || !top.searchSignals || top.searchSignals.intentTermCount === 0) {
+    return {
+      shouldEmpty: false,
+      reason: null,
+    };
+  }
+
+  const second = head[1];
+  const noisyHeadCount = head.filter((item) => (item.searchSignals?.noiseTags?.length ?? 0) > 0).length;
+  const topWeakIntent =
+    !top.searchSignals.hasExactQueryIntent &&
+    top.searchSignals.titleIntentCoverage < EMPTY_GATING.lowCoverageThreshold &&
+    top.searchSignals.queryIntentCoverage < EMPTY_GATING.lowCoverageThreshold &&
+    top.searchSignals.bodyIntentCoverage < EMPTY_GATING.lowBodyCoverageThreshold;
+  const secondWeak =
+    !second ||
+    (!second.searchSignals?.hasExactQueryIntent &&
+      (second.searchSignals?.queryIntentCoverage ?? 0) < EMPTY_GATING.lowCoverageThreshold &&
+      second.score < EMPTY_GATING.lowScoreThreshold);
+  const scoreMargin = top.score - (second?.score ?? 0);
+
+  if (isTimelyNoticeIntentQuery(query, top.source?.title)) {
+    return {
+      shouldEmpty: false,
+      reason: null,
+      summary: {
+        topScore: roundMetricValue(top.score, 4),
+        queryIntentCoverage: roundMetricValue(top.searchSignals.queryIntentCoverage, 4),
+        titleIntentCoverage: roundMetricValue(top.searchSignals.titleIntentCoverage, 4),
+        topNoiseTags: top.searchSignals.noiseTags,
+      },
+    };
+  }
+
+  if (
+    top.score < EMPTY_GATING.lowScoreThreshold &&
+    topWeakIntent &&
+    top.searchSignals.noiseTags.length > 0 &&
+    secondWeak &&
+    noisyHeadCount >= EMPTY_GATING.weakHeadNoiseThreshold &&
+    scoreMargin <= EMPTY_GATING.minTopScoreMargin
+  ) {
+    return {
+      shouldEmpty: true,
+      reason: "weak_noisy_head",
+      summary: {
+        topScore: roundMetricValue(top.score, 4),
+        scoreMargin: roundMetricValue(scoreMargin, 4),
+        noisyHeadCount,
+        queryIntentCoverage: roundMetricValue(top.searchSignals.queryIntentCoverage, 4),
+        titleIntentCoverage: roundMetricValue(top.searchSignals.titleIntentCoverage, 4),
+        topNoiseTags: top.searchSignals.noiseTags,
+      },
+    };
+  }
+
+  return {
+    shouldEmpty: false,
+    reason: null,
+    summary: {
+      topScore: roundMetricValue(top.score, 4),
+      queryIntentCoverage: roundMetricValue(top.searchSignals.queryIntentCoverage, 4),
+      titleIntentCoverage: roundMetricValue(top.searchSignals.titleIntentCoverage, 4),
+      topNoiseTags: top.searchSignals.noiseTags,
+    },
+  };
+}
+
+function attachDebug(response, debug) {
+  Object.defineProperty(response, "__debug", {
+    value: debug,
+    enumerable: false,
+    configurable: true,
+  });
+
+  return response;
+}
+
 async function maybeRerankScoredItems(query, items, limit, rerankMode = normalizeRerankMode()) {
   const rerankConfig = readRerankConfig();
+  const beforeTopSources = summarizeDiagnosticSources(items);
 
   if (rerankMode === "off" || items.length <= 1) {
-    return items;
+    return {
+      items,
+      diagnostics: {
+        applied: false,
+        reason: rerankMode === "off" ? "disabled" : "insufficient_candidates",
+        candidateCount: Math.min(items.length, limit),
+        beforeTopSources,
+        afterTopSources: beforeTopSources,
+        changedTopOrder: false,
+      },
+    };
   }
 
   if (!shouldUseRerank(rerankConfig)) {
@@ -900,12 +1230,20 @@ async function maybeRerankScoredItems(query, items, limit, rerankMode = normaliz
       });
     }
 
-    return items;
+    return {
+      items,
+      diagnostics: {
+        applied: false,
+        reason: "unconfigured",
+        candidateCount: Math.min(items.length, limit),
+        beforeTopSources,
+        afterTopSources: beforeTopSources,
+        changedTopOrder: false,
+      },
+    };
   }
 
-  const rerankLimit = clamp(rerankConfig.topK, limit, Math.min(items.length, 50));
-  const head = items.slice(0, rerankLimit);
-  const tail = items.slice(rerankLimit);
+  const { head, tail, usedFilteredHead } = pickRerankCandidates(items, limit, rerankConfig.topK);
 
   try {
     const reranked = await rerankDocuments(query, head.map((item) => buildRerankDocument(item.source)), rerankConfig);
@@ -928,7 +1266,22 @@ async function maybeRerankScoredItems(query, items, limit, rerankMode = normaliz
       returnedCount: reranked.length,
     });
 
-    return [...rerankedHead, ...tail];
+    const combined = [...rerankedHead, ...tail];
+    const afterTopSources = summarizeDiagnosticSources(combined);
+
+    return {
+      items: combined,
+      diagnostics: {
+        applied: true,
+        reason: usedFilteredHead ? "filtered_high_quality_head" : "fallback_initial_head",
+        candidateCount: head.length,
+        beforeTopSources: summarizeDiagnosticSources(head),
+        afterTopSources,
+        changedTopOrder:
+          JSON.stringify(summarizeDiagnosticSources(head).map((item) => item.id)) !==
+          JSON.stringify(afterTopSources.map((item) => item.id)),
+      },
+    };
   } catch (error) {
     logSearchEvent("error", {
       event: "rerank.failed",
@@ -937,7 +1290,17 @@ async function maybeRerankScoredItems(query, items, limit, rerankMode = normaliz
       errorMessage: error instanceof Error ? error.message : String(error),
     });
 
-    return items;
+    return {
+      items,
+      diagnostics: {
+        applied: false,
+        reason: "request_failed",
+        candidateCount: head.length,
+        beforeTopSources: summarizeDiagnosticSources(head),
+        afterTopSources: beforeTopSources,
+        changedTopOrder: false,
+      },
+    };
   }
 }
 
@@ -1102,14 +1465,19 @@ async function searchPostgres(query, limit, options = {}) {
   const scoredRows = rows
     .map((row) => {
       const source = buildPostgresSource(row, terms, trimmedQuery, generatedAt);
+      const searchSignals = collectPostgresSignals(source, trimmedQuery, terms);
+      const lexicalScore = scorePostgresSource(source, trimmedQuery, terms);
+      const trigramScore = Math.round(Number(row.trigram_score ?? 0) * POSTGRES_SCORING.trigramWeight);
+      const vectorScore = Math.round(Number(row.vector_score ?? 0) * POSTGRES_SCORING.vectorWeight);
 
       return {
         row,
         source,
-        score:
-          scorePostgresSource(source, trimmedQuery, terms) +
-          Math.round(Number(row.trigram_score ?? 0) * POSTGRES_SCORING.trigramWeight) +
-          Math.round(Number(row.vector_score ?? 0) * POSTGRES_SCORING.vectorWeight),
+        searchSignals,
+        lexicalScore,
+        trigramScore,
+        vectorScore,
+        score: lexicalScore + trigramScore + vectorScore,
       };
     })
     .filter((item) => item.score >= POSTGRES_SCORING.minimumScore)
@@ -1129,18 +1497,33 @@ async function searchPostgres(query, limit, options = {}) {
     }
   }
 
-  const rerankedCandidates = await maybeRerankScoredItems(
+  const rerankResult = await maybeRerankScoredItems(
     trimmedQuery,
     [...bestByDocument.values()],
     limit,
     rerankMode,
   );
+  const rerankedCandidates = rerankResult.items;
   const selected = rerankedCandidates.slice(0, limit);
+  const emptyGate = evaluateEmptyGate(trimmedQuery, selected);
+
+  if (emptyGate.shouldEmpty) {
+    return attachDebug(buildEmptyResponse(trimmedQuery), {
+      retrieval: {
+        mode: retrievalMode,
+        rerankMode,
+        candidateCount: scoredRows.length,
+        selectedTopSources: summarizeDiagnosticSources(selected),
+        emptyGate,
+        rerank: rerankResult.diagnostics,
+      },
+    });
+  }
+
   const sources = selected.map((item) => item.source);
   const officialCount = sources.filter((source) => source.type === "official").length;
   const status = officialCount > 0 && sources.length >= Math.min(2, limit) ? "ok" : "partial";
-
-  return {
+  const response = {
     query: trimmedQuery,
     status,
     answer: buildExtractiveAnswer(trimmedQuery, sources, selected),
@@ -1149,6 +1532,17 @@ async function searchPostgres(query, limit, options = {}) {
     retrievedCount: scoredRows.length,
     resultGeneratedAt: generatedAt,
   };
+
+  return attachDebug(response, {
+    retrieval: {
+      mode: retrievalMode,
+      rerankMode,
+      candidateCount: scoredRows.length,
+      selectedTopSources: summarizeDiagnosticSources(selected),
+      emptyGate,
+      rerank: rerankResult.diagnostics,
+    },
+  });
 }
 
 function logSearchEvent(level, payload) {
@@ -1447,11 +1841,14 @@ if (require.main === module) {
 module.exports = {
   countSpecificTermHits,
   buildTerms,
+  collectPostgresSignals,
   closePostgresPool,
   createServer,
+  evaluateEmptyGate,
   getGenericTitlePenalty,
   normalizeRetrievalMode,
   normalizeRerankMode,
+  pickRerankCandidates,
   search,
   searchPostgres,
   searchSeed,

@@ -1,6 +1,6 @@
 # 当前开发进度与下一步计划
 
-> 更新时间：2026-05-11
+> 更新时间：2026-05-12
 >
 > 阅读口径：
 >
@@ -10,7 +10,7 @@
 
 ## 1. 一句话结论
 
-当前项目已经完成了可演示 MVP，且第一阶段已于 2026-05-11 完成真实 PostgreSQL / Redis / GitHub Actions 的闭环验收。
+当前项目已经完成了可演示 MVP，第一阶段已于 2026-05-11 完成真实 PostgreSQL / Redis / GitHub Actions 的闭环验收，第二阶段第二批也已于 2026-05-12 跑通真实 lexical / hybrid / hybrid_rerank 三档检索评估。
 
 更准确地说：
 
@@ -37,8 +37,8 @@
 
 ### 2.2 已有代码或脚手架，但还不能算完成的部分
 
-- pgvector 检索：`vector:init`、`embed:chunks`、`smoke:vector` 已存在，但需要真实 embedding key、pgvector 扩展和固定 query 对比结果。
-- rerank：接口和客户端已接入，但需要真实 cross-encoder 服务与评估对比。
+- pgvector 检索：已接通 Qwen3 向量方案，本地 `vector:init -> embed:chunks -> smoke:vector` 已跑通，当前重点不再是“是否接通”，而是误召回抑制和排序收益。
+- rerank：真实服务与评估链路已接通，但当前 `hybrid_rerank` 相比 `hybrid` 暂未体现额外指标提升，需要继续验证候选质量和 rerank 有效性。
 - evidence-bound LLM answer：具备接入点和回退路径，但还需要更系统的效果验证和错误观测。
 - feedback / query logs：schema 与写入接入口已经存在，但还没有演进成可运维的后台分析能力。
 - metrics：当前是进程内 JSON 指标，适合本地和 demo，不等于生产监控。
@@ -80,7 +80,7 @@
 
 ### 第二阶段：检索质量与 RAG 答案增强
 
-当前状态：已有能力入口，尚未形成稳定评估闭环。
+当前状态：真实评估闭环已形成，正在进入精调阶段。
 
 已经具备：
 
@@ -88,15 +88,24 @@
 - pgvector schema 与 embedding CLI
 - rerank client
 - 可选 LLM answer 与 extractive fallback
+- 54 条官方 Postgres 黄金集
+- `npm run verify:retrieval:real`
+- Qwen3 `lexical / hybrid / hybrid_rerank` 真实对比报告
 
 还差：
 
-- 扩充固定 query 集
-- 记录 lexical / hybrid / rerank 对比结果
-- 验证 evidence 是否始终绑定到当前 `sources`
-- 用真实环境生成可复现报告
+- 提升 `emptyAccuracy`
+- 让 `hybrid_rerank` 相比 `hybrid` 产生可解释增益
+- 继续压低泛通知页、招生动态页、图书馆系统入口页的误召回
+- 把负样本错例和 rerank 前后变化沉淀到阶段报告
 
-结论：第二阶段现在可以正式开始。
+当前结论：
+
+- `hybrid` 已明确优于 `lexical`
+- `hybrid_rerank` 暂未优于 `hybrid`
+- 当前主要瓶颈是负样本拒答和噪声标题抑制
+
+结论：第二阶段第二批已完成，第三批应聚焦检索精调，而不是继续扩功能入口。
 
 ### 第三阶段：线上可靠性与运维能力
 
@@ -133,11 +142,11 @@
    - 在运行手册和项目报告中记录 2026-05-11 的本地与 GitHub Actions 验收结果
    - 记录当前稳定官方源集合与社区关闭策略
 
-2. 启动第二阶段质量增强
-   - 扩充固定 query 集
-   - 跑 `vector:init -> embed:chunks -> smoke:vector`
-   - 接真实 rerank 服务
-   - 产出 lexical / hybrid / rerank 对比报告
+2. 推进第二阶段第三批检索精调
+   - 提升 `emptyAccuracy`
+   - 继续压低负样本误召回
+   - 验证 rerank 是否能产生真实排序增益
+   - 产出调优前后对比报告
 
 3. 再补第三阶段可靠性
    - 校验缓存、限流、超时和降级策略
@@ -153,7 +162,7 @@
 
 下一个真正应该完成的里程碑不是“再补 PostgreSQL / Redis 接入功能”，而是：
 
-> 以当前已验证的真实数据链路为基础，完成第二阶段的固定评估集、vector / rerank 对比和检索质量报告。
+> 以当前已验证的真实数据链路和 Qwen3 三档评估结果为基础，完成第二阶段第三批的负样本抑制、rerank 增益验证和调优前后质量报告。
 
 阶段一已经把项目状态从“代码侧已准备”推进到了“真实数据链路已验证”；下一步要解决的是“检索质量是否持续可评估”。
 

@@ -2,6 +2,7 @@ const DEFAULT_BASE_URL = "https://api.openai.com/v1";
 const DEFAULT_MODEL = "text-embedding-3-small";
 const DEFAULT_DIMENSIONS = 1536;
 const DEFAULT_TIMEOUT_MS = 15_000;
+const DEFAULT_RETRY_ATTEMPTS = 2;
 const DEFAULT_VECTOR_COLUMN = "embedding";
 const DEFAULT_MODEL_COLUMN = "embedding_model";
 const DEFAULT_EMBEDDED_AT_COLUMN = "embedded_at";
@@ -58,6 +59,7 @@ function readEmbeddingConfig(env = process.env) {
     baseUrl,
     dimensions: parsePositiveInteger(env.EMBEDDING_DIMENSIONS, DEFAULT_DIMENSIONS),
     timeoutMs: parsePositiveInteger(env.EMBEDDING_TIMEOUT_MS, DEFAULT_TIMEOUT_MS),
+    retryAttempts: parsePositiveInteger(env.EMBEDDING_RETRY_ATTEMPTS, DEFAULT_RETRY_ATTEMPTS),
     vectorColumn,
     modelColumn,
     embeddedAtColumn,
@@ -99,6 +101,19 @@ function resolveEmbeddingEndpoint(baseUrl) {
     : `${baseUrl.replace(/\/+$/, "")}/embeddings`;
 }
 
+function isRetryableFetchError(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  const causeMessage = error && typeof error === "object" && error.cause ? String(error.cause.message ?? error.cause) : "";
+
+  return /fetch failed|econnreset|etimedout|timed out|socket hang up|connection reset|temporary failure/i.test(
+    `${message} ${causeMessage}`,
+  );
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function assertEmbeddingVector(value, dimensions) {
   if (!Array.isArray(value) || value.length !== dimensions) {
     throw new Error(`Embedding response dimension mismatch. Expected ${dimensions}, got ${Array.isArray(value) ? value.length : "non-array"}.`);
@@ -120,39 +135,58 @@ async function generateEmbeddings(inputs, config = readEmbeddingConfig()) {
     throw new Error("EMBEDDING_API_KEY and EMBEDDING_MODEL are required to generate embeddings.");
   }
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
+  const endpoint = resolveEmbeddingEndpoint(config.baseUrl);
 
-  try {
-    const response = await fetch(resolveEmbeddingEndpoint(config.baseUrl), {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${config.apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        input: inputs,
-        model: config.model,
-        dimensions: config.dimensions,
-      }),
-      signal: controller.signal,
-    });
+  for (let attempt = 1; attempt <= config.retryAttempts; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
 
-    if (!response.ok) {
-      const detail = await response.text().catch(() => "");
-      throw new Error(`Embedding request failed with status ${response.status}: ${detail.slice(0, 240)}`);
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${config.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          input: inputs,
+          model: config.model,
+          dimensions: config.dimensions,
+        }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const detail = await response.text().catch(() => "");
+        throw new Error(`Embedding request failed with status ${response.status}: ${detail.slice(0, 240)}`);
+      }
+
+      const payload = await response.json();
+      const rows = Array.isArray(payload?.data) ? payload.data : [];
+
+      if (rows.length !== inputs.length) {
+        throw new Error(`Embedding response count mismatch. Expected ${inputs.length}, got ${rows.length}.`);
+      }
+
+      return rows.map((row) => assertEmbeddingVector(row.embedding, config.dimensions));
+    } catch (error) {
+      if (attempt >= config.retryAttempts || !isRetryableFetchError(error)) {
+        const causeMessage =
+          error && typeof error === "object" && error.cause ? ` cause=${String(error.cause.message ?? error.cause)}` : "";
+        throw new Error(
+          `Embedding request failed for ${endpoint} model=${config.model} attempt=${attempt}/${config.retryAttempts}: ${
+            error instanceof Error ? error.message : String(error)
+          }${causeMessage}`,
+          {
+            cause: error instanceof Error ? error : undefined,
+          },
+        );
+      }
+
+      await sleep(250 * attempt);
+    } finally {
+      clearTimeout(timeout);
     }
-
-    const payload = await response.json();
-    const rows = Array.isArray(payload?.data) ? payload.data : [];
-
-    if (rows.length !== inputs.length) {
-      throw new Error(`Embedding response count mismatch. Expected ${inputs.length}, got ${rows.length}.`);
-    }
-
-    return rows.map((row) => assertEmbeddingVector(row.embedding, config.dimensions));
-  } finally {
-    clearTimeout(timeout);
   }
 }
 

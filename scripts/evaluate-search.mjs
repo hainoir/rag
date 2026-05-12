@@ -34,29 +34,6 @@ function roundMetric(value, digits = 4) {
   return Number(value.toFixed(digits));
 }
 
-function listen(server, host) {
-  return new Promise((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(0, host, () => {
-      server.off("error", reject);
-      resolve(server.address());
-    });
-  });
-}
-
-function close(server) {
-  return new Promise((resolve, reject) => {
-    server.close((error) => {
-      if (error) {
-        reject(error);
-        return;
-      }
-
-      resolve();
-    });
-  });
-}
-
 function parseArgs(argv) {
   const args = {
     datasetPath: null,
@@ -322,6 +299,11 @@ function describeExpectedMatcher(matcher) {
   return "unknown_matcher";
 }
 
+function computeFirstRelevantRank(sources, matchers) {
+  const firstRelevantIndex = sources.findIndex((source) => matchers.some((matcher) => matchesExpectedSource(source, matcher)));
+  return firstRelevantIndex === -1 ? null : firstRelevantIndex + 1;
+}
+
 export function scoreCase(caseItem, response, durationMs, k = DEFAULT_K) {
   const expectedSourceIds = Array.isArray(caseItem.expectedSourceIds) ? caseItem.expectedSourceIds : [];
   const expectedSourceMatchers = Array.isArray(caseItem.expectedSourceMatchers) ? caseItem.expectedSourceMatchers : [];
@@ -333,9 +315,7 @@ export function scoreCase(caseItem, response, durationMs, k = DEFAULT_K) {
   const relevantTopK = normalizedMatchers.filter((matcher) =>
     topKSources.some((source) => matchesExpectedSource(source, matcher)),
   ).length;
-  const firstRelevantIndex = rankedSources.findIndex((source) =>
-    normalizedMatchers.some((matcher) => matchesExpectedSource(source, matcher)),
-  );
+  const firstRelevantRank = computeFirstRelevantRank(rankedSources, normalizedMatchers);
   const relevances = topKSources.map((source) =>
     normalizedMatchers.some((matcher) => matchesExpectedSource(source, matcher)) ? 1 : 0,
   );
@@ -369,6 +349,19 @@ export function scoreCase(caseItem, response, durationMs, k = DEFAULT_K) {
   const expectedEvidenceHits = normalizedMatchers.filter((matcher) =>
     evidenceSources.some((candidate) => matchesExpectedSource(candidate, matcher)),
   ).length;
+  const retrievalDebug = response.__debug?.retrieval ?? null;
+  const rerankBeforeTopSources = Array.isArray(retrievalDebug?.rerank?.beforeTopSources)
+    ? retrievalDebug.rerank.beforeTopSources
+    : [];
+  const rerankAfterTopSources = Array.isArray(retrievalDebug?.rerank?.afterTopSources)
+    ? retrievalDebug.rerank.afterTopSources
+    : [];
+  const rerankBeforeRelevantRank = normalizedMatchers.length
+    ? computeFirstRelevantRank(rerankBeforeTopSources, normalizedMatchers)
+    : null;
+  const rerankAfterRelevantRank = normalizedMatchers.length
+    ? computeFirstRelevantRank(rerankAfterTopSources, normalizedMatchers)
+    : null;
   const expectedEmpty = caseItem.expectedEmpty;
   const emptyCorrect = expectedEmpty ? response.status === "empty" && rankedIds.length === 0 : null;
 
@@ -392,12 +385,39 @@ export function scoreCase(caseItem, response, durationMs, k = DEFAULT_K) {
     matchedExpectedIds,
     matchedExpectedSources,
     recallAt10: expectedEmpty ? (rankedIds.length === 0 ? 1 : 0) : relevantTopK / normalizedMatchers.length,
-    reciprocalRank: expectedEmpty ? 0 : firstRelevantIndex === -1 ? 0 : 1 / (firstRelevantIndex + 1),
+    reciprocalRank: expectedEmpty ? 0 : firstRelevantRank === null ? 0 : 1 / firstRelevantRank,
     ndcgAt10: idealDcg === 0 ? 0 : dcg(relevances) / idealDcg,
-    firstRelevantRank: firstRelevantIndex === -1 ? null : firstRelevantIndex + 1,
+    firstRelevantRank,
     evidenceCoverage: expectedEmpty ? null : expectedEvidenceHits / normalizedMatchers.length,
     expectedEmpty,
     emptyCorrect,
+    retrievalDiagnostics:
+      retrievalDebug === null
+        ? null
+        : {
+            mode: retrievalDebug.mode ?? null,
+            rerankMode: retrievalDebug.rerankMode ?? null,
+            candidateCount: retrievalDebug.candidateCount ?? null,
+            selectedTopSources: retrievalDebug.selectedTopSources ?? [],
+            emptyGate: retrievalDebug.emptyGate ?? null,
+            rerank:
+              retrievalDebug.rerank == null
+                ? null
+                : {
+                    applied: Boolean(retrievalDebug.rerank.applied),
+                    reason: retrievalDebug.rerank.reason ?? null,
+                    candidateCount: retrievalDebug.rerank.candidateCount ?? null,
+                    beforeTopSources: rerankBeforeTopSources,
+                    afterTopSources: rerankAfterTopSources,
+                    changedTopOrder: Boolean(retrievalDebug.rerank.changedTopOrder),
+                    beforeFirstRelevantRank: rerankBeforeRelevantRank,
+                    afterFirstRelevantRank: rerankAfterRelevantRank,
+                    improvedFirstRelevantRank:
+                      rerankBeforeRelevantRank !== null &&
+                      rerankAfterRelevantRank !== null &&
+                      rerankAfterRelevantRank < rerankBeforeRelevantRank,
+                  },
+          },
   };
 }
 
@@ -456,6 +476,62 @@ function summarizeByScopeAndCategory(scores) {
         },
       ]),
     ),
+  };
+}
+
+function summarizeNegativeAnalysis(scores) {
+  const failures = scores.filter((item) => item.expectedEmpty && item.emptyCorrect === false);
+  const noiseCounts = new Map();
+  const sourceCounts = new Map();
+
+  for (const item of failures) {
+    const topSource = item.returnedTopSources[0];
+    const topNoiseTags = item.retrievalDiagnostics?.emptyGate?.summary?.topNoiseTags ?? [];
+
+    for (const tag of topNoiseTags) {
+      noiseCounts.set(tag, (noiseCounts.get(tag) ?? 0) + 1);
+    }
+
+    if (topSource?.title) {
+      const label = `${topSource.sourceName ?? "unknown"} / ${topSource.title}`;
+      sourceCounts.set(label, (sourceCounts.get(label) ?? 0) + 1);
+    }
+  }
+
+  return {
+    failedNegativeCases: failures.length,
+    topNoiseTags: [...noiseCounts.entries()]
+      .sort((left, right) => right[1] - left[1])
+      .slice(0, 5)
+      .map(([tag, count]) => ({ tag, count })),
+    topFalsePositiveSources: [...sourceCounts.entries()]
+      .sort((left, right) => right[1] - left[1])
+      .slice(0, 5)
+      .map(([label, count]) => ({ label, count })),
+  };
+}
+
+function summarizeRerankImpact(scores) {
+  const rerankCases = scores
+    .map((item) => item.retrievalDiagnostics?.rerank)
+    .filter((item) => item && item.candidateCount !== null);
+
+  const changedTopOrderCount = rerankCases.filter((item) => item.changedTopOrder).length;
+  const improvedFirstRelevantRankCount = rerankCases.filter((item) => item.improvedFirstRelevantRank).length;
+  const reasons = new Map();
+
+  for (const item of rerankCases) {
+    const reason = item.reason ?? "unknown";
+    reasons.set(reason, (reasons.get(reason) ?? 0) + 1);
+  }
+
+  return {
+    cases: rerankCases.length,
+    changedTopOrderCount,
+    improvedFirstRelevantRankCount,
+    reasons: [...reasons.entries()]
+      .sort((left, right) => right[1] - left[1])
+      .map(([reason, count]) => ({ reason, count })),
   };
 }
 
@@ -543,16 +619,14 @@ function strategyToEnv(strategy) {
   }
 }
 
-async function withLocalServer(mode, strategy, task) {
-  const { closePostgresPool, createServer } = require("../search-service/server.cjs");
+async function withLocalStrategy(mode, strategy, task) {
+  const { closePostgresPool } = require("../search-service/server.cjs");
   const previousProvider = process.env.SEARCH_SERVICE_PROVIDER;
   const previousAnswerMode = process.env.SEARCH_ANSWER_MODE;
   const previousDatabaseUrl = process.env.DATABASE_URL;
   const previousRetrievalMode = process.env.SEARCH_RETRIEVAL_MODE;
   const previousRerankMode = process.env.SEARCH_RERANK_MODE;
   const previousSilentLogs = process.env.SEARCH_SERVICE_SILENT_LOGS;
-  const host = "127.0.0.1";
-  const server = createServer();
   const strategyEnv = strategyToEnv(strategy);
 
   process.env.SEARCH_SERVICE_PROVIDER = mode === "postgres" ? "postgres" : "seed";
@@ -566,9 +640,7 @@ async function withLocalServer(mode, strategy, task) {
   }
 
   try {
-    const address = await listen(server, host);
-    const baseUrl = `http://${host}:${address.port}`;
-    return await task(baseUrl);
+    return await task();
   } finally {
     if (previousProvider === undefined) {
       delete process.env.SEARCH_SERVICE_PROVIDER;
@@ -606,10 +678,6 @@ async function withLocalServer(mode, strategy, task) {
       process.env.SEARCH_SERVICE_SILENT_LOGS = previousSilentLogs;
     }
 
-    if (server.listening) {
-      await close(server);
-    }
-
     await closePostgresPool();
   }
 }
@@ -628,12 +696,32 @@ async function runCases(dataset, baseUrl) {
   return scores;
 }
 
+async function runLocalCases(dataset, mode) {
+  const { searchPostgres, searchSeed } = require("../search-service/server.cjs");
+  const scores = [];
+
+  for (const caseItem of dataset) {
+    const startedAt = Date.now();
+    const response =
+      mode === "postgres"
+        ? await searchPostgres(caseItem.query, DEFAULT_K, {
+            retrievalMode: process.env.SEARCH_RETRIEVAL_MODE,
+            rerankMode: process.env.SEARCH_RERANK_MODE,
+          })
+        : searchSeed(caseItem.query, DEFAULT_K);
+
+    scores.push(scoreCase(caseItem, response, Date.now() - startedAt));
+  }
+
+  return scores;
+}
+
 async function evaluateStrategy(dataset, mode, strategy, externalBaseUrl) {
   if (mode === "external") {
     return runCases(dataset, externalBaseUrl.replace(/\/+$/, ""));
   }
 
-  return withLocalServer(mode, strategy, (baseUrl) => runCases(dataset, baseUrl));
+  return withLocalStrategy(mode, strategy, () => runLocalCases(dataset, mode));
 }
 
 function buildDatasetSummary(dataset, datasetUrl) {
@@ -683,6 +771,12 @@ export function buildMarkdownSummary(report) {
       );
       lines.push(
         `- Community Appendix: recall@10=${strategy.appendixSummary.recallAt10}, mrr=${strategy.appendixSummary.mrr}, ndcg@10=${strategy.appendixSummary.ndcgAt10}, evidenceCoverage=${strategy.appendixSummary.evidenceCoverage}, emptyAccuracy=${strategy.appendixSummary.emptyAccuracy}, averageLatencyMs=${strategy.appendixSummary.averageLatencyMs}`,
+      );
+      lines.push(
+        `- Negative Analysis: failedNegativeCases=${strategy.negativeAnalysis.failedNegativeCases}, topNoiseTags=${strategy.negativeAnalysis.topNoiseTags.map((item) => `${item.tag}:${item.count}`).join(", ") || "none"}`,
+      );
+      lines.push(
+        `- Rerank Impact: cases=${strategy.rerankImpact.cases}, changedTopOrder=${strategy.rerankImpact.changedTopOrderCount}, improvedFirstRelevantRank=${strategy.rerankImpact.improvedFirstRelevantRankCount}`,
       );
       lines.push("- Category Breakdown:");
 
@@ -757,6 +851,8 @@ export async function runEvaluation({
         primarySummary: summaries.primarySummary,
         appendixSummary: summaries.appendixSummary,
         byCategory: summaries.byCategory,
+        negativeAnalysis: summarizeNegativeAnalysis(scores),
+        rerankImpact: summarizeRerankImpact(scores),
         cases: scores,
       });
     } catch (error) {

@@ -152,10 +152,10 @@ npm run dev
 EMBEDDING_API_KEY=...
 EMBEDDING_BASE_URL=https://api.siliconflow.com/v1
 EMBEDDING_MODEL=Qwen/Qwen3-Embedding-8B
-EMBEDDING_DIMENSIONS=2048
-EMBEDDING_VECTOR_COLUMN=embedding_qwen3_2048
-EMBEDDING_MODEL_COLUMN=embedding_model_qwen3_2048
-EMBEDDING_EMBEDDED_AT_COLUMN=embedded_at_qwen3_2048
+EMBEDDING_DIMENSIONS=1024
+EMBEDDING_VECTOR_COLUMN=embedding_qwen3_1024
+EMBEDDING_MODEL_COLUMN=embedding_model_qwen3_1024
+EMBEDDING_EMBEDDED_AT_COLUMN=embedded_at_qwen3_1024
 EMBEDDING_QUERY_INSTRUCTION=请将这个中文校园检索问题转换为检索向量，以便召回最相关的官方资料：
 
 RERANK_API_KEY=...
@@ -163,4 +163,4 @@ RERANK_BASE_URL=https://api.siliconflow.com/v1
 RERANK_MODEL=Qwen/Qwen3-Reranker-4B
 ```
 
-这样 `vector:init`、`embed:chunks`、`smoke:vector` 和 Postgres hybrid retrieval 都会切到 `embedding_qwen3_2048` 这一组新列，原有 `embedding` 列会继续保留，不需要清空或重建老数据。
+这样 `vector:init`、`embed:chunks`、`smoke:vector` 和 Postgres hybrid retrieval 都会切到 `embedding_qwen3_1024` 这一组新列，原有 `embedding` 列会继续保留，不需要清空或重建老数据。

@@ -36,14 +36,19 @@ function quoteIdentifier(identifier: string) {
   return `"${identifier}"`;
 }
 
+function isRetryablePostgresConnectionError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /connection terminated unexpectedly|connection terminated|server closed the connection unexpectedly|econnreset/i.test(
+    message,
+  );
+}
+
 async function main() {
   const runtimeConfig = readIngestRuntimeConfig();
   const embeddingConfig = readEmbeddingConfig();
   const schema = process.env.SEARCH_DATABASE_SCHEMA ?? "public";
   const query = process.env.SEARCH_VECTOR_SMOKE_QUERY ?? "图书馆借书";
-  const pool = new Pool({
-    connectionString: requireDatabaseUrl(runtimeConfig),
-  });
+  const connectionString = requireDatabaseUrl(runtimeConfig);
 
   if (!shouldUseEmbeddings(embeddingConfig)) {
     console.error("EMBEDDING_API_KEY is required for vector smoke verification.");
@@ -51,57 +56,68 @@ async function main() {
     return;
   }
 
-  try {
-    await pool.query(`set search_path to ${quoteIdentifier(schema)}, public`);
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const pool = new Pool({
+      connectionString,
+    });
 
-    const embeddedCount = await pool.query<{ count: string }>(
-      `select count(*)::text as count from chunks where ${quoteIdentifier(embeddingConfig.vectorColumn)} is not null`,
-    );
+    try {
+      await pool.query(`set search_path to ${quoteIdentifier(schema)}, public`);
 
-    if (Number(embeddedCount.rows[0]?.count ?? 0) === 0) {
-      throw new Error("No embedded chunks found. Run npm run embed:chunks first.");
+      const embeddedCount = await pool.query<{ count: string }>(
+        `select count(*)::text as count from chunks where ${quoteIdentifier(embeddingConfig.vectorColumn)} is not null`,
+      );
+
+      if (Number(embeddedCount.rows[0]?.count ?? 0) === 0) {
+        throw new Error("No embedded chunks found. Run npm run embed:chunks first.");
+      }
+
+      const embedding = await generateEmbedding(formatQueryEmbeddingInput(query, embeddingConfig), embeddingConfig);
+      const result = await pool.query<{ title: string; distance: number }>(
+        `
+          with latest_versions as (
+            select distinct on (document_id)
+              document_id,
+              id as version_id
+            from document_versions
+            order by document_id, version_no desc
+          )
+          select
+            d.title,
+            (c.${quoteIdentifier(embeddingConfig.vectorColumn)} <=> $1::vector)::float as distance
+          from chunks c
+          join latest_versions lv on lv.version_id = c.document_version_id
+          join documents d on d.id = lv.document_id
+          where c.${quoteIdentifier(embeddingConfig.vectorColumn)} is not null
+            and d.status = 'active'
+          order by c.${quoteIdentifier(embeddingConfig.vectorColumn)} <=> $1::vector
+          limit 3
+        `,
+        [formatVectorLiteral(embedding)],
+      );
+
+      if (result.rows.length === 0) {
+        throw new Error(`Vector query returned no chunks for "${query}".`);
+      }
+
+      console.log(
+        [
+          "Vector smoke passed:",
+          `query="${query}"`,
+          `column=${embeddingConfig.vectorColumn}`,
+          `embeddedChunks=${embeddedCount.rows[0].count}`,
+          `topTitle="${result.rows[0].title}"`,
+          `topDistance=${Number(result.rows[0].distance).toFixed(4)}`,
+        ].join(" "),
+      );
+      return;
+    } catch (error) {
+      if (attempt === 2 || !isRetryablePostgresConnectionError(error)) {
+        throw error;
+      }
+    } finally {
+      await pool.end();
     }
-
-    const embedding = await generateEmbedding(formatQueryEmbeddingInput(query, embeddingConfig), embeddingConfig);
-    const result = await pool.query<{ title: string; distance: number }>(
-      `
-        with latest_versions as (
-          select distinct on (document_id)
-            document_id,
-            id as version_id
-          from document_versions
-          order by document_id, version_no desc
-        )
-        select
-          d.title,
-          (c.${quoteIdentifier(embeddingConfig.vectorColumn)} <=> $1::vector)::float as distance
-        from chunks c
-        join latest_versions lv on lv.version_id = c.document_version_id
-        join documents d on d.id = lv.document_id
-        where c.${quoteIdentifier(embeddingConfig.vectorColumn)} is not null
-          and d.status = 'active'
-        order by c.${quoteIdentifier(embeddingConfig.vectorColumn)} <=> $1::vector
-        limit 3
-      `,
-      [formatVectorLiteral(embedding)],
-    );
-
-    if (result.rows.length === 0) {
-      throw new Error(`Vector query returned no chunks for "${query}".`);
-    }
-
-    console.log(
-      [
-        "Vector smoke passed:",
-        `query="${query}"`,
-        `column=${embeddingConfig.vectorColumn}`,
-        `embeddedChunks=${embeddedCount.rows[0].count}`,
-        `topTitle="${result.rows[0].title}"`,
-        `topDistance=${Number(result.rows[0].distance).toFixed(4)}`,
-      ].join(" "),
-    );
-  } finally {
-    await pool.end();
   }
 }
 

@@ -1,10 +1,14 @@
 # 第二阶段检索质量评估说明
 
-这份文档对应第二阶段首批开发的“评估优先、代码先行”范围。
+这份文档对应第二阶段的检索质量评估与策略对比工作。
 
 目标不是直接上线新的 RAG 生成能力，而是先把检索质量评估、策略对比和报告产出做成一个可重复执行的闭环。
 
-补充说明：进入第二阶段第二批后，`postgres` 黄金集会继续扩充，但它仍然受真实官方来源覆盖约束。当前真实库稳定来源主要集中在研究生招生、图书馆、教务处、主站通知与单条本科招生动态；因此 `postgres` 数据集允许按真实来源覆盖优先扩展，并在文档或报告中显式记录覆盖不足的类别，而不是用错误命中反向固化真值。
+补充说明：
+
+- 第二阶段第二批已经跑通真实 `lexical / hybrid / hybrid_rerank` 三档评估，最新报告显示 `hybrid` 已优于 `lexical`，但 `hybrid_rerank` 暂未优于 `hybrid`。
+- 当前第三批重点转向负样本拒答和 rerank 有效性验证，因此报告里会继续补充负样本误召回分析和 rerank 前后变化摘要。
+- `postgres` 黄金集仍受真实官方来源覆盖约束。当前真实库稳定来源主要集中在研究生招生、图书馆、教务处、主站通知与单条本科招生动态；因此 `postgres` 数据集允许按真实来源覆盖优先扩展，并在文档或报告中显式记录覆盖不足的类别，而不是用错误命中反向固化真值。
 
 ## 1. 当前范围
 
@@ -190,6 +194,12 @@ JSON 主报告固定包含：
 - `expectedSourceMatchers`
 - `matchedExpectedSources`
 - `returnedTopSources`
+- `retrievalDiagnostics`
+
+第三批新增的报告摘要还会包含：
+
+- `negativeAnalysis`
+- `rerankImpact`
 
 当前指标：
 
@@ -236,16 +246,16 @@ npm run verify:retrieval:real
 ```bash
 EMBEDDING_BASE_URL=https://api.siliconflow.com/v1
 EMBEDDING_MODEL=Qwen/Qwen3-Embedding-8B
-EMBEDDING_DIMENSIONS=2048
-EMBEDDING_VECTOR_COLUMN=embedding_qwen3_2048
-EMBEDDING_MODEL_COLUMN=embedding_model_qwen3_2048
-EMBEDDING_EMBEDDED_AT_COLUMN=embedded_at_qwen3_2048
+EMBEDDING_DIMENSIONS=1024
+EMBEDDING_VECTOR_COLUMN=embedding_qwen3_1024
+EMBEDDING_MODEL_COLUMN=embedding_model_qwen3_1024
+EMBEDDING_EMBEDDED_AT_COLUMN=embedded_at_qwen3_1024
 EMBEDDING_QUERY_INSTRUCTION=请将这个中文校园检索问题转换为检索向量，以便召回最相关的官方资料：
 RERANK_BASE_URL=https://api.siliconflow.com/v1
 RERANK_MODEL=Qwen/Qwen3-Reranker-4B
 ```
 
-这样 `vector:init`、`embed:chunks`、`smoke:vector` 和 `evaluate:search --mode postgres --strategy all` 会统一走新的 Qwen3 2048 向量列，不会覆盖原来的 `embedding` 列。
+这样 `vector:init`、`embed:chunks`、`smoke:vector` 和 `evaluate:search --mode postgres --strategy all` 会统一走新的 Qwen3 1024 向量列，不会覆盖原来的 `embedding` 列。
 
 评估远端环境：
 

@@ -207,6 +207,26 @@ test("scores retrieval cases and summarizes primary metrics", () => {
   assert.equal(matcherHit.evidenceCoverage, 1);
   assert.deepEqual(matcherHit.matchedExpectedIds, []);
   assert.deepEqual(matcherHit.matchedExpectedSources, ["天津商业大学图书馆 / 座位预约系统使用说明"]);
+  assert.deepEqual(matcherHit.returnedTopSources, [
+    {
+      rank: 1,
+      id: "postgres-uuid-1",
+      dedupKey: "seat-guide",
+      title: "座位预约系统使用说明",
+      sourceName: "天津商业大学图书馆",
+      canonicalUrl: null,
+      type: null,
+    },
+    {
+      rank: 2,
+      id: "postgres-uuid-2",
+      dedupKey: "other",
+      title: "其他结果",
+      sourceName: "天津商业大学图书馆",
+      canonicalUrl: null,
+      type: null,
+    },
+  ]);
   assert.equal(hit.evidenceCoverage, 1);
   assert.equal(miss.emptyCorrect, true);
   assert.equal(summary.cases, 3);

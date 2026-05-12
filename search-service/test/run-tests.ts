@@ -26,15 +26,35 @@ import {
 const fixtureDir = path.resolve(process.cwd(), "search-service/test/fixtures");
 const require = createRequire(import.meta.url);
 const {
+  buildTerms,
+  countSpecificTermHits,
   closePostgresPool,
+  getGenericTitlePenalty,
   normalizeRerankMode,
   normalizeRetrievalMode,
   searchPostgres,
   searchSeed,
+  scorePostgresSource,
 }: {
+  buildTerms: (query: string) => string[];
+  countSpecificTermHits: (haystack: string, terms: string[]) => number;
   closePostgresPool: () => Promise<void>;
+  getGenericTitlePenalty: (title: string, titleSpecificHits: number) => number;
   normalizeRerankMode: (value?: string) => string;
   normalizeRetrievalMode: (value?: string) => string;
+  scorePostgresSource: (
+    source: {
+      title: string;
+      snippet: string;
+      fullSnippet?: string;
+      sourceName: string;
+      type: string;
+      trustScore?: number;
+      freshnessLabel?: string;
+    },
+    query: string,
+    terms: string[],
+  ) => number;
   searchPostgres: (
     query: string,
     limit: number,
@@ -371,6 +391,56 @@ async function main() {
       assert.equal(normalizeRerankMode("off"), "off");
       assert.equal(normalizeRerankMode("ON"), "on");
       assert.equal(normalizeRerankMode("bad"), "auto");
+    }),
+  );
+
+  results.push(
+    await runCase("postgres lexical scoring ignores source name only matches and penalizes generic titles", () => {
+      const sourceNameOnlyScore = scorePostgresSource(
+        {
+          title: "关于校园服务的通知",
+          snippet: "这里只是普通校园服务说明。",
+          fullSnippet: "这里只介绍一般校园服务安排，与窗口值班、校园设施维护和日常公告相关。",
+          sourceName: "天津商业大学图书馆",
+          type: "official",
+          trustScore: 0.8,
+          freshnessLabel: "fresh",
+        },
+        "图书馆自习座位怎么预约",
+        buildTerms("图书馆自习座位怎么预约"),
+      );
+      const weakBodyMatchScore = scorePostgresSource(
+        {
+          title: "关于校园服务的通知",
+          snippet: "这里只提到图书资料借还安排。",
+          fullSnippet: "这里只提到图书资料借还安排，与窗口值班和基础服务相关。",
+          sourceName: "天津商业大学主站",
+          type: "official",
+          trustScore: 0.8,
+          freshnessLabel: "fresh",
+        },
+        "图书馆自习座位怎么预约",
+        buildTerms("图书馆自习座位怎么预约"),
+      );
+      const targetedScore = scorePostgresSource(
+        {
+          title: "座位预约系统使用说明",
+          snippet: "图书馆自习座位需要先预约并按时签到。",
+          fullSnippet: "图书馆自习座位需要先预约并按时签到，超时会释放座位。",
+          sourceName: "天津商业大学图书馆",
+          type: "official",
+          trustScore: 0.8,
+          freshnessLabel: "fresh",
+        },
+        "图书馆自习座位怎么预约",
+        buildTerms("图书馆自习座位怎么预约"),
+      );
+
+      assert.equal(sourceNameOnlyScore, 0);
+      assert.equal(weakBodyMatchScore, 0);
+      assert.ok(targetedScore > 0);
+      assert.ok(countSpecificTermHits("座位预约系统使用说明", buildTerms("图书馆自习座位怎么预约")) > 0);
+      assert.ok(getGenericTitlePenalty("通知", 0) > getGenericTitlePenalty("座位预约系统使用说明", 2));
     }),
   );
 

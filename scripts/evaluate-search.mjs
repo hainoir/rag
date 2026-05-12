@@ -357,6 +357,15 @@ export function scoreCase(caseItem, response, durationMs, k = DEFAULT_K) {
   const matchedExpectedSources = normalizedMatchers
     .filter((matcher) => topKSources.some((source) => matchesExpectedSource(source, matcher)))
     .map(describeExpectedMatcher);
+  const returnedTopSources = topKSources.map((source, index) => ({
+    rank: index + 1,
+    id: source.id,
+    dedupKey: source.dedupKey ?? null,
+    title: source.title ?? null,
+    sourceName: source.sourceName ?? null,
+    canonicalUrl: source.canonicalUrl ?? source.url ?? null,
+    type: source.type ?? null,
+  }));
   const expectedEvidenceHits = normalizedMatchers.filter((matcher) =>
     evidenceSources.some((candidate) => matchesExpectedSource(candidate, matcher)),
   ).length;
@@ -379,6 +388,7 @@ export function scoreCase(caseItem, response, durationMs, k = DEFAULT_K) {
     expectedSourceIds,
     expectedSourceMatchers,
     returnedTopIds: topK,
+    returnedTopSources,
     matchedExpectedIds,
     matchedExpectedSources,
     recallAt10: expectedEmpty ? (rankedIds.length === 0 ? 1 : 0) : relevantTopK / normalizedMatchers.length,

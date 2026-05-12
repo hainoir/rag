@@ -1,10 +1,12 @@
 const assert = require("node:assert/strict");
 
 const {
+  formatQueryEmbeddingInput,
   formatVectorLiteral,
   generateEmbedding,
   generateEmbeddings,
   isConfiguredValue,
+  normalizeIdentifier,
   readEmbeddingConfig,
   shouldUseEmbeddings,
 } = require("../../search-service/embedding-client.cjs");
@@ -40,6 +42,10 @@ async function main() {
           baseUrl: "https://proxy.example.test/v1",
           dimensions: 4,
           timeoutMs: 2500,
+          vectorColumn: "embedding",
+          modelColumn: "embedding_model",
+          embeddedAtColumn: "embedded_at",
+          queryInstruction: "",
         },
       );
 
@@ -47,6 +53,37 @@ async function main() {
       assert.equal(shouldUseEmbeddings({ apiKey: "key", model: "embed-test" }), true);
       assert.equal(isConfiguredValue("your-embedding-api-key"), false);
       assert.equal(shouldUseEmbeddings({ apiKey: "your-embedding-api-key", model: "embed-test" }), false);
+    }),
+  );
+
+  results.push(
+    await runCase("supports scoped qwen embedding columns and chinese query instructions", () => {
+      const config = readEmbeddingConfig({
+        EMBEDDING_API_KEY: "silicon-key",
+        EMBEDDING_BASE_URL: "https://api.siliconflow.com/v1",
+        EMBEDDING_MODEL: "Qwen/Qwen3-Embedding-8B",
+        EMBEDDING_DIMENSIONS: "2048",
+        EMBEDDING_VECTOR_COLUMN: "embedding_qwen3_2048",
+        EMBEDDING_MODEL_COLUMN: "embedding_model_qwen3_2048",
+        EMBEDDING_EMBEDDED_AT_COLUMN: "embedded_at_qwen3_2048",
+      });
+
+      assert.deepEqual(config, {
+        apiKey: "silicon-key",
+        model: "Qwen/Qwen3-Embedding-8B",
+        baseUrl: "https://api.siliconflow.com/v1",
+        dimensions: 2048,
+        timeoutMs: 15000,
+        vectorColumn: "embedding_qwen3_2048",
+        modelColumn: "embedding_model_qwen3_2048",
+        embeddedAtColumn: "embedded_at_qwen3_2048",
+        queryInstruction: "请将这个中文校园检索问题转换为检索向量，以便召回最相关的官方资料：",
+      });
+      assert.equal(
+        formatQueryEmbeddingInput("图书馆自习座位怎么预约", config),
+        "请将这个中文校园检索问题转换为检索向量，以便召回最相关的官方资料：\n图书馆自习座位怎么预约",
+      );
+      assert.equal(normalizeIdentifier("Embedding-Qwen3-2048", "fallback"), "embedding_qwen3_2048");
     }),
   );
 

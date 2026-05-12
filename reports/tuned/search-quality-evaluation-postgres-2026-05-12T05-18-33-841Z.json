@@ -1,0 +1,44 @@
+{
+  "generatedAt": "2026-05-12T05:18:33.841Z",
+  "mode": "postgres",
+  "requestedStrategies": [
+    "lexical"
+  ],
+  "primarySourceScope": "official",
+  "appendixSourceScope": "community",
+  "dataset": {
+    "path": "D:\\code\\Project\\rag\\fixtures\\golden-search-evaluation.postgres.json",
+    "cases": 54,
+    "officialCases": 54,
+    "communityCases": 0,
+    "byCategory": {
+      "招生": {
+        "official": 14,
+        "community": 0
+      },
+      "教务": {
+        "official": 10,
+        "community": 0
+      },
+      "图书馆": {
+        "official": 13,
+        "community": 0
+      },
+      "后勤": {
+        "official": 5,
+        "community": 0
+      },
+      "学生服务": {
+        "official": 12,
+        "community": 0
+      }
+    }
+  },
+  "strategies": [
+    {
+      "name": "lexical",
+      "status": "failed",
+      "reason": "Expected http://127.0.0.1:1616/api/search?q=%E7%A0%94%E7%A9%B6%E7%94%9F%E6%8B%9B%E7%94%9F%E7%AE%80%E7%AB%A0%E5%9C%A8%E5%93%AA%E9%87%8C%E6%9F%A5&limit=10 to return 2xx, got 500: search_service_error"
+    }
+  ]
+}

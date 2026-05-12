@@ -12,6 +12,9 @@ const {
 }: {
   readEmbeddingConfig: () => {
     dimensions: number;
+    vectorColumn: string;
+    modelColumn: string;
+    embeddedAtColumn: string;
   };
 } = require("../embedding-client.cjs");
 
@@ -48,27 +51,32 @@ async function main() {
 
     await pool.query(`
       alter table chunks
-        add column if not exists embedding vector(${embeddingConfig.dimensions}),
-        add column if not exists embedding_model text,
-        add column if not exists embedded_at timestamptz
+        add column if not exists ${quoteIdentifier(embeddingConfig.vectorColumn)} vector(${embeddingConfig.dimensions}),
+        add column if not exists ${quoteIdentifier(embeddingConfig.modelColumn)} text,
+        add column if not exists ${quoteIdentifier(embeddingConfig.embeddedAtColumn)} timestamptz
     `);
+
+    const hnswIndexName = quoteIdentifier(`chunks_${embeddingConfig.vectorColumn}_hnsw_idx`);
+    const ivfIndexName = quoteIdentifier(`chunks_${embeddingConfig.vectorColumn}_ivfflat_idx`);
 
     try {
       await pool.query(`
-        create index if not exists chunks_embedding_hnsw_idx
-        on chunks using hnsw (embedding vector_cosine_ops)
-        where embedding is not null
+        create index if not exists ${hnswIndexName}
+        on chunks using hnsw (${quoteIdentifier(embeddingConfig.vectorColumn)} vector_cosine_ops)
+        where ${quoteIdentifier(embeddingConfig.vectorColumn)} is not null
       `);
     } catch {
       await pool.query(`
-        create index if not exists chunks_embedding_ivfflat_idx
-        on chunks using ivfflat (embedding vector_cosine_ops)
+        create index if not exists ${ivfIndexName}
+        on chunks using ivfflat (${quoteIdentifier(embeddingConfig.vectorColumn)} vector_cosine_ops)
         with (lists = 100)
-        where embedding is not null
+        where ${quoteIdentifier(embeddingConfig.vectorColumn)} is not null
       `);
     }
 
-    console.log(`Vector schema ready: schema=${schema} dimensions=${embeddingConfig.dimensions}`);
+    console.log(
+      `Vector schema ready: schema=${schema} column=${embeddingConfig.vectorColumn} dimensions=${embeddingConfig.dimensions}`,
+    );
   } finally {
     await pool.end();
   }

@@ -31,6 +31,21 @@
     "expectedEmpty": false
   },
   {
+    "id": "grad-outline",
+    "query": "研究生初试自命题考试大纲在哪里查",
+    "category": "招生",
+    "sourceScope": "official",
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "aa9734e42e69e12004f71bedc8bd2569fd64e8b4d871412dbd0b173eca99a7bd",
+        "title": "2026年硕士研究生招生考试（初试）自命题科目考试大纲",
+        "sourceName": "天津商业大学研究生招生网",
+        "canonicalUrl": "https://yz.tjcu.edu.cn/info/1041/3351.htm"
+      }
+    ],
+    "expectedEmpty": false
+  },
+  {
     "id": "grad-readjustment",
     "query": "研究生调剂公告一般在哪里看",
     "category": "招生",
@@ -59,6 +74,280 @@
       }
     ],
     "expectedEmpty": false
+  },
+  {
+    "id": "grad-readjustment-list",
+    "query": "研究生调剂复试名单在哪里更新",
+    "category": "招生",
+    "sourceScope": "official",
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "cee2ddd495569456a89e6a617187fe05b2287f14d85b056bfcc4cbbe679dc0df",
+        "title": "各学院2025年调剂复试名单（实时更新）",
+        "sourceName": "天津商业大学研究生招生网",
+        "canonicalUrl": "https://yz.tjcu.edu.cn/info/1040/3329.htm"
+      }
+    ],
+    "expectedEmpty": false
+  },
+  {
+    "id": "grad-readjustment-requirements",
+    "query": "研究生调剂基本要求在哪里看",
+    "category": "招生",
+    "sourceScope": "official",
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "b51cfcb2ada89a3d1bf8fc173a459d13abd10c08fd3b2a1ce85643bdb1e208a8",
+        "title": "各学院2025年调剂基本要求（实时更新）",
+        "sourceName": "天津商业大学研究生招生网",
+        "canonicalUrl": "https://yz.tjcu.edu.cn/info/1040/3325.htm"
+      }
+    ],
+    "expectedEmpty": false
+  },
+  {
+    "id": "grad-ethics-review",
+    "query": "拟录取考生思想政治素质和品德考核通知在哪看",
+    "category": "招生",
+    "sourceScope": "official",
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "0b23db529f8d920eb81cdc1d421ada48e3fedb0ac9075bffda7c240f9b4fb39f",
+        "title": "2025年研招拟录取考生思想政治素质和品德考核相关事项通知",
+        "sourceName": "天津商业大学研究生招生网",
+        "canonicalUrl": "https://yz.tjcu.edu.cn/info/1040/3327.htm"
+      }
+    ],
+    "expectedEmpty": false
+  },
+  {
+    "id": "grad-hk-brochure",
+    "query": "港澳台硕士研究生招生简章在哪里查",
+    "category": "招生",
+    "sourceScope": "official",
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "0ce58aa6639ea04c5905016ec6d0f91b38b56ee770b074782f0a9f17e2a0719d",
+        "title": "天津商业大学2025年招收港澳台硕士研究生简章",
+        "sourceName": "天津商业大学研究生招生网",
+        "canonicalUrl": "https://yz.tjcu.edu.cn/info/1041/3310.htm"
+      }
+    ],
+    "expectedEmpty": false
+  },
+  {
+    "id": "grad-hk-directory",
+    "query": "港澳台硕士研究生专业目录在哪里查",
+    "category": "招生",
+    "sourceScope": "official",
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "58894444d7090ecd194bd82d3db907bc330136a8c8db5bd12afb0007ca5fbeb9",
+        "title": "天津商业大学2025年招收港澳台硕士研究生专业目录",
+        "sourceName": "天津商业大学研究生招生网",
+        "canonicalUrl": "https://yz.tjcu.edu.cn/info/1041/3309.htm"
+      }
+    ],
+    "expectedEmpty": false
+  },
+  {
+    "id": "grad-admit-archival",
+    "query": "研究生入学档案关系和户口转递要求在哪里看",
+    "category": "招生",
+    "sourceScope": "official",
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "c657de18309fbd14d927a0f442f8da45de3f4d2ae0df8c7fa062dba84763801a",
+        "title": "2025级研究生入学须知——档案、关系、户口转递要求",
+        "sourceName": "天津商业大学研究生招生网",
+        "canonicalUrl": "https://yz.tjcu.edu.cn/info/1040/3340.htm"
+      }
+    ],
+    "expectedEmpty": false
+  },
+  {
+    "id": "grad-offer-collection",
+    "query": "研究生录取通知书信息采集通知在哪里看",
+    "category": "招生",
+    "sourceScope": "official",
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "9eba20f8c46030bfbb548045414accb9af0705ea925d2749f9cb573e9a8d2d60",
+        "title": "天津商业大学2025年硕士研究生录取通知书信息采集通知",
+        "sourceName": "天津商业大学研究生招生网",
+        "canonicalUrl": "https://yz.tjcu.edu.cn/info/1040/3339.htm"
+      }
+    ],
+    "expectedEmpty": false
+  },
+  {
+    "id": "undergrad-news",
+    "query": "本科招生动态一般在哪里看",
+    "category": "招生",
+    "sourceScope": "official",
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "d65c700821483006796059c0f6dc56ed5fa56381849b0ab6439d9b2730622b18",
+        "title": "招生动态",
+        "sourceName": "天津商业大学本科招生网",
+        "canonicalUrl": "https://zs.tjcu.edu.cn/info/1047/1245.htm"
+      }
+    ],
+    "expectedEmpty": false,
+    "notes": "当前真实库中的本科招生稳定来源仍只有单条招生动态。"
+  },
+  {
+    "id": "admissions-negative",
+    "query": "本科新生军训服可以在线退换吗",
+    "category": "招生",
+    "sourceScope": "official",
+    "expectedSourceIds": [],
+    "expectedEmpty": true,
+    "notes": "官方负样本，用于验证无答案准确率。"
+  },
+  {
+    "id": "academic-printing-platform",
+    "query": "远程自助打印服务平台怎么用",
+    "category": "教务",
+    "sourceScope": "official",
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "2218a3e365fc0d55f2135f094c30cd44af9dee7d9c42670fd9d63ef24e9e93e4",
+        "title": "关于远程自助打印服务平台上线的通知",
+        "sourceName": "天津商业大学教务处",
+        "canonicalUrl": "https://jwc.tjcu.edu.cn/info/1110/1085.htm"
+      }
+    ],
+    "expectedEmpty": false
+  },
+  {
+    "id": "academic-printing-online",
+    "query": "成绩单和材料自助打印平台上线通知在哪看",
+    "category": "教务",
+    "sourceScope": "official",
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "2218a3e365fc0d55f2135f094c30cd44af9dee7d9c42670fd9d63ef24e9e93e4",
+        "title": "关于远程自助打印服务平台上线的通知",
+        "sourceName": "天津商业大学教务处",
+        "canonicalUrl": "https://jwc.tjcu.edu.cn/info/1110/1085.htm"
+      }
+    ],
+    "expectedEmpty": false
+  },
+  {
+    "id": "academic-micro-major",
+    "query": "微专业建设与管理办法在哪里看",
+    "category": "教务",
+    "sourceScope": "official",
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "d93a232ced16553c089931563614c19b799faf94cea5aea1721092e10b5e95ec",
+        "title": "天津商业大学微专业建设与管理办法（试行）",
+        "sourceName": "天津商业大学教务处",
+        "canonicalUrl": "https://jwc.tjcu.edu.cn/info/1106/1796.htm"
+      }
+    ],
+    "expectedEmpty": false
+  },
+  {
+    "id": "academic-micro-major-rules",
+    "query": "微专业管理办法试行版有什么要求",
+    "category": "教务",
+    "sourceScope": "official",
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "d93a232ced16553c089931563614c19b799faf94cea5aea1721092e10b5e95ec",
+        "title": "天津商业大学微专业建设与管理办法（试行）",
+        "sourceName": "天津商业大学教务处",
+        "canonicalUrl": "https://jwc.tjcu.edu.cn/info/1106/1796.htm"
+      }
+    ],
+    "expectedEmpty": false
+  },
+  {
+    "id": "academic-recommendation-postgrad",
+    "query": "推免实施办法在哪里看",
+    "category": "教务",
+    "sourceScope": "official",
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "048b375c24b6c11b4586ab8eee5dcd3f948ebee64c55266ebe9695045158367d",
+        "title": "天津商业大学推荐2023年优秀应届本科毕业生免试攻读硕士学位研究生工作实施办法",
+        "sourceName": "天津商业大学教务处",
+        "canonicalUrl": "https://jwc.tjcu.edu.cn/info/1106/1377.htm"
+      }
+    ],
+    "expectedEmpty": false
+  },
+  {
+    "id": "academic-recommendation-eligibility",
+    "query": "优秀应届本科毕业生免试读研办法怎么查",
+    "category": "教务",
+    "sourceScope": "official",
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "048b375c24b6c11b4586ab8eee5dcd3f948ebee64c55266ebe9695045158367d",
+        "title": "天津商业大学推荐2023年优秀应届本科毕业生免试攻读硕士学位研究生工作实施办法",
+        "sourceName": "天津商业大学教务处",
+        "canonicalUrl": "https://jwc.tjcu.edu.cn/info/1106/1377.htm"
+      }
+    ],
+    "expectedEmpty": false
+  },
+  {
+    "id": "academic-innovation-plan-notice",
+    "query": "大学生创新训练计划申报通知在哪看",
+    "category": "教务",
+    "sourceScope": "official",
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "8495341714726885d91842008a3cb035b388cbf6af633225560c8de7a9ce930a",
+        "title": "关于组织2026年“大学生创新训练计划”项目申报工作的通知",
+        "sourceName": "天津商业大学教务处",
+        "canonicalUrl": "https://jwc.tjcu.edu.cn/info/1110/1877.htm"
+      }
+    ],
+    "expectedEmpty": false
+  },
+  {
+    "id": "academic-innovation-plan-results",
+    "query": "大学生创新训练计划立项评审结果在哪里看",
+    "category": "教务",
+    "sourceScope": "official",
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "530bac590434c8ad61d021b9aff0b61fc71b11174d23145e25bb8a04c37320c6",
+        "title": "天津商业大学2026年“大学生创新训练计划”项目立项评审结果的公示",
+        "sourceName": "天津商业大学教务处",
+        "canonicalUrl": "https://jwc.tjcu.edu.cn/info/1110/1881.htm"
+      }
+    ],
+    "expectedEmpty": false
+  },
+  {
+    "id": "academic-exam-map",
+    "query": "学校考点示意图在哪里查",
+    "category": "教务",
+    "sourceScope": "official",
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "41d014978fb26d5b0f36dcca9ce9ffa0dab19f2ae3d8eccac48204abf9a54e84",
+        "title": "天津商业大学考点示意图",
+        "sourceName": "天津商业大学教务处",
+        "canonicalUrl": "https://jwc.tjcu.edu.cn/info/1110/1674.htm"
+      }
+    ],
+    "expectedEmpty": false
+  },
+  {
+    "id": "academic-negative",
+    "query": "四六级准考证下载入口在哪里",
+    "category": "教务",
+    "sourceScope": "official",
+    "expectedSourceIds": [],
+    "expectedEmpty": true,
+    "notes": "官方负样本，用于验证无答案准确率。"
   },
   {
     "id": "library-seat-booking",
@@ -106,8 +395,8 @@
     "expectedEmpty": false
   },
   {
-    "id": "library-seat-exam",
-    "query": "考试周图书馆座位预约规则会变化吗",
+    "id": "library-seat-system",
+    "query": "座位预约系统使用说明在哪里看",
     "category": "图书馆",
     "sourceScope": "official",
     "expectedSourceMatchers": [
@@ -121,22 +410,124 @@
     "expectedEmpty": false
   },
   {
-    "id": "admissions-negative",
-    "query": "本科新生军训服可以在线退换吗",
-    "category": "招生",
+    "id": "library-locker-basic",
+    "query": "图书馆智能存包柜怎么使用",
+    "category": "图书馆",
     "sourceScope": "official",
-    "expectedSourceIds": [],
-    "expectedEmpty": true,
-    "notes": "官方负样本，用于验证无答案准确率。"
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "5c279bf89a09b2be54bf523a981ce43044dc148ca8dc42a9d4de09ceaf338c92",
+        "title": "图书馆智能存包柜管理系统",
+        "sourceName": "天津商业大学图书馆",
+        "canonicalUrl": "https://lib.tjcu.edu.cn/info/1001/5544.htm"
+      }
+    ],
+    "expectedEmpty": false
   },
   {
-    "id": "academic-negative",
-    "query": "四六级准考证下载入口在哪里",
-    "category": "教务",
+    "id": "library-locker-access",
+    "query": "图书馆存包柜管理系统入口在哪里",
+    "category": "图书馆",
     "sourceScope": "official",
-    "expectedSourceIds": [],
-    "expectedEmpty": true,
-    "notes": "官方负样本，用于验证无答案准确率。"
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "5c279bf89a09b2be54bf523a981ce43044dc148ca8dc42a9d4de09ceaf338c92",
+        "title": "图书馆智能存包柜管理系统",
+        "sourceName": "天津商业大学图书馆",
+        "canonicalUrl": "https://lib.tjcu.edu.cn/info/1001/5544.htm"
+      }
+    ],
+    "expectedEmpty": false
+  },
+  {
+    "id": "library-recommend-books",
+    "query": "图书馆资源荐购怎么提交",
+    "category": "图书馆",
+    "sourceScope": "official",
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "49b22d4715dbe2a7a0c0559eb5f2fc1db28996e7a4589060e395f5e7e5318e35",
+        "title": "资源荐购",
+        "sourceName": "天津商业大学图书馆",
+        "canonicalUrl": "https://lib.tjcu.edu.cn/info/1059/5071.htm"
+      }
+    ],
+    "expectedEmpty": false
+  },
+  {
+    "id": "library-purchase-request",
+    "query": "图书馆荐购图书的说明在哪里看",
+    "category": "图书馆",
+    "sourceScope": "official",
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "49b22d4715dbe2a7a0c0559eb5f2fc1db28996e7a4589060e395f5e7e5318e35",
+        "title": "资源荐购",
+        "sourceName": "天津商业大学图书馆",
+        "canonicalUrl": "https://lib.tjcu.edu.cn/info/1059/5071.htm"
+      }
+    ],
+    "expectedEmpty": false
+  },
+  {
+    "id": "library-cnki",
+    "query": "图书馆中国知网数据库入口在哪里",
+    "category": "图书馆",
+    "sourceScope": "official",
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "001ced6f5bca9a3440735169affc04490ad53e84f5e7d2b0b2d058af332c2a80",
+        "title": "中国知网（CNKI）数据库",
+        "sourceName": "天津商业大学图书馆",
+        "canonicalUrl": "https://lib.tjcu.edu.cn/info/1162/5033.htm"
+      }
+    ],
+    "expectedEmpty": false
+  },
+  {
+    "id": "library-dushu",
+    "query": "读秀学术搜索入口在哪里看",
+    "category": "图书馆",
+    "sourceScope": "official",
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "affc2346f217aee5e8b6d859e16294321721a91259377c1191c966a93bcd9640",
+        "title": "读秀学术搜索",
+        "sourceName": "天津商业大学图书馆",
+        "canonicalUrl": "https://lib.tjcu.edu.cn/info/1162/3336.htm"
+      }
+    ],
+    "expectedEmpty": false
+  },
+  {
+    "id": "library-wanfang-thesis",
+    "query": "万方学位论文数据库入口在哪里",
+    "category": "图书馆",
+    "sourceScope": "official",
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "dd46b314b3c64cb40e5cbbc75fcad46417da03ffc3748db916a676b102bf2dd0",
+        "title": "万方学位论文",
+        "sourceName": "天津商业大学图书馆",
+        "canonicalUrl": "https://lib.tjcu.edu.cn/info/1162/3373.htm"
+      }
+    ],
+    "expectedEmpty": false
+  },
+  {
+    "id": "library-ebsco-journal",
+    "query": "EBSCO电子期刊入口在哪里看",
+    "category": "图书馆",
+    "sourceScope": "official",
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "ab34172aa73918ff558613f2979876da7a8e27a56902506faf61d14eaa42b013",
+        "title": "EBSCO电子期刊",
+        "sourceName": "天津商业大学图书馆",
+        "canonicalUrl": "https://lib.tjcu.edu.cn/info/1162/5274.htm"
+      }
+    ],
+    "expectedEmpty": false
   },
   {
     "id": "library-negative",
@@ -148,6 +539,67 @@
     "notes": "官方负样本，用于验证无答案准确率。"
   },
   {
+    "id": "logistics-network-outage-time",
+    "query": "校园网断网升级什么时候进行",
+    "category": "后勤",
+    "sourceScope": "official",
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "04a88ee19b87b9050983ae65b9b597f68fec38e60b53919a63a1cd3161fdba10",
+        "title": "关于校园网断网升级的通知",
+        "sourceName": "天津商业大学主站",
+        "canonicalUrl": "https://www.tjcu.edu.cn/info/1080/25496.htm"
+      }
+    ],
+    "expectedEmpty": false,
+    "notes": "当前真实后勤类正样本主要来自主站校园服务通知。"
+  },
+  {
+    "id": "logistics-network-outage-notice",
+    "query": "校园网断网升级通知在哪里看",
+    "category": "后勤",
+    "sourceScope": "official",
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "04a88ee19b87b9050983ae65b9b597f68fec38e60b53919a63a1cd3161fdba10",
+        "title": "关于校园网断网升级的通知",
+        "sourceName": "天津商业大学主站",
+        "canonicalUrl": "https://www.tjcu.edu.cn/info/1080/25496.htm"
+      }
+    ],
+    "expectedEmpty": false
+  },
+  {
+    "id": "logistics-tree-spray",
+    "query": "校园内树木消杀打药通知在哪里看",
+    "category": "后勤",
+    "sourceScope": "official",
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "c056c77ed702196bd326a6baf365571838856493c63834cd54e0069a9c42734b",
+        "title": "关于校园内树木消杀打药的通知",
+        "sourceName": "天津商业大学主站",
+        "canonicalUrl": "https://www.tjcu.edu.cn/info/1080/25616.htm"
+      }
+    ],
+    "expectedEmpty": false
+  },
+  {
+    "id": "logistics-tree-spray-area",
+    "query": "校园树木消杀会影响通行吗",
+    "category": "后勤",
+    "sourceScope": "official",
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "c056c77ed702196bd326a6baf365571838856493c63834cd54e0069a9c42734b",
+        "title": "关于校园内树木消杀打药的通知",
+        "sourceName": "天津商业大学主站",
+        "canonicalUrl": "https://www.tjcu.edu.cn/info/1080/25616.htm"
+      }
+    ],
+    "expectedEmpty": false
+  },
+  {
     "id": "logistics-negative",
     "query": "校内共享单车月卡多少钱",
     "category": "后勤",
@@ -155,6 +607,157 @@
     "expectedSourceIds": [],
     "expectedEmpty": true,
     "notes": "官方负样本，用于验证无答案准确率。"
+  },
+  {
+    "id": "student-leadership-day",
+    "query": "本周校领导接待日通知在哪里看",
+    "category": "学生服务",
+    "sourceScope": "official",
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "c6e5fb09aa8a32b98a3fc650652ee79de576fe2d7373c8482b51751906613426",
+        "title": "关于本周校领导接待日的通知",
+        "sourceName": "天津商业大学主站",
+        "canonicalUrl": "https://www.tjcu.edu.cn/info/1080/25533.htm"
+      }
+    ],
+    "expectedEmpty": false,
+    "notes": "当前真实学生服务类正样本主要来自主站学生面向通知与赛事公告。"
+  },
+  {
+    "id": "student-leadership-day-arrangement",
+    "query": "校领导接待日安排一般在哪里查询",
+    "category": "学生服务",
+    "sourceScope": "official",
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "c6e5fb09aa8a32b98a3fc650652ee79de576fe2d7373c8482b51751906613426",
+        "title": "关于本周校领导接待日的通知",
+        "sourceName": "天津商业大学主站",
+        "canonicalUrl": "https://www.tjcu.edu.cn/info/1080/25533.htm"
+      }
+    ],
+    "expectedEmpty": false
+  },
+  {
+    "id": "student-challenge-cup",
+    "query": "挑战杯创业计划竞赛项目公示在哪里看",
+    "category": "学生服务",
+    "sourceScope": "official",
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "00927b4f89e1218931fca794ae5671e19fc5dc1a8f099af59ab9202d6088dddf",
+        "title": "学校拟推荐参加2026年“挑战杯”天津市大学生创业计划竞赛项目情况公示",
+        "sourceName": "天津商业大学主站",
+        "canonicalUrl": "https://www.tjcu.edu.cn/info/1080/25587.htm"
+      }
+    ],
+    "expectedEmpty": false
+  },
+  {
+    "id": "student-translation-contest",
+    "query": "外教社杯翻译竞赛初赛通知在哪里看",
+    "category": "学生服务",
+    "sourceScope": "official",
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "caa2fd67b454da9b9de2baf710bfb8c0b1ef65ee8bee54e46f5879a0d50cd771",
+        "title": "关于举办2026年“外教社杯”天津市大学生翻译竞赛天津商业大学初赛的通知",
+        "sourceName": "天津商业大学主站",
+        "canonicalUrl": "https://www.tjcu.edu.cn/info/1080/25501.htm"
+      }
+    ],
+    "expectedEmpty": false
+  },
+  {
+    "id": "student-huawei-chip",
+    "query": "华为杯研究生创芯大赛通知在哪里看",
+    "category": "学生服务",
+    "sourceScope": "official",
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "20ab2d09f9a961879d31e1c27bba05b0f497bcc94e36473eeb2f58f686db2883",
+        "title": "关于举办“华为杯”第九届中国研究生创“芯”大赛的通知",
+        "sourceName": "天津商业大学主站",
+        "canonicalUrl": "https://www.tjcu.edu.cn/info/1080/25486.htm"
+      }
+    ],
+    "expectedEmpty": false
+  },
+  {
+    "id": "student-innovation-plan-application",
+    "query": "大学生创新训练计划项目申报入口通知在哪看",
+    "category": "学生服务",
+    "sourceScope": "official",
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "8495341714726885d91842008a3cb035b388cbf6af633225560c8de7a9ce930a",
+        "title": "关于组织2026年“大学生创新训练计划”项目申报工作的通知",
+        "sourceName": "天津商业大学教务处",
+        "canonicalUrl": "https://jwc.tjcu.edu.cn/info/1110/1877.htm"
+      }
+    ],
+    "expectedEmpty": false
+  },
+  {
+    "id": "student-innovation-plan-results",
+    "query": "大学生创新训练计划立项公示结果在哪看",
+    "category": "学生服务",
+    "sourceScope": "official",
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "530bac590434c8ad61d021b9aff0b61fc71b11174d23145e25bb8a04c37320c6",
+        "title": "天津商业大学2026年“大学生创新训练计划”项目立项评审结果的公示",
+        "sourceName": "天津商业大学教务处",
+        "canonicalUrl": "https://jwc.tjcu.edu.cn/info/1110/1881.htm"
+      }
+    ],
+    "expectedEmpty": false
+  },
+  {
+    "id": "student-cosmetic-competition",
+    "query": "化妆品创新大赛报名通知在哪里看",
+    "category": "学生服务",
+    "sourceScope": "official",
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "7ccb24b70080ab709ea85a84b6d97604f6b8d5d0d45a47ab20b13809905a5d47",
+        "title": "第四届全国大学生化妆品创新大赛——尧舜牡丹杯（2026）报名通知",
+        "sourceName": "天津商业大学主站",
+        "canonicalUrl": "https://www.tjcu.edu.cn/info/1080/25603.htm"
+      }
+    ],
+    "expectedEmpty": false
+  },
+  {
+    "id": "student-career-logistics-talk",
+    "query": "冷链物流发展及就业趋势讲座信息在哪里看",
+    "category": "学生服务",
+    "sourceScope": "official",
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "7553963bef45178e36f4b367071d6e5f3233c0397df796ffac4b0de639850c1b",
+        "title": "冷链物流的发展及就业趋势",
+        "sourceName": "天津商业大学主站",
+        "canonicalUrl": "https://www.tjcu.edu.cn/info/1081/25642.htm"
+      }
+    ],
+    "expectedEmpty": false
+  },
+  {
+    "id": "student-ai-report-talk",
+    "query": "大数据和AI咨政报告讲座在哪里看",
+    "category": "学生服务",
+    "sourceScope": "official",
+    "expectedSourceMatchers": [
+      {
+        "dedupKey": "546e7634df8823c7d083fa69e3259ca9e903de9cd7da3e3d417e910045ec249f",
+        "title": "基于大数据和AI的咨政报告形成与利用",
+        "sourceName": "天津商业大学主站",
+        "canonicalUrl": "https://www.tjcu.edu.cn/info/1081/25534.htm"
+      }
+    ],
+    "expectedEmpty": false
   },
   {
     "id": "student-service-negative",

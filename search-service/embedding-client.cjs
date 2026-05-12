@@ -2,6 +2,9 @@ const DEFAULT_BASE_URL = "https://api.openai.com/v1";
 const DEFAULT_MODEL = "text-embedding-3-small";
 const DEFAULT_DIMENSIONS = 1536;
 const DEFAULT_TIMEOUT_MS = 15_000;
+const DEFAULT_VECTOR_COLUMN = "embedding";
+const DEFAULT_MODEL_COLUMN = "embedding_model";
+const DEFAULT_EMBEDDED_AT_COLUMN = "embedded_at";
 const PLACEHOLDER_VALUE_PATTERNS = [/^your[-_]/i, /^replace[-_]?me/i, /^example[-_]?/i];
 
 function parsePositiveInteger(value, fallback) {
@@ -14,10 +17,40 @@ function parsePositiveInteger(value, fallback) {
   return parsed;
 }
 
+function normalizeIdentifier(value, fallback) {
+  const normalized = String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
+
+  if (!normalized || !/^[a-z_][a-z0-9_]*$/.test(normalized)) {
+    return fallback;
+  }
+
+  return normalized.slice(0, 63);
+}
+
+function defaultQueryInstruction(model) {
+  const normalizedModel = String(model ?? "").toLowerCase();
+
+  if (normalizedModel.includes("qwen3-embedding")) {
+    return "请将这个中文校园检索问题转换为检索向量，以便召回最相关的官方资料：";
+  }
+
+  return "";
+}
+
 function readEmbeddingConfig(env = process.env) {
   const apiKey = String(env.EMBEDDING_API_KEY ?? env.OPENAI_API_KEY ?? "").trim();
   const model = String(env.EMBEDDING_MODEL ?? env.OPENAI_EMBEDDING_MODEL ?? DEFAULT_MODEL).trim() || DEFAULT_MODEL;
   const baseUrl = String(env.EMBEDDING_BASE_URL ?? env.OPENAI_BASE_URL ?? DEFAULT_BASE_URL).trim() || DEFAULT_BASE_URL;
+  const vectorColumn = normalizeIdentifier(env.EMBEDDING_VECTOR_COLUMN, DEFAULT_VECTOR_COLUMN);
+  const modelColumn = normalizeIdentifier(env.EMBEDDING_MODEL_COLUMN, DEFAULT_MODEL_COLUMN);
+  const embeddedAtColumn = normalizeIdentifier(env.EMBEDDING_EMBEDDED_AT_COLUMN, DEFAULT_EMBEDDED_AT_COLUMN);
+  const queryInstruction =
+    String(env.EMBEDDING_QUERY_INSTRUCTION ?? "").trim() || defaultQueryInstruction(model);
 
   return {
     apiKey,
@@ -25,6 +58,10 @@ function readEmbeddingConfig(env = process.env) {
     baseUrl,
     dimensions: parsePositiveInteger(env.EMBEDDING_DIMENSIONS, DEFAULT_DIMENSIONS),
     timeoutMs: parsePositiveInteger(env.EMBEDDING_TIMEOUT_MS, DEFAULT_TIMEOUT_MS),
+    vectorColumn,
+    modelColumn,
+    embeddedAtColumn,
+    queryInstruction,
   };
 }
 
@@ -40,6 +77,20 @@ function isConfiguredValue(value) {
 
 function shouldUseEmbeddings(config = readEmbeddingConfig()) {
   return isConfiguredValue(config.apiKey) && isConfiguredValue(config.model);
+}
+
+function formatQueryEmbeddingInput(query, config = readEmbeddingConfig()) {
+  const normalizedQuery = String(query ?? "").trim();
+
+  if (!normalizedQuery) {
+    return "";
+  }
+
+  if (!config.queryInstruction) {
+    return normalizedQuery;
+  }
+
+  return `${config.queryInstruction}\n${normalizedQuery}`;
 }
 
 function resolveEmbeddingEndpoint(baseUrl) {
@@ -115,9 +166,11 @@ function formatVectorLiteral(embedding) {
 }
 
 module.exports = {
+  formatQueryEmbeddingInput,
   formatVectorLiteral,
   generateEmbedding,
   generateEmbeddings,
+  normalizeIdentifier,
   readEmbeddingConfig,
   isConfiguredValue,
   shouldUseEmbeddings,

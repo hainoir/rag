@@ -23,6 +23,9 @@ type EmbeddingConfig = {
   apiKey: string;
   model: string;
   dimensions: number;
+  vectorColumn: string;
+  modelColumn: string;
+  embeddedAtColumn: string;
 };
 
 type PendingChunk = {
@@ -61,6 +64,7 @@ function toEmbeddingInput(chunk: PendingChunk) {
 }
 
 async function hasEmbeddingColumn(pool: Pool, schema: string) {
+  const embeddingConfig = readEmbeddingConfig();
   const result = await pool.query<{ exists: boolean }>(
     `
       select exists (
@@ -68,10 +72,10 @@ async function hasEmbeddingColumn(pool: Pool, schema: string) {
         from information_schema.columns
         where table_schema = $1
           and table_name = 'chunks'
-          and column_name = 'embedding'
+          and column_name = $2
       )
     `,
-    [schema],
+    [schema, embeddingConfig.vectorColumn],
   );
 
   return Boolean(result.rows[0]?.exists);
@@ -92,7 +96,9 @@ async function main() {
     await pool.query(`set search_path to ${quoteIdentifier(schema)}, public`);
 
     if (!(await hasEmbeddingColumn(pool, schema))) {
-      throw new Error("chunks.embedding column is missing. Run npm run vector:init before embedding chunks.");
+      throw new Error(
+        `chunks.${embeddingConfig.vectorColumn} column is missing. Run npm run vector:init before embedding chunks.`,
+      );
     }
 
     const pending = await pool.query<{
@@ -117,7 +123,7 @@ async function main() {
         from chunks c
         join latest_versions lv on lv.version_id = c.document_version_id
         join documents d on d.id = lv.document_id
-        where c.embedding is null
+        where c.${quoteIdentifier(embeddingConfig.vectorColumn)} is null
           and d.status = 'active'
         order by c.created_at asc
         limit $1
@@ -151,10 +157,10 @@ async function main() {
           `
             update chunks
             set
-              embedding = $2::vector,
+              ${quoteIdentifier(embeddingConfig.vectorColumn)} = $2::vector,
               embedding_ref = $3,
-              embedding_model = $3,
-              embedded_at = now()
+              ${quoteIdentifier(embeddingConfig.modelColumn)} = $3,
+              ${quoteIdentifier(embeddingConfig.embeddedAtColumn)} = now()
             where id = $1
           `,
           [batch[batchIndex].id, formatVectorLiteral(embeddings[batchIndex]), embeddingConfig.model],

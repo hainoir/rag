@@ -8,11 +8,13 @@ const require = createRequire(import.meta.url);
 require("../load-env.cjs").loadLocalEnv();
 
 const {
+  formatQueryEmbeddingInput,
   formatVectorLiteral,
   generateEmbedding,
   readEmbeddingConfig,
   shouldUseEmbeddings,
 }: {
+  formatQueryEmbeddingInput: (query: string, config?: EmbeddingConfig) => string;
   formatVectorLiteral: (embedding: number[]) => string;
   generateEmbedding: (input: string, config?: EmbeddingConfig) => Promise<number[]>;
   readEmbeddingConfig: () => EmbeddingConfig;
@@ -22,6 +24,8 @@ const {
 type EmbeddingConfig = {
   apiKey: string;
   model: string;
+  vectorColumn: string;
+  queryInstruction?: string;
 };
 
 function quoteIdentifier(identifier: string) {
@@ -51,14 +55,14 @@ async function main() {
     await pool.query(`set search_path to ${quoteIdentifier(schema)}, public`);
 
     const embeddedCount = await pool.query<{ count: string }>(
-      "select count(*)::text as count from chunks where embedding is not null",
+      `select count(*)::text as count from chunks where ${quoteIdentifier(embeddingConfig.vectorColumn)} is not null`,
     );
 
     if (Number(embeddedCount.rows[0]?.count ?? 0) === 0) {
       throw new Error("No embedded chunks found. Run npm run embed:chunks first.");
     }
 
-    const embedding = await generateEmbedding(query, embeddingConfig);
+    const embedding = await generateEmbedding(formatQueryEmbeddingInput(query, embeddingConfig), embeddingConfig);
     const result = await pool.query<{ title: string; distance: number }>(
       `
         with latest_versions as (
@@ -70,13 +74,13 @@ async function main() {
         )
         select
           d.title,
-          (c.embedding <=> $1::vector)::float as distance
+          (c.${quoteIdentifier(embeddingConfig.vectorColumn)} <=> $1::vector)::float as distance
         from chunks c
         join latest_versions lv on lv.version_id = c.document_version_id
         join documents d on d.id = lv.document_id
-        where c.embedding is not null
+        where c.${quoteIdentifier(embeddingConfig.vectorColumn)} is not null
           and d.status = 'active'
-        order by c.embedding <=> $1::vector
+        order by c.${quoteIdentifier(embeddingConfig.vectorColumn)} <=> $1::vector
         limit 3
       `,
       [formatVectorLiteral(embedding)],
@@ -90,6 +94,7 @@ async function main() {
       [
         "Vector smoke passed:",
         `query="${query}"`,
+        `column=${embeddingConfig.vectorColumn}`,
         `embeddedChunks=${embeddedCount.rows[0].count}`,
         `topTitle="${result.rows[0].title}"`,
         `topDistance=${Number(result.rows[0].distance).toFixed(4)}`,

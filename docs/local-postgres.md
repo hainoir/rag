@@ -144,3 +144,23 @@ npm run dev
 - `npm run smoke:postgres` 输出 `Postgres smoke passed`。
 - `npm run test:ingestion:postgres` 输出 `PASS postgres integration`。
 - `SEARCH_SERVICE_PROVIDER=postgres` 时，预期无命中 query 不应因为 `校园`、`通知` 这类泛词返回演示答案。
+## Qwen3 Vector Profile
+
+如果要切到更适合中文检索的 Qwen3，同时保留现有 `embedding` 列与 1536 维旧数据不动，建议显式使用独立向量列：
+
+```bash
+EMBEDDING_API_KEY=...
+EMBEDDING_BASE_URL=https://api.siliconflow.com/v1
+EMBEDDING_MODEL=Qwen/Qwen3-Embedding-8B
+EMBEDDING_DIMENSIONS=2048
+EMBEDDING_VECTOR_COLUMN=embedding_qwen3_2048
+EMBEDDING_MODEL_COLUMN=embedding_model_qwen3_2048
+EMBEDDING_EMBEDDED_AT_COLUMN=embedded_at_qwen3_2048
+EMBEDDING_QUERY_INSTRUCTION=请将这个中文校园检索问题转换为检索向量，以便召回最相关的官方资料：
+
+RERANK_API_KEY=...
+RERANK_BASE_URL=https://api.siliconflow.com/v1
+RERANK_MODEL=Qwen/Qwen3-Reranker-4B
+```
+
+这样 `vector:init`、`embed:chunks`、`smoke:vector` 和 Postgres hybrid retrieval 都会切到 `embedding_qwen3_2048` 这一组新列，原有 `embedding` 列会继续保留，不需要清空或重建老数据。

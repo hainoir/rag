@@ -3,6 +3,7 @@ const { URL } = require("node:url");
 
 const { generateLlmAnswer } = require("./answer-generator.cjs");
 const {
+  formatQueryEmbeddingInput,
   formatVectorLiteral,
   generateEmbedding,
   readEmbeddingConfig,
@@ -49,6 +50,23 @@ const GENERIC_QUERY_TERMS = new Set([
   "相关",
   "问题",
 ]);
+const POSTGRES_SCORING = {
+  titleExactMatch: 30,
+  fullSnippetExactMatch: 24,
+  titleTermWeight: 10,
+  snippetTermWeight: 6,
+  fullSnippetTermWeight: 4,
+  sourceNameTermWeight: 1,
+  titleIntentCoverageWeight: 6,
+  titleIntentCoverageBonus: 8,
+  officialBonus: 10,
+  trustScoreWeight: 10,
+  freshBonus: 3,
+  recentBonus: 1,
+  trigramWeight: 18,
+  vectorWeight: 26,
+  minimumScore: 12,
+};
 
 let postgresPool = null;
 let PostgresPoolCtor = null;
@@ -183,24 +201,56 @@ async function closePostgresPool() {
   await pool.end();
 }
 
-async function withPostgresClient(task) {
+function isRetryablePostgresConnectionError(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /connection terminated unexpectedly|connection terminated|server closed the connection unexpectedly|econnreset/i.test(
+    message,
+  );
+}
+
+async function withPostgresClient(task, attempt = 1) {
   const pool = getPostgresPool();
 
   if (!pool) {
     throw new Error("DATABASE_URL is not configured.");
   }
 
-  const client = await pool.connect();
+  let client = null;
+  let released = false;
 
   try {
+    client = await pool.connect();
     await client.query(`set search_path to ${quoteIdentifier(getSearchSchema())}, public`);
     return await task(client);
+  } catch (error) {
+    if (client && !released) {
+      try {
+        client.release(true);
+        released = true;
+      } catch {
+        // Ignore release failures for broken connections and rebuild the pool below.
+      }
+    }
+
+    if (attempt < 2 && isRetryablePostgresConnectionError(error)) {
+      try {
+        await closePostgresPool();
+      } catch {
+        // Ignore pool shutdown errors; the retry will rebuild it.
+      }
+      return withPostgresClient(task, attempt + 1);
+    }
+
+    throw error;
   } finally {
-    client.release();
+    if (client && !released) {
+      client.release();
+    }
   }
 }
 
 async function hasVectorColumn(client) {
+  const embeddingConfig = readEmbeddingConfig();
   const result = await client.query(
     `
       select exists (
@@ -208,10 +258,10 @@ async function hasVectorColumn(client) {
         from information_schema.columns
         where table_schema = $1
           and table_name = 'chunks'
-          and column_name = 'embedding'
+          and column_name = $2
       ) as exists
     `,
-    [getSearchSchema()],
+    [getSearchSchema(), embeddingConfig.vectorColumn],
   );
 
   return Boolean(result.rows[0]?.exists);
@@ -233,7 +283,7 @@ async function maybeBuildQueryEmbeddingLiteral(client, query, retrievalMode = no
   }
 
   try {
-    const embedding = await generateEmbedding(query, embeddingConfig);
+    const embedding = await generateEmbedding(formatQueryEmbeddingInput(query, embeddingConfig), embeddingConfig);
 
     return {
       literal: formatVectorLiteral(embedding),
@@ -318,6 +368,43 @@ function countMatches(haystack, terms, weight) {
 function hasSpecificTermMatch(haystack, terms) {
   const normalizedHaystack = normalizeText(haystack);
   return pickSpecificTerms(terms).some((term) => normalizedHaystack.includes(term));
+}
+
+function countSpecificTermHits(haystack, terms) {
+  const normalizedHaystack = normalizeText(haystack);
+
+  return unique(
+    terms
+      .map((term) => normalizeText(term))
+      .filter((term) => isSpecificTerm(term) && normalizedHaystack.includes(term)),
+  ).length;
+}
+
+function getGenericTitlePenalty(title, titleSpecificHits) {
+  const normalizedTitle = normalizeText(title);
+  let penalty = 0;
+
+  if (/^\d{4}$/.test(normalizedTitle)) {
+    penalty += 14;
+  }
+
+  if (normalizedTitle === "招生动态") {
+    penalty += 8;
+  }
+
+  if (titleSpecificHits === 0) {
+    if (normalizedTitle.endsWith("通知") || normalizedTitle.endsWith("公告") || normalizedTitle.endsWith("公示")) {
+      penalty += 6;
+    }
+
+    if (normalizedTitle.includes("动态")) {
+      penalty += 4;
+    }
+  } else if (titleSpecificHits === 1 && normalizedTitle.endsWith("通知")) {
+    penalty += 2;
+  }
+
+  return penalty;
 }
 
 function scoreRecord(record, query, terms) {
@@ -735,39 +822,55 @@ function scorePostgresSource(source, query, terms) {
   const snippet = normalizeText(source.snippet);
   const fullSnippet = normalizeText(source.fullSnippet ?? source.snippet);
   const sourceName = normalizeText(source.sourceName);
+  const lexicalText = `${title} ${snippet} ${fullSnippet}`;
 
-  if (!hasSpecificTermMatch(`${title} ${snippet} ${fullSnippet} ${sourceName}`, terms)) {
+  if (!hasSpecificTermMatch(lexicalText, terms)) {
+    return 0;
+  }
+
+  const titleSpecificHits = countSpecificTermHits(title, scoringTerms);
+  const bodySpecificHits = countSpecificTermHits(`${snippet} ${fullSnippet}`, scoringTerms);
+  const hasExactQueryIntent = title.includes(normalizedQuery) || fullSnippet.includes(normalizedQuery);
+
+  if (!hasExactQueryIntent && titleSpecificHits === 0 && bodySpecificHits < 2) {
     return 0;
   }
 
   let score = 0;
 
   if (title.includes(normalizedQuery)) {
-    score += 32;
+    score += POSTGRES_SCORING.titleExactMatch;
   }
 
   if (fullSnippet.includes(normalizedQuery)) {
-    score += 28;
+    score += POSTGRES_SCORING.fullSnippetExactMatch;
   }
 
-  score += countMatches(title, scoringTerms, 9);
-  score += countMatches(snippet, scoringTerms, 6);
-  score += countMatches(fullSnippet, scoringTerms, 4);
-  score += countMatches(sourceName, scoringTerms, 3);
+  score += countMatches(title, scoringTerms, POSTGRES_SCORING.titleTermWeight);
+  score += countMatches(snippet, scoringTerms, POSTGRES_SCORING.snippetTermWeight);
+  score += countMatches(fullSnippet, scoringTerms, POSTGRES_SCORING.fullSnippetTermWeight);
+  score += countMatches(sourceName, scoringTerms, POSTGRES_SCORING.sourceNameTermWeight);
+  score += titleSpecificHits * POSTGRES_SCORING.titleIntentCoverageWeight;
+
+  if (titleSpecificHits > 0 && bodySpecificHits > 0) {
+    score += POSTGRES_SCORING.titleIntentCoverageBonus;
+  }
+
+  score -= getGenericTitlePenalty(title, titleSpecificHits);
 
   if (source.type === "official") {
-    score += 10;
+    score += POSTGRES_SCORING.officialBonus;
   }
 
-  score += Math.round((source.trustScore ?? 0.72) * 10);
+  score += Math.round((source.trustScore ?? 0.72) * POSTGRES_SCORING.trustScoreWeight);
 
   if (source.freshnessLabel === "fresh") {
-    score += 5;
+    score += POSTGRES_SCORING.freshBonus;
   } else if (source.freshnessLabel === "recent") {
-    score += 3;
+    score += POSTGRES_SCORING.recentBonus;
   }
 
-  return score;
+  return Math.max(0, score);
 }
 
 function buildRerankDocument(source) {
@@ -851,6 +954,8 @@ async function searchPostgres(query, limit, options = {}) {
   const candidateLimit = clamp(limit * 8, limit, DEFAULT_CANDIDATE_LIMIT);
   const retrievalMode = normalizeRetrievalMode(options.retrievalMode ?? process.env.SEARCH_RETRIEVAL_MODE);
   const rerankMode = normalizeRerankMode(options.rerankMode ?? process.env.SEARCH_RERANK_MODE);
+  const embeddingConfig = readEmbeddingConfig();
+  const vectorColumnIdentifier = quoteIdentifier(embeddingConfig.vectorColumn);
 
   const rows = await withPostgresClient(async (client) => {
     const vectorQuery = await maybeBuildQueryEmbeddingLiteral(client, trimmedQuery, retrievalMode);
@@ -871,9 +976,9 @@ async function searchPostgres(query, limit, options = {}) {
             from chunks c
             join latest_versions lv on lv.version_id = c.document_version_id
             join documents d on d.id = lv.document_id
-            where c.embedding is not null
+            where c.${vectorColumnIdentifier} is not null
               and d.status = 'active'
-            order by c.embedding <=> $4::vector
+            order by c.${vectorColumnIdentifier} <=> $4::vector
             limit $2
           )
           select
@@ -900,8 +1005,8 @@ async function searchPostgres(query, limit, options = {}) {
               similarity(c.full_snippet, $3)
             )::float as trigram_score,
             case
-              when c.embedding is null then 0
-              else greatest(0, 1 - (c.embedding <=> $4::vector))
+              when c.${vectorColumnIdentifier} is null then 0
+              else greatest(0, 1 - (c.${vectorColumnIdentifier} <=> $4::vector))
             end::float as vector_score
           from chunks c
           join latest_versions lv on lv.version_id = c.document_version_id
@@ -1003,11 +1108,11 @@ async function searchPostgres(query, limit, options = {}) {
         source,
         score:
           scorePostgresSource(source, trimmedQuery, terms) +
-          Math.round(Number(row.trigram_score ?? 0) * 20) +
-          Math.round(Number(row.vector_score ?? 0) * 24),
+          Math.round(Number(row.trigram_score ?? 0) * POSTGRES_SCORING.trigramWeight) +
+          Math.round(Number(row.vector_score ?? 0) * POSTGRES_SCORING.vectorWeight),
       };
     })
-    .filter((item) => item.score >= 12)
+    .filter((item) => item.score >= POSTGRES_SCORING.minimumScore)
     .sort((left, right) => right.score - left.score);
 
   if (scoredRows.length === 0) {
@@ -1340,13 +1445,16 @@ if (require.main === module) {
 }
 
 module.exports = {
+  countSpecificTermHits,
   buildTerms,
   closePostgresPool,
   createServer,
+  getGenericTitlePenalty,
   normalizeRetrievalMode,
   normalizeRerankMode,
   search,
   searchPostgres,
   searchSeed,
+  scorePostgresSource,
   startServer,
 };

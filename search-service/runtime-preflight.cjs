@@ -14,6 +14,22 @@ function readOptionalFeatureState(configured) {
   };
 }
 
+function shouldRequireDatabase(preflight) {
+  if (preflight.provider === "postgres") {
+    return true;
+  }
+
+  if (preflight.provider === "auto") {
+    return preflight.hasDatabaseUrl;
+  }
+
+  return false;
+}
+
+function shouldRequireTelemetry(preflight) {
+  return shouldRequireDatabase(preflight);
+}
+
 function readSearchServiceRuntimePreflight(env = process.env) {
   const provider = normalizeProvider(env.SEARCH_SERVICE_PROVIDER);
   const hasDatabaseUrl = isConfigured(env.DATABASE_URL);
@@ -44,15 +60,18 @@ function readSearchServiceRuntimePreflight(env = process.env) {
 }
 
 function summarizeHealthStatus(preflight, checks) {
-  if (preflight.provider === "postgres" && !checks.databaseReachable) {
+  const databaseRequired = shouldRequireDatabase(preflight);
+  const telemetryRequired = shouldRequireTelemetry(preflight);
+
+  if (preflight.provider === "postgres" && databaseRequired && !checks.databaseReachable) {
     return "error";
   }
 
-  if (preflight.provider === "auto" && preflight.hasDatabaseUrl && !checks.databaseReachable) {
+  if (preflight.provider === "auto" && databaseRequired && !checks.databaseReachable) {
     return "degraded";
   }
 
-  if (preflight.provider !== "seed" && preflight.hasDatabaseUrl && !checks.telemetryWritable) {
+  if (telemetryRequired && !checks.telemetryWritable) {
     return "degraded";
   }
 
@@ -77,6 +96,8 @@ function buildHealthSnapshot({
     status: summarizeHealthStatus(preflight, checks),
     provider: preflight.provider,
     databaseConfigured: preflight.hasDatabaseUrl,
+    databaseRequired: shouldRequireDatabase(preflight),
+    telemetryRequired: shouldRequireTelemetry(preflight),
     corpusSize,
     timestamp,
     mode: preflight.mode,
@@ -88,4 +109,6 @@ module.exports = {
   buildHealthSnapshot,
   readSearchServiceRuntimePreflight,
   summarizeHealthStatus,
+  shouldRequireDatabase,
+  shouldRequireTelemetry,
 };

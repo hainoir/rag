@@ -36,8 +36,28 @@ test("keeps seed mode healthy without a database", () => {
 
   assert.equal(snapshot.status, "ok");
   assert.equal(snapshot.provider, "seed");
+  assert.equal(snapshot.databaseRequired, false);
+  assert.equal(snapshot.telemetryRequired, false);
   assert.equal(snapshot.checks.databaseReachable, false);
   assert.equal(snapshot.checks.optionalFeatures.redis.status, "degraded");
+});
+
+test("keeps seed mode healthy even when DATABASE_URL is configured", () => {
+  const preflight = readSearchServiceRuntimePreflight({
+    SEARCH_SERVICE_PROVIDER: "seed",
+    DATABASE_URL: "postgres://example",
+  });
+  const snapshot = buildHealthSnapshot({
+    preflight,
+    databaseReachable: false,
+    telemetryWritable: false,
+    corpusSize: 4,
+  });
+
+  assert.equal(snapshot.status, "ok");
+  assert.equal(snapshot.databaseConfigured, true);
+  assert.equal(snapshot.databaseRequired, false);
+  assert.equal(snapshot.telemetryRequired, false);
 });
 
 test("marks postgres mode as error when the database is unreachable", () => {
@@ -53,6 +73,8 @@ test("marks postgres mode as error when the database is unreachable", () => {
   });
 
   assert.equal(snapshot.status, "error");
+  assert.equal(snapshot.databaseRequired, true);
+  assert.equal(snapshot.telemetryRequired, true);
 });
 
 test("summarizes persistent metrics rows into JSON buckets", () => {

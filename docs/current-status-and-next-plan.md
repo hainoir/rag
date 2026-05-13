@@ -40,8 +40,8 @@
 - pgvector 检索：已接通 Qwen3 向量方案，本地 `vector:init -> embed:chunks -> smoke:vector` 已跑通，当前重点不再是“是否接通”，而是误召回抑制和排序收益。
 - rerank：代码链路、候选诊断和真实评估入口都已完成，且 `Qwen/Qwen3-Reranker-8B` 已在真实评估中跑通；但当前模型与参数组合会拉低排序质量，因此只保留为显式实验能力，不再建议默认开启。
 - evidence-bound LLM answer：具备接入点和回退路径，但还需要更系统的效果验证和错误观测。
-- feedback / query logs：前端入口已保留不变，但持久化已经统一收口到 `search-service`，并开始记录 `gateway_event` 与 `service_event_logs`；仍缺后台分析面板和告警联动。
-- metrics：现在已经同时包含进程内 runtime metrics 与 Postgres 聚合的 `persistent` 指标，但还没有外部监控平台和告警系统。
+- feedback / query logs：前端入口已保留不变，但持久化已经统一收口到 `search-service`，并开始记录 `gateway_event` 与 `service_event_logs`；第二轮又补了仓库内告警检查脚本、定时 workflow，以及基于 `/health.databaseRequired` / `telemetryRequired` 的模式感知判定，但仍缺后台分析面板和外部通知链路。
+- metrics：现在已经同时包含进程内 runtime metrics 与 Postgres 聚合的 `persistent` 指标，并可以被 `check:phase-three-ops` 自动判定；seed / demo 模式也不会再因为本机残留数据库配置而被误判成必须通过 persistent 指标，但还没有外部监控平台。
 
 ### 2.3 还明显没有完成的部分
 
@@ -117,15 +117,19 @@
 - scheduled ingestion workflow
 - `test:telemetry:postgres`
 - `docs/phase-three-operations.md`
+- `check:phase-three-ops`
+- `.github/workflows/ops-health-check.yml`
+- seed / demo 模式的本地运维检查入口：`SEARCH_SERVICE_DISABLE_ENV_FILE=1`
 
 还差：
 
 - 缓存、超时、限流策略在真实部署环境下的持续回归验证
-- 外部监控 / 告警平台接入
+- 外部监控平台接入
+- 外部通知链路
 - 备份、恢复、回滚的真实演练记录
 - 更完整的来源治理、失败看板和运维后台
 
-结论：第三阶段已经完成第一轮“可靠性与可观测性基线”，但还没有完成完整的线上运维闭环。
+结论：第三阶段已经完成第二轮“仓库内可靠性与告警检查基线”，并补齐了 seed / 持久化两种运行模式的判定边界，但还没有完成完整的线上运维闭环。
 
 ### 第四阶段与第五阶段
 
@@ -143,7 +147,7 @@
    - 记录当前稳定官方源集合与社区关闭策略
 
 2. 继续补第三阶段可靠性
-   - 把新的 `/health`、`/metrics.persistent`、`service_event_logs` 接到外部监控与告警
+   - 把新的 `/health`、`/metrics.persistent`、`service_event_logs` 接到外部监控与通知平台
    - 在真实部署环境里复验缓存、限流、超时和降级策略
    - 做一次可复盘的备份、恢复和回滚演练
 

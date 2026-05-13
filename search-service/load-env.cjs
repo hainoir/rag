@@ -53,7 +53,15 @@ function loadEnvFile(filePath) {
   }
 }
 
-function loadLocalEnv(cwd = process.cwd()) {
+function isTruthyFlag(value) {
+  return ["1", "true", "yes", "on"].includes(String(value ?? "").trim().toLowerCase());
+}
+
+function loadLocalEnv(cwd = process.cwd(), env = process.env) {
+  if (isTruthyFlag(env.SEARCH_SERVICE_DISABLE_ENV_FILE)) {
+    return;
+  }
+
   loadEnvFile(path.join(cwd, ".env.local"));
   loadEnvFile(path.join(cwd, ".env"));
 }

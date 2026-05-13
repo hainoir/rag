@@ -154,6 +154,9 @@ npm run test:telemetry:postgres
   - `ok`：当前模式可服务
   - `degraded`：存在数据库或 telemetry 降级，但不一定阻断 seed / fallback 路径
   - `error`：例如 `SEARCH_SERVICE_PROVIDER=postgres` 且数据库不可达
+- `databaseRequired` / `telemetryRequired`
+  - `true`：当前模式下数据库和持久化观测应视为必需
+  - `false`：例如 `seed` demo 模式，即使进程环境里残留 `DATABASE_URL`，也不应把数据库不可达当成阻断告警
 - `mode`
   - `provider`
   - `answerMode`
@@ -193,6 +196,83 @@ curl http://127.0.0.1:8080/health
 ```bash
 curl http://127.0.0.1:8080/metrics
 ```
+
+### 5.3 自动告警检查脚本
+
+第二轮新增了仓库内的自动化检查入口：
+
+```bash
+npm run check:phase-three-ops
+```
+
+默认读取：
+
+- `SEARCH_SERVICE_URL`
+- 或显式 `SEARCH_SERVICE_HEALTH_URL` / `SEARCH_SERVICE_METRICS_URL`
+
+可调阈值：
+
+```bash
+OPS_ALLOW_DEGRADED=false
+OPS_REQUIRE_PERSISTENT=auto
+OPS_MAX_ERROR_RATE=0.2
+OPS_MAX_AVERAGE_DURATION_MS=3000
+OPS_MAX_UPSTREAM_TIMEOUTS=5
+OPS_MAX_RECENT_INGESTION_FAILURES=0
+OPS_REQUEST_TIMEOUT_MS=5000
+OPS_OUTPUT_PATH=reports/ops-health-check.json
+```
+
+这个脚本会：
+
+- 拉取 `/health`
+- 拉取 `/metrics`
+- 校验 `status`、`databaseRequired`、`telemetryRequired`、`databaseReachable`、`telemetryWritable`
+- 按阈值检查 `persistent.errorRate`、平均耗时、`upstream_timeout` 数量和最近 ingestion 失败数
+- 输出一份 JSON 报告，并在违规时返回非零退出码
+
+`OPS_REQUIRE_PERSISTENT=auto` 现在按 `/health.telemetryRequired` 自动判断，而不是简单按“是否配置了 `DATABASE_URL`”判定。这意味着：
+
+- 真实 Postgres / auto-with-database 部署仍会把持久化观测视为必需
+- seed / demo 模式不会因为本地遗留的 `DATABASE_URL` 配置而被误判成必须通过持久化指标
+
+如果你要在本机验证纯 seed / demo 路径，而 `.env.local` 默认带了数据库配置，可以这样启动：
+
+```powershell
+$env:SEARCH_SERVICE_DISABLE_ENV_FILE='1'
+$env:SEARCH_SERVICE_PROVIDER='seed'
+$env:SEARCH_SERVICE_URL='http://127.0.0.1:8080/api/search'
+node search-service/server.cjs
+```
+
+然后在另一终端执行：
+
+```powershell
+$env:SEARCH_SERVICE_URL='http://127.0.0.1:8080/api/search'
+$env:OPS_REQUIRE_PERSISTENT='never'
+npm run check:phase-three-ops
+```
+
+### 5.4 GitHub Actions 定时检查
+
+仓库现在额外提供 `.github/workflows/ops-health-check.yml`，用于对已部署的 `search-service` 做定时或手动检查。
+
+最小配置：
+
+- `OPS_SEARCH_SERVICE_URL` secret
+
+可选变量：
+
+- `OPS_SEARCH_SERVICE_HEALTH_URL`
+- `OPS_SEARCH_SERVICE_METRICS_URL`
+- `OPS_ALLOW_DEGRADED`
+- `OPS_REQUIRE_PERSISTENT`
+- `OPS_MAX_ERROR_RATE`
+- `OPS_MAX_AVERAGE_DURATION_MS`
+- `OPS_MAX_UPSTREAM_TIMEOUTS`
+- `OPS_MAX_RECENT_INGESTION_FAILURES`
+
+workflow 会把检查结果写到 `reports/ops-health-check.json` 并上传为 artifact。
 
 ## 6. 常用排障 SQL
 
@@ -318,6 +398,6 @@ npm run test:telemetry:postgres
 仍未完成的是：
 
 - 外部监控平台接入
-- 告警规则和通知链路
+- 外部通知链路
 - 备份 / 恢复 / 回滚的真实演练记录
 - 更完整的来源治理与后台看板

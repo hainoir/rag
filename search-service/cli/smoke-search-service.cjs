@@ -65,6 +65,8 @@ async function main() {
 
     assert.equal(health.status, "ok");
     assert.equal(health.provider, "seed");
+    assert.equal(health.databaseRequired, false);
+    assert.equal(health.telemetryRequired, false);
     assert.equal(typeof health.mode?.provider, "string");
     assert.equal(typeof health.checks?.telemetryWritable, "boolean");
 

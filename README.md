@@ -40,6 +40,8 @@
 - 统一的 `/api/search` 搜索入口
 - `/api/feedback` 保持前端入口不变，但已改为由 `search-service` 统一持久化
 - `search-service` 现在额外提供 `/api/query-logs`、增强版 `/health` 和带 `persistent` 聚合的 `/metrics`
+- `/health` 现在会额外标记 `databaseRequired` / `telemetryRequired`，区分 seed demo 与真实持久化模式
+- 仓库现在内置了 `check:phase-three-ops` 告警检查脚本和 `Ops Health Check` 定时 workflow
 
 ## 当前检索链路
 
@@ -106,6 +108,23 @@ npm run dev
 仓库现在内置了一个最小可用的上游搜索服务，启动 `npm run search-service` 后会在 `http://localhost:8080/api/search` 提供 HTTP 搜索接口。默认 `SEARCH_SERVICE_PROVIDER=auto`：配置 `DATABASE_URL` 时优先读取 Postgres 中的 ingestion chunks；没有数据库时使用本地 seed corpus 作为 demo fallback。无论哪种模式，都继续输出同一条 `SearchResponse` 契约。
 
 `.env.local` 至少需要配置一个可访问的 `SEARCH_SERVICE_URL`。如果上游服务没有准备好，前端会进入错误态，而不会伪装成“无答案”。当前 `web` 已不再要求 `DATABASE_URL`；feedback 和 query log 也统一通过 `SEARCH_SERVICE_URL` 指向的 `search-service` sibling endpoint 代理。
+
+如果本机 `.env.local` 默认带了 `DATABASE_URL`，但你只想验证 seed / demo 路径，可以临时跳过本地 env 文件加载：
+
+```powershell
+$env:SEARCH_SERVICE_DISABLE_ENV_FILE='1'
+$env:SEARCH_SERVICE_PROVIDER='seed'
+$env:SEARCH_SERVICE_URL='http://127.0.0.1:8080/api/search'
+node search-service/server.cjs
+```
+
+然后在另一个终端执行：
+
+```powershell
+$env:SEARCH_SERVICE_URL='http://127.0.0.1:8080/api/search'
+$env:OPS_REQUIRE_PERSISTENT='never'
+npm run check:phase-three-ops
+```
 
 然后访问 [http://localhost:3000](http://localhost:3000)。
 
@@ -215,6 +234,7 @@ npm run smoke:postgres
 npm run test:ingestion:unit
 npm run test:ingestion:postgres
 npm run test:telemetry:postgres
+npm run check:phase-three-ops
 ```
 
 这期已经具备 `documents / document_versions / chunks / ingestion_runs -> search-service -> SearchResponse` 的最小真实数据回路代码。是否已经在当前环境闭合，必须以 `npm run verify:real-data` 或 `npm run smoke:postgres` 的输出为准。重复执行 `npm run ingest:official` 或 `npm run ingest:community` 时，未变化文章只刷新校验时间，不会重复插入相同文档和版本。
@@ -226,6 +246,7 @@ npm run test:telemetry:postgres
 
 本地 Postgres 启动和真实检索闭环见 [docs/local-postgres.md](./docs/local-postgres.md)。演示 query 与部署边界见 [docs/demo-and-deploy.md](./docs/demo-and-deploy.md)。
 第三阶段运维、健康检查、备份恢复和回滚说明见 [docs/phase-three-operations.md](./docs/phase-three-operations.md)。
+如果已经有可访问的线上 `search-service`，可以直接用 `npm run check:phase-three-ops` 对 `/health`、`/metrics` 和 `persistent` 阈值做自动检查。
 
 ## 后续方向
 

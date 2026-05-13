@@ -1,0 +1,43 @@
+name: Ops Health Check
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 0 * * *"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      SEARCH_SERVICE_URL: ${{ secrets.OPS_SEARCH_SERVICE_URL }}
+      SEARCH_SERVICE_HEALTH_URL: ${{ vars.OPS_SEARCH_SERVICE_HEALTH_URL || '' }}
+      SEARCH_SERVICE_METRICS_URL: ${{ vars.OPS_SEARCH_SERVICE_METRICS_URL || '' }}
+      OPS_REQUEST_TIMEOUT_MS: ${{ vars.OPS_REQUEST_TIMEOUT_MS || '5000' }}
+      OPS_ALLOW_DEGRADED: ${{ vars.OPS_ALLOW_DEGRADED || 'false' }}
+      OPS_REQUIRE_PERSISTENT: ${{ vars.OPS_REQUIRE_PERSISTENT || 'auto' }}
+      OPS_MAX_ERROR_RATE: ${{ vars.OPS_MAX_ERROR_RATE || '0.2' }}
+      OPS_MAX_AVERAGE_DURATION_MS: ${{ vars.OPS_MAX_AVERAGE_DURATION_MS || '3000' }}
+      OPS_MAX_UPSTREAM_TIMEOUTS: ${{ vars.OPS_MAX_UPSTREAM_TIMEOUTS || '5' }}
+      OPS_MAX_RECENT_INGESTION_FAILURES: ${{ vars.OPS_MAX_RECENT_INGESTION_FAILURES || '0' }}
+      OPS_OUTPUT_PATH: reports/ops-health-check.json
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Skip when endpoints are not configured
+        if: ${{ env.SEARCH_SERVICE_URL == '' && (env.SEARCH_SERVICE_HEALTH_URL == '' || env.SEARCH_SERVICE_METRICS_URL == '') }}
+        run: echo "Ops health check skipped because no search-service health/metrics endpoint is configured."
+
+      - name: Run phase-three ops check
+        if: ${{ env.SEARCH_SERVICE_URL != '' || (env.SEARCH_SERVICE_HEALTH_URL != '' && env.SEARCH_SERVICE_METRICS_URL != '') }}
+        run: node --experimental-strip-types scripts/check-phase-three-ops.mjs
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() && (env.SEARCH_SERVICE_URL != '' || (env.SEARCH_SERVICE_HEALTH_URL != '' && env.SEARCH_SERVICE_METRICS_URL != '')) }}
+        with:
+          name: ops-health-check-report
+          path: reports/ops-health-check.json

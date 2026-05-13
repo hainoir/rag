@@ -30,6 +30,8 @@ async function main() {
   try {
     const health = await fetch(`${baseUrl}/health`).then((response) => response.json());
     assert.equal(typeof health.checks?.telemetryWritable, "boolean");
+    assert.equal(health.databaseRequired, true);
+    assert.equal(health.telemetryRequired, true);
 
     const queryLogResponse = await fetch(`${baseUrl}/api/query-logs`, {
       method: "POST",

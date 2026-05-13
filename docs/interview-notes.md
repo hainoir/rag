@@ -216,7 +216,7 @@
 
 ### 难点 3：原型和真实产品之间要留迁移边界
 
-当前仓库已经有最小官方来源摄取、Postgres 入库和 lexical chunk 检索，但我不会把它说成完整生产级 RAG 平台。核心设计是先守住 `/api/search` 边界、来源时间字段和 `SearchResponse` 契约，让前端只消费统一结果结构；后续再把向量召回、rerank、评估和监控补到搜索服务层。
+当前仓库已经有最小官方来源摄取、Postgres 入库、真实验证过的 `lexical / hybrid / hybrid_rerank` 检索链路，但我不会把它说成完整生产级 RAG 平台。核心设计是先守住 `/api/search` 边界、来源时间字段和 `SearchResponse` 契约，让前端只消费统一结果结构；当前默认策略已经收口为 `hybrid`，后续重点转向监控、调度和后台治理。
 
 ## 一句话总结
 

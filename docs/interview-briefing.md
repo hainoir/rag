@@ -11,7 +11,7 @@
 
 这个项目是一个校园信息检索与可解释问答助手，我想解决的不是“模型能不能生成一段话”，而是“用户拿到答案后能不能快速核验”。  
 所以我把结果页做成了“回答摘要 + 来源卡片 + 原始命中片段”的结构，前端统一通过 `/api/search` 获取 `SearchResponse`，后面再由 `searchServiceProvider` 代理到独立搜索服务。  
-它已经是一个可以演示的 RAG MVP，但我不会把它包装成生产级平台，因为真实数据验收、评估、监控和稳定调度还没有完全闭环。
+它已经是一个可以演示的 RAG MVP，而且真实数据验收和检索评估已经闭环；但我不会把它包装成生产级平台，因为监控、稳定调度、后台治理和长期运维能力还没有完全闭环。
 
 ## 1 分钟版本
 
@@ -25,7 +25,7 @@
 - 官方来源和社区来源分层，避免把经验贴包装成确定事实
 - 结果状态明确区分 `ok / partial / empty / error`，信息不足时不会强答
 
-如果面试官问项目边界，我会明确说：它是一个可演示的 explainable RAG MVP，已经有官方来源摄取、Postgres 检索、可选 pgvector、可选 rerank 和可选 LLM answer 的代码骨架，但还不是完整生产级 RAG 系统。
+如果面试官问项目边界，我会明确说：它是一个可演示的 explainable RAG MVP，已经有官方来源摄取、Postgres 检索、已验证的 hybrid 检索、实验性 rerank 和可选 LLM answer，但还不是完整生产级 RAG 系统。
 
 ## 3 分钟版本
 
@@ -65,7 +65,7 @@
 - 可信度表达：官方 `official` 和社区 `community` 明确分层
 - 状态设计：不是简单的“有结果 / 没结果”，而是 `ok / partial / empty / error`
 - 工程边界：前端统一走 `/api/search`，由服务端代理上游搜索服务
-- 可演进性：上游已经有 Postgres lexical 检索、可选 pgvector、可选 rerank、可选 LLM answer，但前端契约保持稳定
+- 可演进性：上游已经有真实验证过的 lexical / hybrid 检索、实验性 rerank 和可选 LLM answer，但前端契约保持稳定
 
 ### 5. 我会怎么诚实总结它
 
@@ -212,9 +212,9 @@ LLM 在这里不是唯一核心，而是可选的回答组织层。
 
 ### 11. 当前真实数据能力做到哪一步
 
-目前仓库里已经有官方来源摄取 CLI、Postgres schema、Postgres lexical 检索、可选 pgvector、可选 rerank 和验证脚本。  
-同时 `source-registry.ts` 里已经配置了 9 个官方源和 2 个社区源。  
-但我会明确说：真实数据闭环是否跑通，仍要以实际环境中的 `verify:real-data`、`smoke:postgres`、`smoke:vector` 为准。
+目前仓库里已经有官方来源摄取 CLI、Postgres schema、真实 `lexical / hybrid / hybrid_rerank` 三档评估报告，以及默认推荐 `hybrid` 的结论。  
+同时 `source-registry.ts` 里已经配置了官方和社区来源入口。  
+但我会明确说：这代表检索闭环已经跑通，不代表监控、调度和后台治理已经达到生产级。
 
 ### 12. 这个项目里最难的点是什么
 
@@ -249,10 +249,10 @@ LLM 在这里不是唯一核心，而是可选的回答组织层。
 
 我会按这个顺序继续：
 
-1. 先稳定真实数据闭环，保证官方来源可重复同步并通过 Postgres 验收
-2. 再复验 pgvector 和 rerank，对比 lexical 与 hybrid 的命中质量
-3. 然后补检索评估集、指标和告警
-4. 最后再补更完整的调度、缓存、限流和社区治理策略
+1. 先进入第三阶段可靠性建设，补缓存、超时、限流和观测
+2. 再补 query logs、feedback 和更完整的后台治理
+3. 如果后续有必要，再单独优化实验性 rerank，而不是把它作为默认策略
+4. 最后再补更完整的调度、备份恢复和发布物料
 
 这个顺序的核心思路是：先把真实链路做扎实，再谈更大的能力扩展。
 

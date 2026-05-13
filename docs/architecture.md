@@ -6,7 +6,7 @@
 
 它现在的边界比早期 mock 版本清晰得多：前端通过 `src/app/api/search/route.ts` 请求结果，Route Handler 内部再调用 `searchServiceProvider` 访问外部搜索服务。这个仓库负责统一结果契约、状态编排和可信度表达；`search-service/` 负责最小可用的官方来源摄取、Postgres chunk 检索、seed fallback，以及可选的 evidence-bound LLM 回答生成。
 
-从项目形态看，它已经具备完整主流程，适合作品集展示；从工程成熟度看，它仍然不是完整生产级 RAG 平台，因为当前只是 lexical / pg_trgm 加可选 pgvector hybrid retrieval 与可选 rerank，LLM 只是在检索命中后生成回答，还没有系统化评估、告警和稳定调度体系。
+从项目形态看，它已经具备完整主流程，适合作品集展示；从工程成熟度看，它仍然不是完整生产级 RAG 平台，因为当前虽然已经完成真实数据闭环、真实检索评估和 `lexical / hybrid / hybrid_rerank` 三档验证，但线上告警、稳定调度、持久化观测和后台治理仍未闭环。
 
 ## 项目定位与目标用户
 
@@ -72,7 +72,9 @@
 - `/api/search` 只是前端唯一入口，不代表仓库里已经包含完整搜索服务
 - `searchServiceProvider` 负责请求上游搜索服务，不直接读取数据库
 - `search-service/` 可以读取 Postgres chunks，默认生成 extractive answer，也可以在 `SEARCH_ANSWER_MODE=llm` 时调用 LLM 生成回答
-- pgvector hybrid retrieval 和 rerank 已有可选接入口，但评估体系、告警、缓存、限流和生产调度仍属于后续搜索服务能力
+- pgvector hybrid retrieval 已完成真实验证，当前默认推荐策略是 `hybrid`
+- rerank 链路已接通且完成真实验证，但当前配置下效果回退，因此只保留为显式实验能力，不作为默认路径
+- 告警、缓存、限流和生产调度仍属于后续搜索服务能力
 
 ## 架构分层
 
@@ -162,9 +164,9 @@
 
 `search-service/answer-generator.cjs` 提供 OpenAI-compatible Chat Completions 接入点。它只在检索命中后调用模型，提示词要求模型返回 `summary / usedSourceIds / confidence`，服务端再把 `usedSourceIds` 映射回 `SearchAnswer.evidence`。如果没有配置 key/model，或模型调用失败，系统会回退到 extractive answer。
 
-### 可选 rerank 和 metrics
+### Hybrid 默认与实验性 rerank
 
-`search-service/rerank-client.cjs` 提供兼容 `/rerank` 的 cross-encoder 接入点。它只在配置 `RERANK_API_KEY / RERANK_BASE_URL / RERANK_MODEL` 后重排 Postgres 候选；失败时保留原排序。`/metrics` 提供进程内 JSON 计数器，记录 provider、status、fallback、error code 和平均耗时。
+`search-service/rerank-client.cjs` 提供兼容 `/rerank` 的 cross-encoder 接入点。当前普通请求默认不启用 rerank，只有显式 `SEARCH_RERANK_MODE=on|auto` 时才会参与重排；失败时仍保留原排序。当前真实评估已经确认 `hybrid` 是默认推荐策略，而 `hybrid_rerank` 仅保留为实验入口。`/metrics` 提供进程内 JSON 计数器，记录 provider、status、fallback、error code 和平均耗时。
 
 ### 无答案兜底
 
@@ -174,11 +176,11 @@
 
 需要明确承认的边界：
 
-- 这个仓库已经包含最小官方 / 社区来源摄取、Postgres-backed lexical retrieval、可选 pgvector 和可选 rerank 接入，但还不是完整生产检索平台
+- 这个仓库已经包含最小官方 / 社区来源摄取、Postgres-backed retrieval、已验证的 hybrid 检索和实验性 rerank 接入，但还不是完整生产检索平台
 - LLM 回答是可选生成层，不替代检索和来源校验；没有配置模型时仍是 extractive answer
 - `source-registry.ts` 已绑定天津商业大学官方 / 社区来源，社区来源默认只摄取一个低权重入口，不能当作权威事实
 - 当前已有上游错误码、seed / postgres 降级边界和轻量 metrics，但还没有完整的监控、告警、缓存和限流体系
-- 已有 unit / component / contract / e2e / Postgres integration 入口，但还缺检索评估集和生产运行指标
+- 已有 unit / component / contract / e2e / Postgres integration 入口，也已有固定检索评估集和真实对比报告，但仍缺生产运行指标与长期监控体系
 
 ## Validation
 

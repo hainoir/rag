@@ -4,8 +4,8 @@
 >
 > 阅读口径：
 >
-> - 当前状态优先参考 `docs/full-rag-launch-plan.md`、`docs/phase-one-infra.md`、`docs/production-data-runbook.md`
-> - `docs/project-completion-report.md`、`docs/architecture.md`、`docs/data-pipeline.md` 更适合作为阶段快照和背景说明
+> - 当前状态优先参考 `docs/current-status-and-next-plan.md`、`docs/search-quality-evaluation.md`、`docs/local-postgres.md`
+> - `docs/full-rag-launch-plan.md`、`docs/architecture.md`、`docs/data-pipeline.md` 更适合作为阶段规划和背景说明
 > - 对外描述仍保持：这是一个可演示的校园信息检索 / explainable RAG MVP，不是生产级 RAG 平台
 
 ## 1. 一句话结论
@@ -161,11 +161,10 @@
 如果之后要快速判断仓库状态，建议按这个顺序读：
 
 1. `docs/current-status-and-next-plan.md`
-2. `docs/full-rag-launch-plan.md`
-3. `docs/phase-one-infra.md`
-4. `docs/production-data-runbook.md`
-5. `docs/project-completion-report.md`
-6. `docs/architecture.md`
-7. `docs/data-pipeline.md`
+2. `docs/search-quality-evaluation.md`
+3. `docs/local-postgres.md`
+4. `docs/full-rag-launch-plan.md`
+5. `docs/architecture.md`
+6. `docs/data-pipeline.md`
 
 这样可以避免把较早的阶段快照误读成当前最终状态。

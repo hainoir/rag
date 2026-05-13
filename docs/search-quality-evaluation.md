@@ -24,7 +24,7 @@
 这批不覆盖：
 
 - LLM answer 效果调优
-- feedback 后台分析
+- feedback 后台分析的真实运营验收
 - metrics 持久化
 - 生产监控与告警
 

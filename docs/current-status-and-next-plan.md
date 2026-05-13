@@ -40,14 +40,14 @@
 - pgvector 检索：已接通 Qwen3 向量方案，本地 `vector:init -> embed:chunks -> smoke:vector` 已跑通，当前重点不再是“是否接通”，而是误召回抑制和排序收益。
 - rerank：代码链路、候选诊断和真实评估入口都已完成，且 `Qwen/Qwen3-Reranker-8B` 已在真实评估中跑通；但当前模型与参数组合会拉低排序质量，因此只保留为显式实验能力，不再建议默认开启。
 - evidence-bound LLM answer：具备接入点和回退路径，但还需要更系统的效果验证和错误观测。
-- feedback / query logs：前端入口已保留不变，但持久化已经统一收口到 `search-service`，并开始记录 `gateway_event` 与 `service_event_logs`；第二轮又补了仓库内告警检查脚本、定时 workflow、webhook 通知入口，以及基于 `/health.databaseRequired` / `telemetryRequired` 的模式感知判定，但仍缺后台分析面板和真实外部通知渠道验收。
+- feedback / query logs：前端入口已保留不变，但持久化已经统一收口到 `search-service`，并开始记录 `gateway_event` 与 `service_event_logs`；第二轮又补了仓库内告警检查脚本、定时 workflow、webhook 通知入口，以及基于 `/health.databaseRequired` / `telemetryRequired` 的模式感知判定；第四阶段已补入后台分析入口，真实外部通知渠道验收仍待完成。
 - metrics：现在已经同时包含进程内 runtime metrics 与 Postgres 聚合的 `persistent` 指标，并可以被 `check:phase-three-ops` 自动判定；seed / demo 模式也不会再因为本机残留数据库配置而被误判成必须通过 persistent 指标，但还没有外部监控平台。
 
 ### 2.3 还明显没有完成的部分
 
 - 生产级缓存、限流、告警、持久化观测与故障恢复
-- 管理后台、来源状态看板、失败重试看板、人工审核工作流
-- 社区来源长期治理策略和运营审计
+- 第四阶段后台治理代码侧 MVP 已接入，但真实管理员验收、失败重试流程和运营审计仍未完成
+- 社区来源长期治理策略已经有代码侧审核入口，真实运营规则和审计闭环仍需继续验证
 - 数据库备份、迁移、恢复和回滚流程的真实演练记录
 - 最终发布物料：上线 README、验收报告、release checklist、稳定演示脚本
 
@@ -129,48 +129,53 @@
 - 外部监控平台接入
 - 真实外部通知渠道的密钥配置和发送验收记录
 - 备份、恢复、回滚的真实演练记录
-- 更完整的来源治理、失败看板和运维后台
+- 第四阶段代码侧后台治理 MVP 已接入，但真实来源治理、失败看板和后台操作验收仍待补跑
 
-结论：第三阶段可以按“代码侧完成”进入第四阶段开发；真实外部监控、真实 webhook 发送、真实备份恢复回滚演练保留为上线前验收项，不能对外宣称 production-grade 运维闭环已完成。
+结论：第三阶段仍按“代码侧完成”处理，第四阶段管理后台与运营闭环也已完成代码侧 MVP；真实外部监控、真实 webhook 发送、真实备份恢复回滚演练和真实管理员验收保留为上线前验收项，不能对外宣称 production-grade 运维闭环已完成。
 
 ### 第四阶段与第五阶段
 
-当前状态：第四阶段管理后台与运营闭环已经进入代码侧落地；第五阶段仍未开始闭环。
+当前状态：第四阶段管理后台与运营闭环代码侧 MVP 已完成；真实线上管理员验收、真实 Redis 手动同步和 Postgres admin integration 复验当前暂搁置，转为上线前 gate。第五阶段可以先启动代码侧开发。
 
 - 第四阶段已新增单密钥后台登录、`/admin` 工作台、`search-service` 管理 API、来源治理覆盖层、query / feedback 追踪字段和社区审核记录。
 - 代码侧已经可以覆盖来源状态看板、单来源同步触发、feedback 处理列表、社区审核与人工复核状态流转。
-- 后续仍需要在真实部署环境配置 `ADMIN_DASHBOARD_TOKEN`、`SEARCH_SERVICE_API_KEY`、`DATABASE_URL` 和 `REDIS_URL`，再跑一次后台验收。
-- 第五阶段的上线包装、验收报告、release checklist 也还没有形成最终版。
+- 暂搁置不等于取消；后续仍需要在真实部署环境配置 `ADMIN_DASHBOARD_TOKEN`、`SEARCH_SERVICE_API_KEY`、`DATABASE_URL` 和 `REDIS_URL`，再跑一次后台验收。
+- 第五阶段可以先围绕上线包装、验收报告、release checklist 和稳定演示脚本做代码侧开发。
 
 ## 4. 下一步开发顺序
 
-建议严格按下面顺序推进，不要跳步：
+当前建议按下面顺序推进：先做第五阶段代码侧发布准备，同时把第四阶段真实验收保留为上线前必须回收的 gate。
 
 1. 固化第一阶段验收记录
    - 在运行手册和项目报告中记录 2026-05-11 的本地与 GitHub Actions 验收结果
    - 记录当前稳定官方源集合与社区关闭策略
 
-2. 完成第四阶段代码侧复验
+2. 启动第五阶段代码侧开发
+   - 上线 README、验收报告模板、release checklist、稳定演示脚本
+   - 在第五阶段文档里明确区分 `已验证`、`代码侧完成`、`暂搁置待验收` 和 `不在本阶段`
+   - 不把第四阶段真实管理员验收、真实 Redis 手动同步或 Postgres admin integration 写成已完成
+
+3. 上线前回收第四阶段真实验收
    - `npm run test:admin`
    - `npm run build`
    - 有 Postgres 时补跑 `npm run test:admin:postgres`
    - 有 Redis 时从后台触发单来源同步，再运行 `npm run ingest:worker -- --once`
 
-3. 上线前补跑第三阶段真实验收
+4. 上线前补跑第三阶段真实验收
    - 把 `/health`、`/metrics.persistent`、`service_event_logs` 接到外部监控与通知平台
    - 在真实部署环境里复验缓存、限流、超时和降级策略
    - 用 `backup:drill` 做一次可复盘的备份、恢复和回滚演练
 
-4. 最后再做发布物料
-   - 上线 README、验收报告、release checklist
+5. 最后做发布定稿
+   - 把第五阶段产物、第四阶段真实验收记录和第三阶段上线前运维验收汇总成最终 release checklist
 
 ## 5. 当前最重要的里程碑
 
-下一个真正应该完成的里程碑不是“再补 PostgreSQL / Redis 接入功能”，而是：
+下一个真正应该完成的里程碑不是“马上回收第四阶段全部真实验收”，而是：
 
-> 以当前已验证的真实数据链路和 Qwen3 评估结果为基础，把第四阶段后台治理 MVP 在本地和准线上环境验收完成。
+> 以当前已验证的真实数据链路、Qwen3 评估结果和第四阶段后台治理代码侧 MVP 为基础，先启动第五阶段发布准备与验收包装；第四阶段真实验收暂搁置并保留为上线前 gate。
 
-阶段一和第二阶段已经把项目状态从“代码侧已准备”推进到了“真实数据链路已验证 + 默认检索策略已收口”；第三阶段已经完成代码侧可靠性基线，真实运维验收保留到上线前执行。第四阶段现在已有代码侧后台治理 MVP，当前重点应切换为后台验收、真实 Redis 手动同步和 Postgres admin integration 复验。
+阶段一和第二阶段已经把项目状态从“代码侧已准备”推进到了“真实数据链路已验证 + 默认检索策略已收口”；第三阶段已经完成代码侧可靠性基线，真实运维验收保留到上线前执行。第四阶段现在已有代码侧后台治理 MVP，真实 Redis 手动同步、Postgres admin integration 和管理员准线上验收先暂搁置；当前重点切换为第五阶段代码侧发布准备。
 
 ## 6. 当前建议的文档阅读顺序
 

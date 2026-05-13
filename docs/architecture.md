@@ -6,7 +6,7 @@
 
 它现在的边界比早期 mock 版本清晰得多：前端通过 `src/app/api/search/route.ts` 请求结果，Route Handler 内部再调用 `searchServiceProvider` 访问外部搜索服务。这个仓库负责统一结果契约、状态编排和可信度表达；`search-service/` 负责最小可用的官方来源摄取、Postgres chunk 检索、seed fallback，以及可选的 evidence-bound LLM 回答生成。
 
-从项目形态看，它已经具备完整主流程，适合作品集展示；从工程成熟度看，它仍然不是完整生产级 RAG 平台，因为当前虽然已经完成真实数据闭环、真实检索评估和 `lexical / hybrid / hybrid_rerank` 三档验证，但线上告警、稳定调度、持久化观测和后台治理仍未闭环。
+从项目形态看，它已经具备完整主流程，适合作品集展示；从工程成熟度看，它仍然不是完整生产级 RAG 平台，因为当前虽然已经完成真实数据闭环、真实检索评估、`lexical / hybrid / hybrid_rerank` 三档验证和第四阶段后台治理代码侧 MVP，但线上告警、稳定调度、真实管理员验收和长期运维闭环仍未完成。
 
 ## 项目定位与目标用户
 

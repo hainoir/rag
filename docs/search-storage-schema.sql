@@ -110,6 +110,22 @@ create table if not exists search_query_logs (
   error_code text,
   duration_ms integer,
   client_hash text,
+  gateway_event text not null default 'search_response' check (gateway_event in ('search_response', 'rate_limited', 'gateway_error')),
+  created_at timestamptz not null default now()
+);
+
+alter table if exists search_query_logs
+  add column if not exists gateway_event text not null default 'search_response';
+
+create table if not exists service_event_logs (
+  id uuid primary key default gen_random_uuid(),
+  service text not null,
+  level text not null check (level in ('info', 'error')),
+  event text not null,
+  request_id text,
+  error_code text,
+  message text,
+  payload jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now()
 );
 
@@ -127,3 +143,6 @@ create index if not exists search_feedback_created_at_idx on search_feedback (cr
 create index if not exists search_query_logs_request_id_idx on search_query_logs (request_id);
 create index if not exists search_query_logs_created_at_idx on search_query_logs (created_at desc);
 create index if not exists search_query_logs_status_idx on search_query_logs (status, created_at desc);
+create index if not exists search_query_logs_gateway_event_idx on search_query_logs (gateway_event, created_at desc);
+create index if not exists service_event_logs_event_idx on service_event_logs (event, created_at desc);
+create index if not exists service_event_logs_request_id_idx on service_event_logs (request_id);

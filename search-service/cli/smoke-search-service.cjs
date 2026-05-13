@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 
 const { loadLocalEnv } = require("../load-env.cjs");
 const { closePostgresPool, createServer, searchSeed } = require("../server.cjs");
+const { closeTelemetryPool } = require("../telemetry-store.cjs");
 
 loadLocalEnv();
 
@@ -41,6 +42,7 @@ async function requestJson(url, init) {
 
 async function main() {
   const previousProvider = process.env.SEARCH_SERVICE_PROVIDER;
+  const previousApiKey = process.env.SEARCH_SERVICE_API_KEY;
   const hitQuery = process.env.SEARCH_SMOKE_HIT_QUERY ?? "图书馆借书";
   const emptyQuery = process.env.SEARCH_SMOKE_EMPTY_QUERY ?? "明天校园集市几点开始";
   const limit = parsePositiveInteger(process.env.SEARCH_SMOKE_LIMIT, 3);
@@ -48,6 +50,7 @@ async function main() {
   const server = createServer();
 
   process.env.SEARCH_SERVICE_PROVIDER = "seed";
+  delete process.env.SEARCH_SERVICE_API_KEY;
 
   try {
     const directResponse = searchSeed(hitQuery, limit);
@@ -62,6 +65,8 @@ async function main() {
 
     assert.equal(health.status, "ok");
     assert.equal(health.provider, "seed");
+    assert.equal(typeof health.mode?.provider, "string");
+    assert.equal(typeof health.checks?.telemetryWritable, "boolean");
 
     const hitResponse = await requestJson(`${baseUrl}/api/search`, {
       method: "POST",
@@ -91,6 +96,7 @@ async function main() {
     assert.equal(metrics.byResolvedProvider.seed >= 2, true);
     assert.equal(metrics.byStatus.ok >= 1, true);
     assert.equal(metrics.byStatus.empty >= 1, true);
+    assert.equal(typeof metrics.persistent?.enabled, "boolean");
 
     console.log(
       [
@@ -107,12 +113,18 @@ async function main() {
     } else {
       process.env.SEARCH_SERVICE_PROVIDER = previousProvider;
     }
+    if (previousApiKey === undefined) {
+      delete process.env.SEARCH_SERVICE_API_KEY;
+    } else {
+      process.env.SEARCH_SERVICE_API_KEY = previousApiKey;
+    }
 
     if (server.listening) {
       await close(server);
     }
 
     await closePostgresPool();
+    await closeTelemetryPool();
   }
 }
 

@@ -178,7 +178,7 @@ async function generateEmbeddings(inputs, config = readEmbeddingConfig()) {
             error instanceof Error ? error.message : String(error)
           }${causeMessage}`,
           {
-            cause: error instanceof Error ? error : undefined,
+            cause: error,
           },
         );
       }

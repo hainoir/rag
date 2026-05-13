@@ -145,6 +145,7 @@ npm run dev
 - `npm run smoke:postgres` 输出 `Postgres smoke passed`。
 - `npm run test:ingestion:postgres` 输出 `PASS postgres integration`。
 - `SEARCH_SERVICE_PROVIDER=postgres` 时，预期无命中 query 不应因为 `校园`、`通知` 这类泛词返回演示答案。
+
 ## Qwen3 Vector Profile
 
 如果要切到更适合中文检索的 Qwen3，同时保留现有 `embedding` 列与 1536 维旧数据不动，建议显式使用独立向量列：

@@ -2,6 +2,11 @@ import "server-only";
 
 import type { SearchErrorCode, SearchProvider, SearchProviderOptions } from "@/lib/search/types";
 import {
+  buildSearchServiceRequestHeaders,
+  getConfiguredSearchServiceUrl,
+  parsePositiveInteger,
+} from "@/lib/search/search-service-config";
+import {
   buildEmptyResponse,
   buildErrorResponse,
   normalizeUpstreamResponse,
@@ -66,37 +71,8 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
-function parsePositiveInteger(value: string | undefined, fallback: number) {
-  const parsed = Number(value);
-
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    return fallback;
-  }
-
-  return Math.floor(parsed);
-}
-
-function buildRequestHeaders() {
-  const headers = new Headers({
-    Accept: "application/json",
-  });
-  const apiKey = process.env.SEARCH_SERVICE_API_KEY;
-  const authHeader = process.env.SEARCH_SERVICE_AUTH_HEADER ?? "Authorization";
-
-  if (isNonEmptyString(apiKey)) {
-    headers.set(
-      authHeader,
-      authHeader.toLowerCase() === "authorization" && !apiKey.trim().startsWith("Bearer ")
-        ? `Bearer ${apiKey.trim()}`
-        : apiKey.trim(),
-    );
-  }
-
-  return headers;
-}
-
 function buildSearchServiceRequest(query: string) {
-  const endpoint = process.env.SEARCH_SERVICE_URL;
+  const endpoint = getConfiguredSearchServiceUrl();
 
   if (!isNonEmptyString(endpoint)) {
     return null;
@@ -104,7 +80,7 @@ function buildSearchServiceRequest(query: string) {
 
   const method = (process.env.SEARCH_SERVICE_METHOD ?? "POST").trim().toUpperCase();
   const limit = parsePositiveInteger(process.env.SEARCH_SERVICE_LIMIT, DEFAULT_LIMIT);
-  const headers = buildRequestHeaders();
+  const headers = buildSearchServiceRequestHeaders();
 
   if (method === "GET") {
     const url = new URL(endpoint);
@@ -121,13 +97,11 @@ function buildSearchServiceRequest(query: string) {
     };
   }
 
-  headers.set("Content-Type", "application/json");
-
   return {
     url: endpoint,
     init: {
       method: "POST",
-      headers,
+      headers: buildSearchServiceRequestHeaders(process.env, "application/json"),
       body: JSON.stringify({
         query,
         limit,

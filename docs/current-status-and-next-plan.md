@@ -40,8 +40,8 @@
 - pgvector 检索：已接通 Qwen3 向量方案，本地 `vector:init -> embed:chunks -> smoke:vector` 已跑通，当前重点不再是“是否接通”，而是误召回抑制和排序收益。
 - rerank：代码链路、候选诊断和真实评估入口都已完成，且 `Qwen/Qwen3-Reranker-8B` 已在真实评估中跑通；但当前模型与参数组合会拉低排序质量，因此只保留为显式实验能力，不再建议默认开启。
 - evidence-bound LLM answer：具备接入点和回退路径，但还需要更系统的效果验证和错误观测。
-- feedback / query logs：schema 与写入接入口已经存在，但还没有演进成可运维的后台分析能力。
-- metrics：当前是进程内 JSON 指标，适合本地和 demo，不等于生产监控。
+- feedback / query logs：前端入口已保留不变，但持久化已经统一收口到 `search-service`，并开始记录 `gateway_event` 与 `service_event_logs`；仍缺后台分析面板和告警联动。
+- metrics：现在已经同时包含进程内 runtime metrics 与 Postgres 聚合的 `persistent` 指标，但还没有外部监控平台和告警系统。
 
 ### 2.3 还明显没有完成的部分
 
@@ -105,23 +105,27 @@
 
 ### 第三阶段：线上可靠性与运维能力
 
-当前状态：已有若干接入点，但还远不到“生产运维完成”。
+当前状态：已经完成第一轮可靠性基线，但还不能算“生产运维完成”。
 
 已经具备：
 
-- 基础 `/health`
-- 基础 `/metrics`
-- feedback / query log schema
+- `web` 不再直连 Postgres，feedback / query log 已统一代理到 `search-service`
+- `/api/feedback`、`/api/query-logs`
+- 增强版 `/health`
+- 带 `persistent` 聚合的 `/metrics`
+- `service_event_logs`
 - scheduled ingestion workflow
+- `test:telemetry:postgres`
+- `docs/phase-three-operations.md`
 
 还差：
 
-- 缓存、超时、限流策略的系统化验证
-- 指标持久化或监控平台接入
-- 备份、恢复、回滚文档和演练
-- 更明确的异常追踪和告警路径
+- 缓存、超时、限流策略在真实部署环境下的持续回归验证
+- 外部监控 / 告警平台接入
+- 备份、恢复、回滚的真实演练记录
+- 更完整的来源治理、失败看板和运维后台
 
-结论：第三阶段还属于后续建设，不应在当前文档里被默认视为已完成。
+结论：第三阶段已经完成第一轮“可靠性与可观测性基线”，但还没有完成完整的线上运维闭环。
 
 ### 第四阶段与第五阶段
 
@@ -138,10 +142,10 @@
    - 在运行手册和项目报告中记录 2026-05-11 的本地与 GitHub Actions 验收结果
    - 记录当前稳定官方源集合与社区关闭策略
 
-2. 再补第三阶段可靠性
-   - 校验缓存、限流、超时和降级策略
-   - 把 query logs / feedback / metrics 从“存在接入口”推进到“可观测、可排查”
-   - 增加备份、恢复和回滚说明
+2. 继续补第三阶段可靠性
+   - 把新的 `/health`、`/metrics.persistent`、`service_event_logs` 接到外部监控与告警
+   - 在真实部署环境里复验缓存、限流、超时和降级策略
+   - 做一次可复盘的备份、恢复和回滚演练
 
 3. 最后再做后台与发布物料
    - 来源状态看板
@@ -154,7 +158,7 @@
 
 > 以当前已验证的真实数据链路和 Qwen3 评估结果为基础，进入第三阶段可靠性建设；第二阶段结论已经固定为“`hybrid` 是默认策略，`rerank` 仅保留实验能力”。
 
-阶段一已经把项目状态从“代码侧已准备”推进到了“真实数据链路已验证”；下一步要解决的是“检索质量是否持续可评估”。
+阶段一和第二阶段已经把项目状态从“代码侧已准备”推进到了“真实数据链路已验证 + 默认检索策略已收口”；第三阶段现在进入“把可靠性基线接成真正运维闭环”的阶段。
 
 ## 6. 当前建议的文档阅读顺序
 
@@ -162,9 +166,10 @@
 
 1. `docs/current-status-and-next-plan.md`
 2. `docs/search-quality-evaluation.md`
-3. `docs/local-postgres.md`
-4. `docs/full-rag-launch-plan.md`
-5. `docs/architecture.md`
-6. `docs/data-pipeline.md`
+3. `docs/phase-three-operations.md`
+4. `docs/local-postgres.md`
+5. `docs/full-rag-launch-plan.md`
+6. `docs/architecture.md`
+7. `docs/data-pipeline.md`
 
 这样可以避免把较早的阶段快照误读成当前最终状态。

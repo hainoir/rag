@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { buildErrorResponse } from "@/lib/search/normalize-response";
+import { buildSearchQueryLogPayload, type SearchQueryLogGatewayEvent } from "@/lib/search/query-log";
 import { createSearchRequestId, stripSearchResponseMeta, withSearchResponseMeta } from "@/lib/search/response-meta";
 import { checkSearchRateLimit, readCachedSearchResponse, writeCachedSearchResponse } from "@/lib/search/search-gateway";
 import { searchServiceProvider } from "@/lib/search/search-provider";
@@ -37,14 +38,10 @@ async function storeSearchLogFailOpen(
   query: string,
   response: ReturnType<typeof withSearchResponseMeta>,
   clientId: string,
+  gatewayEvent: SearchQueryLogGatewayEvent,
 ) {
   try {
-    await storeSearchQueryLog({
-      requestId,
-      query,
-      response,
-      clientId,
-    });
+    await storeSearchQueryLog(buildSearchQueryLogPayload({ requestId, query, response, clientId, gatewayEvent }));
   } catch (error) {
     logSearchGatewayEvent("error", {
       event: "search.query_log_failed",
@@ -78,7 +75,7 @@ export async function GET(request: Request) {
         },
       );
 
-      await storeSearchLogFailOpen(requestId, query.trim(), response, clientId);
+      await storeSearchLogFailOpen(requestId, query.trim(), response, clientId, "rate_limited");
 
       return NextResponse.json(response, {
         status: 429,
@@ -129,7 +126,7 @@ export async function GET(request: Request) {
         durationMs: Date.now() - startedAt,
       });
 
-      await storeSearchLogFailOpen(requestId, query, response, clientId);
+      await storeSearchLogFailOpen(requestId, query, response, clientId, "search_response");
 
       return NextResponse.json(response, {
         headers: {
@@ -155,10 +152,10 @@ export async function GET(request: Request) {
         event: "search.cache_write_failed",
         requestId,
         errorMessage: error instanceof Error ? error.message : String(error),
-      });
+        });
     }
 
-    await storeSearchLogFailOpen(requestId, query, responseWithMeta, clientId);
+    await storeSearchLogFailOpen(requestId, query, responseWithMeta, clientId, "search_response");
 
     return NextResponse.json(responseWithMeta, {
       headers: {
@@ -185,7 +182,7 @@ export async function GET(request: Request) {
       },
     );
 
-    await storeSearchLogFailOpen(requestId, query.trim(), response, clientId);
+    await storeSearchLogFailOpen(requestId, query.trim(), response, clientId, "gateway_error");
 
     return NextResponse.json(response, {
       status: 500,

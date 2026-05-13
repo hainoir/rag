@@ -221,7 +221,7 @@ async function requestJson(url) {
 
   if (!response.ok) {
     const contentType = response.headers.get("content-type") ?? "";
-    let detail = response.statusText;
+    let detail;
 
     try {
       if (contentType.includes("application/json")) {

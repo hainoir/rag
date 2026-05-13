@@ -11,7 +11,17 @@ const {
 } = require("./embedding-client.cjs");
 const { loadLocalEnv } = require("./load-env.cjs");
 const { readRerankConfig, rerankDocuments, shouldUseRerank } = require("./rerank-client.cjs");
+const { buildHealthSnapshot, readSearchServiceRuntimePreflight } = require("./runtime-preflight.cjs");
 const { defaultQuestions, seedCorpus } = require("./seed-corpus.cjs");
+const { parseSearchFeedbackPayload, parseSearchQueryLogPayload } = require("./telemetry-contract.cjs");
+const {
+  closeTelemetryPool,
+  getPersistentMetrics,
+  readTelemetryState,
+  recordServiceEvent,
+  storeSearchFeedback,
+  storeSearchQueryLog,
+} = require("./telemetry-store.cjs");
 
 loadLocalEnv();
 
@@ -182,6 +192,76 @@ function getMetricsSnapshot() {
   };
 }
 
+function buildServiceAuthConfig(env = process.env) {
+  const apiKey = String(env.SEARCH_SERVICE_API_KEY ?? "").trim();
+  const headerName = String(env.SEARCH_SERVICE_AUTH_HEADER ?? "Authorization").trim() || "Authorization";
+
+  return {
+    enabled: apiKey.length > 0,
+    apiKey,
+    headerName,
+  };
+}
+
+function buildExpectedAuthValue(authConfig) {
+  if (
+    authConfig.headerName.toLowerCase() === "authorization" &&
+    authConfig.apiKey &&
+    !authConfig.apiKey.startsWith("Bearer ")
+  ) {
+    return `Bearer ${authConfig.apiKey}`;
+  }
+
+  return authConfig.apiKey;
+}
+
+function readRequestHeader(request, headerName) {
+  const value = request.headers[String(headerName).toLowerCase()];
+
+  if (Array.isArray(value)) {
+    return value[0];
+  }
+
+  return value;
+}
+
+function isAuthorizedRequest(request, env = process.env) {
+  const authConfig = buildServiceAuthConfig(env);
+
+  if (!authConfig.enabled) {
+    return true;
+  }
+
+  const provided = String(readRequestHeader(request, authConfig.headerName) ?? "").trim();
+
+  if (!provided) {
+    return false;
+  }
+
+  return provided === buildExpectedAuthValue(authConfig) || provided === authConfig.apiKey;
+}
+
+function formatErrorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+async function recordServiceEventFailOpen(event) {
+  try {
+    await recordServiceEvent(event);
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        level: "error",
+        timestamp: new Date().toISOString(),
+        service: "search-service",
+        event: "service_event.persist_failed",
+        originalEvent: event.event,
+        errorMessage: formatErrorMessage(error),
+      }),
+    );
+  }
+}
+
 function normalizeProvider(value) {
   const provider = String(value ?? "auto").trim().toLowerCase();
   return ALLOWED_PROVIDERS.has(provider) ? provider : "auto";
@@ -249,7 +329,17 @@ function getPostgresPool() {
       logSearchEvent("error", {
         event: "postgres.pool_error",
         errorType: error instanceof Error ? error.name : "UnknownError",
-        errorMessage: error instanceof Error ? error.message : String(error),
+        errorMessage: formatErrorMessage(error),
+      });
+      void recordServiceEventFailOpen({
+        service: "search-service",
+        level: "error",
+        event: "postgres.pool_error",
+        errorCode: "database_unavailable",
+        message: formatErrorMessage(error),
+        payload: {
+          errorType: error instanceof Error ? error.name : "UnknownError",
+        },
       });
     });
   }
@@ -1739,6 +1829,7 @@ async function search(query, limit) {
     }
 
     const classifiedError = classifyServiceError(error);
+    const errorMessage = formatErrorMessage(error);
 
     logSearchEvent("error", {
       event: "search.failed",
@@ -1747,8 +1838,23 @@ async function search(query, limit) {
       resolvedProvider,
       errorType: error instanceof Error ? error.name : "UnknownError",
       errorCode: classifiedError.code,
-      errorMessage: error instanceof Error ? error.message : String(error),
+      errorMessage,
       durationMs: Date.now() - startedAt,
+    });
+
+    await recordServiceEventFailOpen({
+      service: "search-service",
+      level: "error",
+      event: "search.failed",
+      errorCode: classifiedError.code,
+      message: errorMessage,
+      payload: {
+        query,
+        requestedProvider: provider,
+        resolvedProvider,
+        errorType: error instanceof Error ? error.name : "UnknownError",
+        durationMs: Date.now() - startedAt,
+      },
     });
 
     recordSearchMetric({
@@ -1769,6 +1875,12 @@ function sendJson(response, statusCode, payload) {
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   });
+
+  if (statusCode === 204) {
+    response.end();
+    return;
+  }
+
   response.end(JSON.stringify(payload, null, 2));
 }
 
@@ -1815,6 +1927,150 @@ async function handleSearch(request, response, url) {
   sendJson(response, 200, await search(query, limit));
 }
 
+async function handleFeedback(request, response) {
+  let payload;
+
+  try {
+    payload = await readJsonBody(request);
+  } catch {
+    sendJson(response, 400, {
+      ok: false,
+      error: "invalid_json",
+    });
+    return;
+  }
+
+  const parsed = parseSearchFeedbackPayload(payload);
+
+  if (!parsed.ok) {
+    sendJson(response, 400, {
+      ok: false,
+      error: "invalid_feedback",
+      message: parsed.error,
+    });
+    return;
+  }
+
+  try {
+    const result = await storeSearchFeedback(parsed.feedback);
+
+    if (!result.stored) {
+      sendJson(response, 503, {
+        ok: false,
+        error: "feedback_store_unavailable",
+      });
+      return;
+    }
+
+    sendJson(response, 204);
+  } catch (error) {
+    const errorMessage = formatErrorMessage(error);
+
+    logSearchEvent("error", {
+      event: "feedback.store_failed",
+      requestId: parsed.feedback.requestId,
+      errorMessage,
+    });
+    await recordServiceEventFailOpen({
+      service: "search-service",
+      level: "error",
+      event: "feedback.store_failed",
+      requestId: parsed.feedback.requestId,
+      errorCode: "feedback_store_unavailable",
+      message: errorMessage,
+      payload: {
+        query: parsed.feedback.query,
+      },
+    });
+
+    sendJson(response, 503, {
+      ok: false,
+      error: "feedback_store_unavailable",
+    });
+  }
+}
+
+async function handleQueryLog(request, response) {
+  let payload;
+
+  try {
+    payload = await readJsonBody(request);
+  } catch {
+    sendJson(response, 400, {
+      ok: false,
+      error: "invalid_json",
+    });
+    return;
+  }
+
+  const parsed = parseSearchQueryLogPayload(payload);
+
+  if (!parsed.ok) {
+    sendJson(response, 400, {
+      ok: false,
+      error: "invalid_query_log",
+      message: parsed.error,
+    });
+    return;
+  }
+
+  try {
+    const result = await storeSearchQueryLog(parsed.payload);
+
+    if (!result.stored) {
+      sendJson(response, 503, {
+        ok: false,
+        error: "query_log_store_unavailable",
+      });
+      return;
+    }
+
+    sendJson(response, 204);
+  } catch (error) {
+    const errorMessage = formatErrorMessage(error);
+
+    logSearchEvent("error", {
+      event: "query_log.store_failed",
+      requestId: parsed.payload.requestId,
+      errorMessage,
+    });
+    await recordServiceEventFailOpen({
+      service: "search-service",
+      level: "error",
+      event: "query_log.store_failed",
+      requestId: parsed.payload.requestId,
+      message: errorMessage,
+      payload: {
+        gatewayEvent: parsed.payload.gatewayEvent,
+      },
+    });
+
+    sendJson(response, 503, {
+      ok: false,
+      error: "query_log_store_unavailable",
+    });
+  }
+}
+
+async function buildHealthResponse() {
+  const preflight = readSearchServiceRuntimePreflight();
+  const telemetryState = await readTelemetryState();
+
+  return buildHealthSnapshot({
+    preflight,
+    databaseReachable: telemetryState.databaseReachable,
+    telemetryWritable: telemetryState.telemetryWritable,
+    corpusSize: seedCorpus.length,
+  });
+}
+
+async function buildMetricsResponse() {
+  return {
+    ...getMetricsSnapshot(),
+    persistent: await getPersistentMetrics(),
+  };
+}
+
 function createServer() {
   const port = parsePositiveInteger(process.env.PORT, DEFAULT_PORT);
   const host = process.env.HOST || DEFAULT_HOST;
@@ -1828,18 +2084,29 @@ function createServer() {
     }
 
     if (url.pathname === "/health") {
-      sendJson(response, 200, {
-        status: "ok",
-        provider: normalizeProvider(process.env.SEARCH_SERVICE_PROVIDER),
-        databaseConfigured: Boolean(getPostgresPool()),
-        corpusSize: seedCorpus.length,
-        timestamp: new Date().toISOString(),
-      });
+      sendJson(response, 200, await buildHealthResponse());
       return;
     }
 
     if (url.pathname === "/metrics") {
-      sendJson(response, 200, getMetricsSnapshot());
+      sendJson(response, 200, await buildMetricsResponse());
+      return;
+    }
+
+    if (url.pathname.startsWith("/api/") && !isAuthorizedRequest(request)) {
+      sendJson(response, 401, {
+        error: "unauthorized",
+      });
+      return;
+    }
+
+    if (url.pathname === "/api/feedback" && request.method === "POST") {
+      await handleFeedback(request, response);
+      return;
+    }
+
+    if (url.pathname === "/api/query-logs" && request.method === "POST") {
+      await handleQueryLog(request, response);
       return;
     }
 
@@ -1854,13 +2121,26 @@ function createServer() {
       await handleSearch(request, response, url);
     } catch (error) {
       const classifiedError = classifyServiceError(error);
+      const errorMessage = formatErrorMessage(error);
       logSearchEvent("error", {
         event: "request.failed",
         method: request.method,
         path: url.pathname,
         errorCode: classifiedError.code,
         errorType: error instanceof Error ? error.name : "UnknownError",
-        errorMessage: error instanceof Error ? error.message : String(error),
+        errorMessage,
+      });
+      await recordServiceEventFailOpen({
+        service: "search-service",
+        level: "error",
+        event: "request.failed",
+        errorCode: classifiedError.code,
+        message: errorMessage,
+        payload: {
+          method: request.method,
+          path: url.pathname,
+          errorType: error instanceof Error ? error.name : "UnknownError",
+        },
       });
       sendJson(response, classifiedError.statusCode, {
         error: classifiedError.code,
@@ -1885,6 +2165,7 @@ function startServer() {
     process.on(signal, () => {
       server.close(async () => {
         await closePostgresPool();
+        await closeTelemetryPool();
         process.exit(0);
       });
     });

@@ -38,6 +38,8 @@
 - 暗色模式切换，偏好会保存在浏览器本地
 - 无答案兜底和相关问题推荐
 - 统一的 `/api/search` 搜索入口
+- `/api/feedback` 保持前端入口不变，但已改为由 `search-service` 统一持久化
+- `search-service` 现在额外提供 `/api/query-logs`、增强版 `/health` 和带 `persistent` 聚合的 `/metrics`
 
 ## 当前检索链路
 
@@ -52,7 +54,7 @@
 - 线上监控、告警、限流和缓存策略
 - 社区内容的长期质量治理与人工复核流程
 
-这些能力现在通过仓库内的契约文件和文档留好了接口，而不是继续写死在前端页面里。
+这些能力现在通过仓库内的契约文件和文档留好了接口，而不是继续写死在前端页面里。第三阶段第一轮已经把 query log、feedback、service event 的持久化统一收口到 `search-service`，并补上了 `telemetry` 级别的健康检查与运行手册。
 
 ## 数据源与更新链路
 
@@ -103,7 +105,7 @@ npm run dev
 
 仓库现在内置了一个最小可用的上游搜索服务，启动 `npm run search-service` 后会在 `http://localhost:8080/api/search` 提供 HTTP 搜索接口。默认 `SEARCH_SERVICE_PROVIDER=auto`：配置 `DATABASE_URL` 时优先读取 Postgres 中的 ingestion chunks；没有数据库时使用本地 seed corpus 作为 demo fallback。无论哪种模式，都继续输出同一条 `SearchResponse` 契约。
 
-`.env.local` 至少需要配置一个可访问的 `SEARCH_SERVICE_URL`。如果上游服务没有准备好，前端会进入错误态，而不会伪装成“无答案”。
+`.env.local` 至少需要配置一个可访问的 `SEARCH_SERVICE_URL`。如果上游服务没有准备好，前端会进入错误态，而不会伪装成“无答案”。当前 `web` 已不再要求 `DATABASE_URL`；feedback 和 query log 也统一通过 `SEARCH_SERVICE_URL` 指向的 `search-service` sibling endpoint 代理。
 
 然后访问 [http://localhost:3000](http://localhost:3000)。
 
@@ -212,6 +214,7 @@ npm run smoke:vector
 npm run smoke:postgres
 npm run test:ingestion:unit
 npm run test:ingestion:postgres
+npm run test:telemetry:postgres
 ```
 
 这期已经具备 `documents / document_versions / chunks / ingestion_runs -> search-service -> SearchResponse` 的最小真实数据回路代码。是否已经在当前环境闭合，必须以 `npm run verify:real-data` 或 `npm run smoke:postgres` 的输出为准。重复执行 `npm run ingest:official` 或 `npm run ingest:community` 时，未变化文章只刷新校验时间，不会重复插入相同文档和版本。
@@ -222,6 +225,7 @@ npm run test:ingestion:postgres
 `npm run verify:demo` 使用 [fixtures/demo-queries.json](./fixtures/demo-queries.json) 中的固定问题验证 seed 演示闭环；`npm run test:components` 用 Vitest + Testing Library 覆盖核心 React 组件；`npm run e2e` 会启动 seed 搜索服务和 Next.js dev server，覆盖首页搜索、暗色模式、结果页渲染、来源展开、无答案兜底和错误态。
 
 本地 Postgres 启动和真实检索闭环见 [docs/local-postgres.md](./docs/local-postgres.md)。演示 query 与部署边界见 [docs/demo-and-deploy.md](./docs/demo-and-deploy.md)。
+第三阶段运维、健康检查、备份恢复和回滚说明见 [docs/phase-three-operations.md](./docs/phase-three-operations.md)。
 
 ## 后续方向
 
@@ -233,4 +237,4 @@ npm run test:ingestion:postgres
 4. 配置 rerank 服务，用固定 query 对比 rerank 前后的命中顺序和答案依据
 5. 扩大官方来源 adapter 的实站验证范围，优先保证 3-5 个来源稳定重复同步
 6. 对社区来源补合规策略、质量阈值和人工复核记录，再扩大自动摄取范围
-7. 再补评估集、告警、缓存、限流和生产调度
+7. 在当前 telemetry 基线之上补外部告警平台、来源治理后台和正式发布物料

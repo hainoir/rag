@@ -45,6 +45,7 @@ jobs:
       - run: npm run evaluate:search
       - run: npm run smoke:search-service
       - run: npm run test:unit
+      - run: npm run test:telemetry:postgres
       - run: npm run test:ingestion:postgres
       - run: npm run build
       - run: npx playwright install --with-deps chromium

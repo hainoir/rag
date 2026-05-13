@@ -554,7 +554,7 @@ async function main() {
           },
         },
       ]);
-      const timelyNoticeGate = evaluateEmptyGate("复试通知和研招最新安排去哪里找", [
+      const timelyNoticeItems = [
         {
           score: 57,
           source: {
@@ -569,36 +569,38 @@ async function main() {
             noiseTags: ["generic_notice", "year_heavy_title"],
           },
         },
-      ]);
+      ] as unknown as Parameters<typeof evaluateEmptyGate>[1];
+      const timelyNoticeGate = evaluateEmptyGate("复试通知和研招最新安排去哪里找", timelyNoticeItems);
+      const hybridNoiseItems = [
+        {
+          score: 99,
+          source: {
+            title: "图书馆智能存包柜管理系统",
+          },
+          searchSignals: {
+            intentTermCount: 3,
+            hasExactQueryIntent: false,
+            titleIntentCoverage: 0.25,
+            queryIntentCoverage: 0.25,
+            bodyIntentCoverage: 0.2,
+            noiseTags: ["library_system_page"],
+          },
+        },
+        {
+          score: 92,
+          searchSignals: {
+            intentTermCount: 3,
+            hasExactQueryIntent: false,
+            titleIntentCoverage: 0.1,
+            queryIntentCoverage: 0.15,
+            bodyIntentCoverage: 0.1,
+            noiseTags: ["generic_notice"],
+          },
+        },
+      ] as unknown as Parameters<typeof evaluateEmptyGate>[1];
       const hybridNoiseGate = evaluateEmptyGate(
         "图书馆打印店会员卡怎么办",
-        [
-          {
-            score: 99,
-            source: {
-              title: "图书馆智能存包柜管理系统",
-            },
-            searchSignals: {
-              intentTermCount: 3,
-              hasExactQueryIntent: false,
-              titleIntentCoverage: 0.25,
-              queryIntentCoverage: 0.25,
-              bodyIntentCoverage: 0.2,
-              noiseTags: ["library_system_page"],
-            },
-          },
-          {
-            score: 92,
-            searchSignals: {
-              intentTermCount: 3,
-              hasExactQueryIntent: false,
-              titleIntentCoverage: 0.1,
-              queryIntentCoverage: 0.15,
-              bodyIntentCoverage: 0.1,
-              noiseTags: ["generic_notice"],
-            },
-          },
-        ],
+        hybridNoiseItems,
         "hybrid",
       );
 

@@ -40,6 +40,7 @@ const ALLOWED_ERROR_CODES = new Set<SearchErrorCode>([
 ]);
 
 const ALLOWED_CACHE_STATUSES = new Set<SearchCacheStatus>(["hit", "miss", "bypass"]);
+const ALLOWED_GOVERNANCE_STATUSES = new Set(["approved", "supplemental", "pending", "rejected"]);
 
 function isRecord(value: unknown): value is JsonRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -425,6 +426,8 @@ function normalizeSource(rawSource: JsonRecord, index: number, query: string, fa
     : deriveMatchedKeywords(query, `${title} ${fullSnippet}`);
   const trustScore = pickFirst(rawSource, ["trustScore", "trust_score", "authorityScore", "sourceScore"]);
   const canonicalUrl = pickString(rawSource, ["canonicalUrl", "canonical_url"]) ?? url;
+  const governanceStatus = pickString(rawSource, ["governanceStatus", "governance_status"]);
+  const answerEligible = pickFirst(rawSource, ["answerEligible", "answer_eligible"]);
 
   return {
     id:
@@ -454,6 +457,11 @@ function normalizeSource(rawSource: JsonRecord, index: number, query: string, fa
         ? clampConfidence(trustScore, sourceType === "official" ? 0.92 : 0.72)
         : undefined,
     dedupKey: pickString(rawSource, ["dedupKey", "dedupeKey", "contentFingerprint", "documentFingerprint"]),
+    governanceStatus:
+      governanceStatus && ALLOWED_GOVERNANCE_STATUSES.has(governanceStatus)
+        ? (governanceStatus as SearchSource["governanceStatus"])
+        : undefined,
+    answerEligible: typeof answerEligible === "boolean" ? answerEligible : undefined,
   };
 }
 

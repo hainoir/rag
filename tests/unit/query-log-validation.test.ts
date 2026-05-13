@@ -23,7 +23,13 @@ function test(name: string, task: () => void | Promise<void>) {
 const sampleResponse: SearchResponse = {
   query: "图书馆借书",
   status: "ok",
-  answer: null,
+  answer: {
+    summary: "可以按图书馆借阅规则办理。",
+    sourceNote: "当前结论主要基于官方来源整理。",
+    disclaimer: "以原文为准。",
+    confidence: 0.82,
+    evidence: [],
+  },
   sources: [
     {
       id: "official-1",
@@ -83,6 +89,24 @@ test("builds query log payload from search responses", () => {
     durationMs: 320,
     clientId: "127.0.0.1",
     gatewayEvent: "search_response",
+    sourceIds: ["official-1", "community-1"],
+    sourceSnapshot: [
+      {
+        id: "official-1",
+        title: "图书馆借阅说明",
+        type: "official",
+        sourceName: "图书馆",
+      },
+      {
+        id: "community-1",
+        title: "借书经验",
+        type: "community",
+        sourceName: "贴吧",
+      },
+    ],
+    answerSummary: "可以按图书馆借阅规则办理。",
+    answerConfidence: 0.82,
+    resultGeneratedAt: "2026-05-13T00:00:00.000Z",
   } satisfies SearchQueryLogPayload);
 });
 
@@ -99,6 +123,11 @@ test("parses valid query log payloads", () => {
     errorCode: "upstream_timeout",
     durationMs: 240,
     gatewayEvent: "search_response",
+    sourceIds: ["source-1"],
+    sourceSnapshot: [{ id: "source-1", title: "宿舍报修", type: "official", sourceName: "后勤处" }],
+    answerSummary: "报修流程摘要",
+    answerConfidence: 0.73,
+    resultGeneratedAt: "2026-05-13T01:00:00.000Z",
   });
 
   assert.equal(parsed.ok, true);
@@ -114,6 +143,11 @@ test("parses valid query log payloads", () => {
     errorCode: "upstream_timeout",
     durationMs: 240,
     gatewayEvent: "search_response",
+    sourceIds: ["source-1"],
+    sourceSnapshot: [{ id: "source-1", title: "宿舍报修", type: "official", sourceName: "后勤处" }],
+    answerSummary: "报修流程摘要",
+    answerConfidence: 0.73,
+    resultGeneratedAt: "2026-05-13T01:00:00.000Z",
   });
 });
 

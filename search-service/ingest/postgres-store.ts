@@ -45,6 +45,13 @@ type InspectRow = {
   lastStartedAt: string | null;
 };
 
+type SourceGovernanceOverrideRow = {
+  source_id: string;
+  enabled_override: boolean | null;
+  trust_weight_override: string | null;
+  update_cadence_override: SelectedSource["updateCadence"] | null;
+};
+
 function quoteIdentifier(identifier: string) {
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(identifier)) {
     throw new Error(`Invalid schema identifier: ${identifier}`);
@@ -160,6 +167,44 @@ export class PostgresStore {
     });
   }
 
+  async applySourceGovernanceOverrides(sources: SelectedSource[]) {
+    if (sources.length === 0) {
+      return [];
+    }
+
+    return this.withClient(async (client) => {
+      const result = await client.query<SourceGovernanceOverrideRow>(
+        `
+          select
+            source_id,
+            enabled_override,
+            trust_weight_override,
+            update_cadence_override
+          from source_governance_overrides
+          where source_id = any($1::text[])
+        `,
+        [sources.map((source) => source.id)],
+      );
+      const overrides = new Map(result.rows.map((row) => [row.source_id, row]));
+
+      return sources
+        .map((source) => {
+          const override = overrides.get(source.id);
+
+          return {
+            ...source,
+            enabled: override?.enabled_override ?? source.enabled,
+            trustWeight:
+              override?.trust_weight_override === null || override?.trust_weight_override === undefined
+                ? source.trustWeight
+                : Number(override.trust_weight_override),
+            updateCadence: override?.update_cadence_override ?? source.updateCadence,
+          };
+        })
+        .filter((source) => source.enabled);
+    });
+  }
+
   async createRun(sourceId: string) {
     return this.withClient(async (client) => {
       const result = await client.query<{ id: string }>(
@@ -257,6 +302,47 @@ export class PostgresStore {
           item.errorMessage ?? null,
           item.startedAt ?? new Date().toISOString(),
           item.endedAt ?? new Date().toISOString(),
+        ],
+      );
+    });
+  }
+
+  async recordCommunityReviewCandidate(input: {
+    sourceId: string;
+    documentId?: string;
+    canonicalUrl: string;
+    title?: string;
+    moderationFlagged?: boolean;
+    moderationReason?: string;
+  }) {
+    await this.withClient(async (client) => {
+      await client.query(
+        `
+          insert into community_review_records (
+            source_id,
+            document_id,
+            canonical_url,
+            title,
+            status,
+            risk_level,
+            reason,
+            created_at,
+            updated_at
+          )
+          values ($1, $2, $3, $4, 'pending', $5, $6, now(), now())
+          on conflict (canonical_url)
+          do update set
+            document_id = coalesce(excluded.document_id, community_review_records.document_id),
+            title = coalesce(excluded.title, community_review_records.title),
+            updated_at = now()
+        `,
+        [
+          input.sourceId,
+          input.documentId ?? null,
+          input.canonicalUrl,
+          input.title ?? null,
+          input.moderationFlagged ? "high" : "medium",
+          input.moderationReason ?? "community_default_review",
         ],
       );
     });

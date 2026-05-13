@@ -3,6 +3,7 @@ export type ViewMode = "answer" | "retrieval";
 export type SearchStatus = "ok" | "partial" | "empty" | "error";
 export type SourceFreshness = "fresh" | "recent" | "stale" | "undated";
 export type SearchCacheStatus = "hit" | "miss" | "bypass";
+export type SourceGovernanceStatus = "approved" | "supplemental" | "pending" | "rejected";
 export type SearchErrorCode =
   | "missing_search_service_url"
   | "upstream_bad_request"
@@ -49,6 +50,8 @@ export type SearchSource = {
   freshnessLabel: SourceFreshness;
   trustScore?: number;
   dedupKey?: string;
+  governanceStatus?: SourceGovernanceStatus;
+  answerEligible?: boolean;
 };
 
 export type SearchAnswer = {

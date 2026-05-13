@@ -41,7 +41,7 @@
 - `/api/feedback` 保持前端入口不变，但已改为由 `search-service` 统一持久化
 - `search-service` 现在额外提供 `/api/query-logs`、增强版 `/health` 和带 `persistent` 聚合的 `/metrics`
 - `/health` 现在会额外标记 `databaseRequired` / `telemetryRequired`，区分 seed demo 与真实持久化模式
-- 仓库现在内置了 `check:phase-three-ops` 告警检查脚本和 `Ops Health Check` 定时 workflow
+- 仓库现在内置了 `check:phase-three-ops` 告警检查脚本、`notify:phase-three-ops` webhook 通知脚本、`backup:drill` 备份恢复演练脚本和 `Ops Health Check` 定时 workflow
 
 ## 当前检索链路
 
@@ -234,7 +234,10 @@ npm run smoke:postgres
 npm run test:ingestion:unit
 npm run test:ingestion:postgres
 npm run test:telemetry:postgres
+npm run test:admin
 npm run check:phase-three-ops
+npm run notify:phase-three-ops
+npm run backup:drill
 ```
 
 这期已经具备 `documents / document_versions / chunks / ingestion_runs -> search-service -> SearchResponse` 的最小真实数据回路代码。是否已经在当前环境闭合，必须以 `npm run verify:real-data` 或 `npm run smoke:postgres` 的输出为准。重复执行 `npm run ingest:official` 或 `npm run ingest:community` 时，未变化文章只刷新校验时间，不会重复插入相同文档和版本。
@@ -246,7 +249,8 @@ npm run check:phase-three-ops
 
 本地 Postgres 启动和真实检索闭环见 [docs/local-postgres.md](./docs/local-postgres.md)。演示 query 与部署边界见 [docs/demo-and-deploy.md](./docs/demo-and-deploy.md)。
 第三阶段运维、健康检查、备份恢复和回滚说明见 [docs/phase-three-operations.md](./docs/phase-three-operations.md)。
-如果已经有可访问的线上 `search-service`，可以直接用 `npm run check:phase-three-ops` 对 `/health`、`/metrics` 和 `persistent` 阈值做自动检查。
+第四阶段后台治理、来源覆盖层、反馈处理和社区审核说明见 [docs/phase-four-admin-ops.md](./docs/phase-four-admin-ops.md)。
+如果已经有可访问的线上 `search-service`，可以直接用 `npm run check:phase-three-ops` 对 `/health`、`/metrics` 和 `persistent` 阈值做自动检查；配置 `OPS_ALERT_WEBHOOK_URL` 后可用 `npm run notify:phase-three-ops` 发送 webhook 告警；配置临时恢复库后可用 `npm run backup:drill` 生成备份 / 恢复演练报告。
 
 ## 后续方向
 

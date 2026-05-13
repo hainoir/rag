@@ -26,8 +26,9 @@ export function resolveSearchServiceSiblingEndpoint(pathname: string, env = proc
   }
 
   const url = new URL(endpoint);
-  url.pathname = pathname.startsWith("/") ? pathname : `/${pathname}`;
-  url.search = "";
+  const pathUrl = new URL(pathname.startsWith("/") ? `http://local${pathname}` : `http://local/${pathname}`);
+  url.pathname = pathUrl.pathname;
+  url.search = pathUrl.search;
   url.hash = "";
 
   return url.toString();

@@ -1,6 +1,23 @@
 const http = require("node:http");
 const { URL } = require("node:url");
 
+const {
+  closeAdminPool,
+  createAdminError,
+  getAdminSummary,
+  getEffectiveSource,
+  listCommunityReview,
+  listFeedback,
+  listQueryLogs,
+  listSources,
+  parseCommunityReviewPatch,
+  parseFeedbackPatch,
+  parseSourceGovernancePatch,
+  updateCommunityReview,
+  updateFeedback,
+  updateSourceGovernance,
+} = require("./admin-store.cjs");
+const { enqueueAdminSourceIngestion } = require("./admin-ingestion-queue.cjs");
 const { generateLlmAnswer } = require("./answer-generator.cjs");
 const {
   formatQueryEmbeddingInput,
@@ -239,6 +256,12 @@ function isAuthorizedRequest(request, env = process.env) {
   }
 
   return provided === buildExpectedAuthValue(authConfig) || provided === authConfig.apiKey;
+}
+
+function isAuthorizedAdminRequest(request, env = process.env) {
+  const authConfig = buildServiceAuthConfig(env);
+
+  return authConfig.enabled && isAuthorizedRequest(request, env);
 }
 
 function formatErrorMessage(error) {
@@ -869,6 +892,8 @@ function buildPostgresSource(row, terms, query, generatedAt) {
     canonicalUrl: row.canonical_url,
     trustScore: typeof row.trust_score === "number" ? clamp(row.trust_score, 0, 1) : undefined,
     dedupKey: row.dedup_key,
+    governanceStatus: row.governance_status,
+    answerEligible: row.answer_eligible === undefined || row.answer_eligible === null ? undefined : Boolean(row.answer_eligible),
   };
 
   return {
@@ -894,6 +919,14 @@ function buildSourceNote(results) {
   }
 
   return `当前结果综合了 ${officialCount} 条官方来源和 ${communityCount} 条社区来源，优先以官方信息为准。`;
+}
+
+function isAnswerEligibleSource(source) {
+  return source.answerEligible !== false && source.governanceStatus !== "supplemental";
+}
+
+function pickAnswerEligibleSources(sources) {
+  return sources.filter(isAnswerEligibleSource);
 }
 
 function buildRelatedQuestions(query, results) {
@@ -960,7 +993,8 @@ function buildAnswer(query, results, scoredResults) {
 }
 
 function buildExtractiveAnswer(query, sources, scoredResults) {
-  const evidence = sources.slice(0, 4).map((source) => ({
+  const answerSources = pickAnswerEligibleSources(sources);
+  const evidence = answerSources.slice(0, 4).map((source) => ({
     sourceId: source.id,
     title: source.title,
     sourceName: source.sourceName,
@@ -970,14 +1004,16 @@ function buildExtractiveAnswer(query, sources, scoredResults) {
     .slice(0, 3)
     .map((item) => summarizeSnippet(item.snippet))
     .filter(Boolean);
-  const officialCount = sources.filter((source) => source.type === "official").length;
+  const officialCount = answerSources.filter((source) => source.type === "official").length;
   const topScore = scoredResults[0]?.score ?? 0;
-  const confidenceBase = officialCount > 0 ? 0.66 : 0.48;
+  const confidenceBase = answerSources.length === 0 ? 0.38 : officialCount > 0 ? 0.66 : 0.48;
   const confidence = clamp(confidenceBase + topScore / 140, 0.45, 0.9);
 
   return {
     summary:
-      topSnippets.length > 0
+      answerSources.length === 0
+        ? `针对“${query}”，当前只检索到需要人工复核或仅作补充展示的社区来源，暂不据此生成结论。`
+        : topSnippets.length > 0
         ? `针对“${query}”，当前检索到的高相关片段显示：${topSnippets.join(" ")}`
         : `针对“${query}”，当前检索到相关来源，但片段内容不足以形成完整摘要。`,
     sourceNote: buildSourceNote(sources),
@@ -1014,14 +1050,20 @@ async function enhanceResponseWithLlmAnswer(response) {
     return response;
   }
 
+  const answerSources = pickAnswerEligibleSources(response.sources);
+
+  if (answerSources.length === 0) {
+    return response;
+  }
+
   try {
-    const generated = await generateLlmAnswer(response.query, response.sources, response.answer);
+    const generated = await generateLlmAnswer(response.query, answerSources, response.answer);
 
     if (!generated) {
       return response;
     }
 
-    const evidenceSources = pickEvidenceSources(response.sources, generated.usedSourceIds);
+    const evidenceSources = pickEvidenceSources(answerSources, generated.usedSourceIds);
 
     return {
       ...response,
@@ -1510,7 +1552,13 @@ async function searchPostgres(query, limit, options = {}) {
             d.fetched_at,
             d.last_verified_at,
             d.dedup_key,
-            coalesce(sr.trust_weight, 0.72)::float as trust_score,
+            coalesce(sgo.trust_weight_override, sr.trust_weight, 0.72)::float as trust_score,
+            coalesce(crr.status, case when d.source_type = 'community' then 'pending' else 'approved' end) as governance_status,
+            case
+              when d.source_type <> 'community' then true
+              when coalesce(crr.status, 'pending') = 'approved' then true
+              else false
+            end as answer_eligible,
             greatest(
               similarity(d.title, $3),
               similarity(c.snippet, $3),
@@ -1524,7 +1572,20 @@ async function searchPostgres(query, limit, options = {}) {
           join latest_versions lv on lv.version_id = c.document_version_id
           join documents d on d.id = lv.document_id
           left join source_registry sr on sr.id = d.source_id
+          left join source_governance_overrides sgo on sgo.source_id = d.source_id
+          left join lateral (
+            select status
+            from community_review_records
+            where document_id = d.id or canonical_url = d.canonical_url
+            order by updated_at desc, created_at desc
+            limit 1
+          ) crr on true
           where d.status = 'active'
+            and coalesce(sgo.enabled_override, sr.enabled, true) = true
+            and (
+              d.source_type <> 'community'
+              or coalesce(crr.status, 'pending') in ('approved', 'supplemental')
+            )
             and (
               d.title ilike any($1::text[])
               or c.snippet ilike any($1::text[])
@@ -1538,7 +1599,7 @@ async function searchPostgres(query, limit, options = {}) {
             vector_score desc,
             trigram_score desc,
             case when d.source_type = 'official' then 1 else 0 end desc,
-            coalesce(sr.trust_weight, 0.72) desc,
+            coalesce(sgo.trust_weight_override, sr.trust_weight, 0.72) desc,
             coalesce(d.last_verified_at, d.updated_at, d.published_at, d.fetched_at) desc nulls last
           limit $2
         `,
@@ -1574,7 +1635,13 @@ async function searchPostgres(query, limit, options = {}) {
           d.fetched_at,
           d.last_verified_at,
           d.dedup_key,
-          coalesce(sr.trust_weight, 0.72)::float as trust_score,
+          coalesce(sgo.trust_weight_override, sr.trust_weight, 0.72)::float as trust_score,
+          coalesce(crr.status, case when d.source_type = 'community' then 'pending' else 'approved' end) as governance_status,
+          case
+            when d.source_type <> 'community' then true
+            when coalesce(crr.status, 'pending') = 'approved' then true
+            else false
+          end as answer_eligible,
           greatest(
             similarity(d.title, $3),
             similarity(c.snippet, $3),
@@ -1585,7 +1652,20 @@ async function searchPostgres(query, limit, options = {}) {
         join latest_versions lv on lv.version_id = c.document_version_id
         join documents d on d.id = lv.document_id
         left join source_registry sr on sr.id = d.source_id
+        left join source_governance_overrides sgo on sgo.source_id = d.source_id
+        left join lateral (
+          select status
+          from community_review_records
+          where document_id = d.id or canonical_url = d.canonical_url
+          order by updated_at desc, created_at desc
+          limit 1
+        ) crr on true
         where d.status = 'active'
+          and coalesce(sgo.enabled_override, sr.enabled, true) = true
+          and (
+            d.source_type <> 'community'
+            or coalesce(crr.status, 'pending') in ('approved', 'supplemental')
+          )
           and (
             d.title ilike any($1::text[])
             or c.snippet ilike any($1::text[])
@@ -1597,7 +1677,7 @@ async function searchPostgres(query, limit, options = {}) {
         order by
           trigram_score desc,
           case when d.source_type = 'official' then 1 else 0 end desc,
-          coalesce(sr.trust_weight, 0.72) desc,
+          coalesce(sgo.trust_weight_override, sr.trust_weight, 0.72) desc,
           coalesce(d.last_verified_at, d.updated_at, d.published_at, d.fetched_at) desc nulls last
         limit $2
       `,
@@ -1873,7 +1953,7 @@ function sendJson(response, statusCode, payload) {
     "Content-Type": "application/json; charset=utf-8",
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, PATCH, OPTIONS",
   });
 
   if (statusCode === 204) {
@@ -2071,6 +2151,160 @@ async function buildMetricsResponse() {
   };
 }
 
+function readAdminFilters(url) {
+  return {
+    windowHours: url.searchParams.get("windowHours") ?? undefined,
+    type: url.searchParams.get("type") ?? undefined,
+    health: url.searchParams.get("health") ?? undefined,
+    status: url.searchParams.get("status") ?? undefined,
+    rating: url.searchParams.get("rating") ?? undefined,
+    sourceType: url.searchParams.get("sourceType") ?? undefined,
+    gatewayEvent: url.searchParams.get("gatewayEvent") ?? undefined,
+    cacheStatus: url.searchParams.get("cacheStatus") ?? undefined,
+    errorCode: url.searchParams.get("errorCode") ?? undefined,
+    sourceId: url.searchParams.get("sourceId") ?? undefined,
+    limit: url.searchParams.get("limit") ?? undefined,
+    offset: url.searchParams.get("offset") ?? undefined,
+  };
+}
+
+function parseAdminResourcePath(pathname) {
+  return pathname
+    .replace(/^\/api\/admin\/?/, "")
+    .split("/")
+    .filter(Boolean)
+    .map((part) => decodeURIComponent(part));
+}
+
+function sendAdminError(response, error) {
+  const statusCode = Number.isInteger(error?.statusCode) ? error.statusCode : 500;
+  const code = typeof error?.code === "string" ? error.code : "admin_api_error";
+  const message = error instanceof Error ? error.message : "Admin API request failed.";
+
+  sendJson(response, statusCode, {
+    ok: false,
+    error: code,
+    message,
+  });
+}
+
+async function handleAdminRequest(request, response, url) {
+  const parts = parseAdminResourcePath(url.pathname);
+  const [resource, id, action] = parts;
+
+  try {
+    if (resource === "summary" && request.method === "GET") {
+      sendJson(response, 200, {
+        ok: true,
+        summary: await getAdminSummary(readAdminFilters(url)),
+      });
+      return;
+    }
+
+    if (resource === "sources" && !id && request.method === "GET") {
+      sendJson(response, 200, {
+        ok: true,
+        ...(await listSources(readAdminFilters(url))),
+      });
+      return;
+    }
+
+    if (resource === "sources" && id && !action && request.method === "PATCH") {
+      const payload = await readJsonBody(request);
+      const parsed = parseSourceGovernancePatch(payload);
+
+      if (!parsed.ok) {
+        throw createAdminError(400, "invalid_source_governance", parsed.error);
+      }
+
+      sendJson(response, 200, {
+        ok: true,
+        source: await updateSourceGovernance(id, parsed.patch),
+      });
+      return;
+    }
+
+    if (resource === "sources" && id && action === "ingest" && request.method === "POST") {
+      const source = await getEffectiveSource(id);
+
+      if (!source) {
+        throw createAdminError(404, "source_not_found", `Unknown source: ${id}`);
+      }
+
+      if (!source.enabled) {
+        throw createAdminError(409, "source_disabled", `Source ${id} is disabled and cannot be queued.`);
+      }
+
+      sendJson(response, 202, {
+        ok: true,
+        job: await enqueueAdminSourceIngestion(id),
+      });
+      return;
+    }
+
+    if (resource === "query-logs" && request.method === "GET") {
+      sendJson(response, 200, {
+        ok: true,
+        ...(await listQueryLogs(readAdminFilters(url))),
+      });
+      return;
+    }
+
+    if (resource === "feedback" && !id && request.method === "GET") {
+      sendJson(response, 200, {
+        ok: true,
+        ...(await listFeedback(readAdminFilters(url))),
+      });
+      return;
+    }
+
+    if (resource === "feedback" && id && request.method === "PATCH") {
+      const payload = await readJsonBody(request);
+      const parsed = parseFeedbackPatch(payload);
+
+      if (!parsed.ok) {
+        throw createAdminError(400, "invalid_feedback_update", parsed.error);
+      }
+
+      await updateFeedback(id, parsed.patch);
+      sendJson(response, 200, {
+        ok: true,
+      });
+      return;
+    }
+
+    if (resource === "community-review" && !id && request.method === "GET") {
+      sendJson(response, 200, {
+        ok: true,
+        ...(await listCommunityReview(readAdminFilters(url))),
+      });
+      return;
+    }
+
+    if (resource === "community-review" && id && request.method === "PATCH") {
+      const payload = await readJsonBody(request);
+      const parsed = parseCommunityReviewPatch(payload);
+
+      if (!parsed.ok) {
+        throw createAdminError(400, "invalid_community_review_update", parsed.error);
+      }
+
+      await updateCommunityReview(id, parsed.patch);
+      sendJson(response, 200, {
+        ok: true,
+      });
+      return;
+    }
+
+    sendJson(response, 404, {
+      ok: false,
+      error: "admin_route_not_found",
+    });
+  } catch (error) {
+    sendAdminError(response, error);
+  }
+}
+
 function createServer() {
   const port = parsePositiveInteger(process.env.PORT, DEFAULT_PORT);
   const host = process.env.HOST || DEFAULT_HOST;
@@ -2090,6 +2324,20 @@ function createServer() {
 
     if (url.pathname === "/metrics") {
       sendJson(response, 200, await buildMetricsResponse());
+      return;
+    }
+
+    if (url.pathname.startsWith("/api/admin/")) {
+      if (!isAuthorizedAdminRequest(request)) {
+        sendJson(response, 401, {
+          ok: false,
+          error: "admin_unauthorized",
+          message: "SEARCH_SERVICE_API_KEY is required for admin APIs.",
+        });
+        return;
+      }
+
+      await handleAdminRequest(request, response, url);
       return;
     }
 
@@ -2166,6 +2414,7 @@ function startServer() {
       server.close(async () => {
         await closePostgresPool();
         await closeTelemetryPool();
+        await closeAdminPool();
         process.exit(0);
       });
     });
@@ -2181,6 +2430,7 @@ if (require.main === module) {
 module.exports = {
   countSpecificTermHits,
   buildTerms,
+  closeAdminPool,
   collectPostgresSignals,
   closePostgresPool,
   createServer,

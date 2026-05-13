@@ -15,6 +15,23 @@ export type SearchQueryLogPayload = {
   durationMs?: number;
   clientId?: string;
   gatewayEvent: SearchQueryLogGatewayEvent;
+  sourceIds: string[];
+  sourceSnapshot?: SearchQueryLogSourceSnapshot[];
+  answerSummary?: string;
+  answerConfidence?: number;
+  resultGeneratedAt?: string;
+};
+
+export type SearchQueryLogSourceSnapshot = {
+  id: string;
+  title: string;
+  type: "official" | "community";
+  sourceName: string;
+  url?: string;
+  canonicalUrl?: string;
+  trustScore?: number;
+  governanceStatus?: string;
+  answerEligible?: boolean;
 };
 
 type ParseSearchQueryLogResult =
@@ -71,6 +88,20 @@ function countSources(response: SearchResponse) {
   );
 }
 
+function buildSourceSnapshot(response: SearchResponse): SearchQueryLogSourceSnapshot[] {
+  return response.sources.slice(0, 10).map((source) => ({
+    id: source.id,
+    title: source.title,
+    type: source.type,
+    sourceName: source.sourceName,
+    ...(source.url ? { url: source.url } : {}),
+    ...(source.canonicalUrl ? { canonicalUrl: source.canonicalUrl } : {}),
+    ...(typeof source.trustScore === "number" ? { trustScore: source.trustScore } : {}),
+    ...(source.governanceStatus ? { governanceStatus: source.governanceStatus } : {}),
+    ...(typeof source.answerEligible === "boolean" ? { answerEligible: source.answerEligible } : {}),
+  }));
+}
+
 export function buildSearchQueryLogPayload({
   requestId,
   query,
@@ -99,6 +130,11 @@ export function buildSearchQueryLogPayload({
     ...(response.meta?.durationMs !== undefined ? { durationMs: response.meta.durationMs } : {}),
     ...(clientId?.trim() ? { clientId: clientId.trim() } : {}),
     gatewayEvent,
+    sourceIds: response.sources.map((source) => source.id).slice(0, 20),
+    sourceSnapshot: buildSourceSnapshot(response),
+    ...(response.answer?.summary ? { answerSummary: response.answer.summary.slice(0, 1_000) } : {}),
+    ...(typeof response.answer?.confidence === "number" ? { answerConfidence: response.answer.confidence } : {}),
+    resultGeneratedAt: response.resultGeneratedAt,
   };
 }
 
@@ -176,11 +212,27 @@ export function parseSearchQueryLogPayload(value: unknown): ParseSearchQueryLogR
 
   const errorCode = isNonEmptyString(value.errorCode) ? value.errorCode.trim() : undefined;
   const durationMs = value.durationMs === undefined ? undefined : toNonNegativeInteger(value.durationMs);
+  const sourceIds = Array.isArray(value.sourceIds)
+    ? value.sourceIds.filter(isNonEmptyString).map((item) => item.trim()).slice(0, 20)
+    : [];
+  const sourceSnapshot = Array.isArray(value.sourceSnapshot)
+    ? (value.sourceSnapshot.filter(isRecord).slice(0, 10) as SearchQueryLogSourceSnapshot[])
+    : undefined;
+  const answerSummary = isNonEmptyString(value.answerSummary) ? value.answerSummary.trim().slice(0, 1_000) : undefined;
+  const answerConfidence = typeof value.answerConfidence === "number" ? value.answerConfidence : undefined;
+  const resultGeneratedAt = isNonEmptyString(value.resultGeneratedAt) ? value.resultGeneratedAt.trim() : undefined;
 
   if (value.durationMs !== undefined && durationMs === null) {
     return {
       ok: false,
       error: "durationMs must be an integer >= 0 when provided.",
+    };
+  }
+
+  if (answerConfidence !== undefined && (!Number.isFinite(answerConfidence) || answerConfidence < 0 || answerConfidence > 1)) {
+    return {
+      ok: false,
+      error: "answerConfidence must be between 0 and 1 when provided.",
     };
   }
 
@@ -202,6 +254,11 @@ export function parseSearchQueryLogPayload(value: unknown): ParseSearchQueryLogR
       ...(normalizedDurationMs !== undefined ? { durationMs: normalizedDurationMs } : {}),
       ...(clientId ? { clientId } : {}),
       gatewayEvent: gatewayEvent as SearchQueryLogGatewayEvent,
+      sourceIds,
+      ...(sourceSnapshot ? { sourceSnapshot } : {}),
+      ...(answerSummary ? { answerSummary } : {}),
+      ...(answerConfidence !== undefined ? { answerConfidence } : {}),
+      ...(resultGeneratedAt ? { resultGeneratedAt } : {}),
     },
   };
 }

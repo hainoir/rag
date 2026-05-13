@@ -6,7 +6,8 @@
 > - 第二阶段检索质量闭环已完成，真实 `lexical / hybrid / hybrid_rerank` 三档验证已留档
 > - 当前默认推荐策略是 `hybrid`
 > - `rerank` 已验证可用，但当前配置下效果回退，因此仅保留为显式实验能力
-> - 下一步重点已经从“第二阶段是否收口”转向第三阶段可靠性与运维能力
+> - 第三阶段可靠性与运维代码侧基线已完成，真实外部监控、通知和备份恢复验收流程后置到上线前执行
+> - 下一步可以进入第四阶段管理后台与运营闭环的代码侧开发
 
 ## 1. 项目目标
 
@@ -210,18 +211,20 @@
 
 ### 第三阶段：线上可靠性与运维能力
 
+当前状态：代码侧已完成，真实线上运维验收后置。
+
 目标：让系统具备持续运行、可观测和可恢复能力。
 
 功能任务：
 
-- 拆分 web、search-service 和 Postgres 的生产部署配置。
-- 增加环境变量检查，启动时明确提示缺失项。
-- 为 `/api/search` 增加缓存策略、超时策略和限流策略。
-- 持久化 query logs、error logs 和 feedback events。
-- 将 `/metrics` 从进程内计数扩展为可持久化或可接入监控系统的指标。
-- 配置 scheduled ingestion，官方来源定时同步，社区来源默认手动或审核后同步。
-- 增加数据库备份、迁移和恢复说明。
-- 增加健康检查和部署回滚流程。
+- 已拆分 `web -> search-service -> Postgres` 的职责边界，`web` 不再直接写数据库。
+- 已增加运行态检查，`/health` 暴露数据库、telemetry、scheduled ingestion 和可选能力状态。
+- 已保留缓存、超时、限流的 fail-open 运行策略，适配本地 demo 与真实部署。
+- 已持久化 query logs、feedback events 和 service event logs。
+- 已将 `/metrics` 扩展为 runtime metrics 与 Postgres `persistent` 聚合视图。
+- 已配置 scheduled ingestion workflow，官方来源定时同步，社区来源默认手动或审核后同步。
+- 已增加 `check:phase-three-ops`、`notify:phase-three-ops` 和 `backup:drill` 运维脚本。
+- 已补充健康检查、告警、备份恢复和部署回滚 runbook。
 
 验收标准：
 
@@ -231,26 +234,36 @@
 - 定时同步失败会留下可追踪记录。
 - 生产环境密钥不进入仓库。
 
+后置真实验收：
+
+- 将 `/health`、`/metrics.persistent` 和 `service_event_logs` 接入真实外部监控平台。
+- 配置真实 `OPS_ALERT_WEBHOOK_URL`，完成一次成功和一次失败通知验收。
+- 使用真实主库和临时恢复库执行一次 `backup:drill`，留存备份、恢复和验证报告。
+- 在准线上环境复验缓存、限流、超时和降级策略。
+
 ### 第四阶段：管理后台与运营闭环
+
+当前状态：代码侧运营 MVP 已接入，真实线上管理员验收后置。
 
 目标：让维护者能管理来源、质量和用户反馈。
 
 功能任务：
 
-- 新增管理入口，限制为管理员访问。
-- 来源列表支持查看健康状态、最近同步、文档数、chunk 数和失败率。
-- 支持手动触发单个来源同步。
-- 支持禁用来源、调整权重和修改更新频率。
-- 查询日志支持按时间、状态、来源类型和错误码筛选。
-- 用户反馈进入反馈列表，支持标记已处理。
-- 社区来源增加审核状态、屏蔽词规则和人工复核记录。
-- 高风险或低可信社区内容默认不参与答案生成，只作为补充来源展示。
+- 已新增 `/admin/login` 与 `/admin`，使用 `ADMIN_DASHBOARD_TOKEN` 换取 HttpOnly 管理会话。
+- 已新增 `search-service` 的 `/api/admin/*` 管理 API，必须配置 `SEARCH_SERVICE_API_KEY` 才能访问。
+- 已新增 `source_governance_overrides`，管理员禁用、权重和更新频率调整写入 DB 覆盖层，不回写代码注册表。
+- 来源列表支持查看健康状态、最近同步、文档数、chunk 数、失败率和最近错误。
+- 支持手动触发单个来源同步；禁用来源会返回明确错误，不进入队列。
+- 查询日志已补充 `source_ids`、`source_snapshot`、回答摘要和回答置信度，支持后台追踪。
+- feedback 已支持 `new / reviewing / resolved / dismissed` 处理状态和管理员备注。
+- 社区来源已新增 `community_review_records`，`pending/rejected` 不参与召回，`supplemental` 只展示为补充来源，`approved` 才允许进入回答证据。
 
 验收标准：
 
 - 管理员能定位某个来源为什么没有被检索到。
 - 管理员能从用户反馈追踪到 query、sources 和回答。
 - 社区来源有明确治理状态，不与官方来源混淆。
+- `npm run test:admin` 通过；真实 Postgres 环境可补跑 `npm run test:admin:postgres`。
 
 ### 第五阶段：发布、验收与项目包装
 
@@ -409,7 +422,7 @@ RERANK_MODEL=...
 | 第 1 周 | 真实数据闭环     | 官方来源稳定入库、Postgres 检索复验、数据验收命令通过 |
 | 第 2 周 | 检索质量增强     | 评估集、evaluate 报告、pgvector 与 rerank 对比        |
 | 第 3 周 | 生成式回答与反馈 | evidence-bound LLM、反馈接口、query logs              |
-| 第 4 周 | 可靠性与部署     | 缓存、限流、调度、监控、部署文档                      |
+| 第 4 周 | 可靠性与部署     | 代码侧基线已完成，真实运维验收后置到上线前            |
 | 第 5 周 | 管理后台         | 来源状态、同步记录、反馈处理、社区审核                |
 | 第 6 周 | 上线验收         | CI 补齐、演示脚本、验收报告、release checklist        |
 

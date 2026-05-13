@@ -221,6 +221,7 @@ OPS_MAX_UPSTREAM_TIMEOUTS=5
 OPS_MAX_RECENT_INGESTION_FAILURES=0
 OPS_REQUEST_TIMEOUT_MS=5000
 OPS_OUTPUT_PATH=reports/ops-health-check.json
+OPS_SUMMARY_OUTPUT_PATH=reports/ops-health-check.md
 ```
 
 这个脚本会：
@@ -229,7 +230,8 @@ OPS_OUTPUT_PATH=reports/ops-health-check.json
 - 拉取 `/metrics`
 - 校验 `status`、`databaseRequired`、`telemetryRequired`、`databaseReachable`、`telemetryWritable`
 - 按阈值检查 `persistent.errorRate`、平均耗时、`upstream_timeout` 数量和最近 ingestion 失败数
-- 输出一份 JSON 报告，并在违规时返回非零退出码
+- 输出 JSON 与 Markdown 报告，并在违规时返回非零退出码
+- 即使 `/health` 或 `/metrics` 不可达，也会尽量生成带 `ops_check_runtime_error` 的报告，便于 CI artifact 和通知链路留痕
 
 `OPS_REQUIRE_PERSISTENT=auto` 现在按 `/health.telemetryRequired` 自动判断，而不是简单按“是否配置了 `DATABASE_URL`”判定。这意味着：
 
@@ -271,8 +273,49 @@ npm run check:phase-three-ops
 - `OPS_MAX_AVERAGE_DURATION_MS`
 - `OPS_MAX_UPSTREAM_TIMEOUTS`
 - `OPS_MAX_RECENT_INGESTION_FAILURES`
+- `OPS_ALERT_PROVIDER`
+- `OPS_ALERT_NOTIFY_ON`
+- `OPS_ALERT_TIMEOUT_MS`
 
-workflow 会把检查结果写到 `reports/ops-health-check.json` 并上传为 artifact。
+可选 secret：
+
+- `OPS_ALERT_WEBHOOK_URL`
+
+workflow 会把检查结果写到 `reports/ops-health-check.json` 和 `reports/ops-health-check.md`，并上传为 artifact。
+
+### 5.5 外部通知 webhook
+
+仓库现在提供通用 webhook 通知脚本：
+
+```bash
+npm run notify:phase-three-ops
+```
+
+这个脚本读取 `OPS_OUTPUT_PATH` 指向的检查报告，并按下面配置发出通知：
+
+```bash
+OPS_ALERT_WEBHOOK_URL=https://your-webhook.example.com/ops
+OPS_ALERT_PROVIDER=generic
+OPS_ALERT_NOTIFY_ON=failure
+OPS_ALERT_TIMEOUT_MS=5000
+OPS_ALERT_SOURCE=phase-three-ops
+```
+
+支持的 `OPS_ALERT_PROVIDER`：
+
+- `generic`：发送包含 `status`、`text`、`markdown`、`report` 的 JSON payload，适合接自建告警入口或任意 webhook relay
+- `slack`：发送 Slack Incoming Webhook 兼容 payload
+- `feishu`：发送飞书机器人 text payload
+
+`OPS_ALERT_NOTIFY_ON` 默认是 `failure`，只有检查失败时通知；配置为 `always` 时成功和失败都会通知。
+
+`.github/workflows/ops-health-check.yml` 已经串好以下动作：
+
+- 运行 `check:phase-three-ops`
+- 写入 GitHub Step Summary
+- 上传 JSON / Markdown artifact
+- 如果配置了 `OPS_ALERT_WEBHOOK_URL` secret，则调用 `notify:phase-three-ops`
+- 最后根据检查结果决定 workflow 是否失败
 
 ## 6. 常用排障 SQL
 
@@ -341,7 +384,42 @@ limit 20;
 
 ## 7. 备份与恢复
 
-### 7.1 逻辑备份
+### 7.1 自动演练脚本
+
+第三阶段现在提供备份 / 恢复演练脚本：
+
+```bash
+npm run backup:drill
+```
+
+最小备份演练只要求：
+
+```bash
+DATABASE_URL=postgres://...
+```
+
+完整恢复演练需要额外准备一个临时恢复库，避免覆盖正在服务的主库：
+
+```bash
+DATABASE_URL=postgres://source-db
+BACKUP_DRILL_RESTORE_DATABASE_URL=postgres://temporary-restore-db
+BACKUP_DRILL_OUTPUT_DIR=reports/backup-drills
+BACKUP_DRILL_LABEL=pre-release
+BACKUP_DRILL_RUN_VERIFY=true
+npm run backup:drill
+```
+
+脚本会：
+
+- 运行 `pg_dump --format=custom`
+- 额外导出 schema-only SQL
+- 如果配置了 `BACKUP_DRILL_RESTORE_DATABASE_URL`，执行 `pg_restore --clean --if-exists`
+- 如果 `BACKUP_DRILL_RUN_VERIFY=true`，在恢复库上执行 `npm run smoke:postgres` 和 `npm run test:telemetry:postgres`
+- 写出 `backup-drill-report.json`，作为演练留档
+
+注意：恢复库必须是临时库或明确可覆盖的测试库，不要把 `BACKUP_DRILL_RESTORE_DATABASE_URL` 指向生产主库。
+
+### 7.2 手工逻辑备份
 
 ```bash
 pg_dump "$env:DATABASE_URL" --format=custom --file campus-rag-backup.dump
@@ -353,10 +431,10 @@ pg_dump "$env:DATABASE_URL" --format=custom --file campus-rag-backup.dump
 pg_dump "$env:DATABASE_URL" --schema-only --file campus-rag-schema.sql
 ```
 
-### 7.2 恢复
+### 7.3 手工恢复
 
 ```bash
-pg_restore --clean --if-exists --dbname "$env:DATABASE_URL" campus-rag-backup.dump
+pg_restore --clean --if-exists --dbname "$env:BACKUP_DRILL_RESTORE_DATABASE_URL" campus-rag-backup.dump
 ```
 
 恢复后至少复验：
@@ -394,10 +472,12 @@ npm run test:telemetry:postgres
 - `/metrics.persistent`
 - scheduled ingestion 的结构化事件留痕
 - 第三阶段 runbook 与验证脚本
+- webhook 通知脚本与 GitHub Actions 通知接入点
+- 备份 / 恢复演练脚本与演练报告产物
 
 仍未完成的是：
 
 - 外部监控平台接入
-- 外部通知链路
+- 真实外部通知渠道的密钥配置与发送验收记录
 - 备份 / 恢复 / 回滚的真实演练记录
 - 更完整的来源治理与后台看板

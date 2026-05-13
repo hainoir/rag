@@ -44,12 +44,14 @@ async function main() {
   const previousProvider = process.env.SEARCH_SERVICE_PROVIDER;
   const previousAnswerMode = process.env.SEARCH_ANSWER_MODE;
   const previousDatabaseUrl = process.env.DATABASE_URL;
+  const previousApiKey = process.env.SEARCH_SERVICE_API_KEY;
   const host = "127.0.0.1";
   const server = createServer();
 
   process.env.SEARCH_SERVICE_PROVIDER = "seed";
   process.env.SEARCH_ANSWER_MODE = "extractive";
   process.env.DATABASE_URL = "";
+  process.env.SEARCH_SERVICE_API_KEY = "";
 
   try {
     const demoQueries = await readDemoQueries();
@@ -105,6 +107,12 @@ async function main() {
       delete process.env.DATABASE_URL;
     } else {
       process.env.DATABASE_URL = previousDatabaseUrl;
+    }
+
+    if (previousApiKey === undefined) {
+      delete process.env.SEARCH_SERVICE_API_KEY;
+    } else {
+      process.env.SEARCH_SERVICE_API_KEY = previousApiKey;
     }
 
     if (server.listening) {

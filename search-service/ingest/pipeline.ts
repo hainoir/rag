@@ -3,7 +3,7 @@ import { readIngestRuntimeConfig, resolveSelectedSources } from "./config.ts";
 import { fetchHtml } from "./http.ts";
 import { moderateCommunityMarkdown } from "./moderation.ts";
 import { PostgresStore } from "./postgres-store.ts";
-import type { ParsedArticle, SourceRunSummary, SupportedSourceId } from "./types.ts";
+import type { ParsedArticle, SelectedSource, SourceRunSummary } from "./types.ts";
 import {
   buildChunksFromMarkdown,
   buildContentHash,
@@ -76,9 +76,8 @@ export function sanitizeCommunityMarkdown(markdown: string) {
     .replace(/((?:微信|vx|QQ|qq)[:：\s]*)[A-Za-z0-9_-]{5,}/g, "$1[联系方式已隐藏]");
 }
 
-async function discoverDetailUrls(sourceId: SupportedSourceId, config: ReturnType<typeof readIngestRuntimeConfig>) {
-  const source = resolveSelectedSources([sourceId])[0];
-  const adapter = getSourceAdapter(sourceId);
+async function discoverDetailUrls(source: SelectedSource, config: ReturnType<typeof readIngestRuntimeConfig>) {
+  const adapter = getSourceAdapter(source.id);
   const pending = [...adapter.seedListUrls(source)];
   const visited = new Set<string>();
   const detailUrls = new Set<string>();
@@ -129,13 +128,12 @@ async function discoverDetailUrls(sourceId: SupportedSourceId, config: ReturnTyp
 }
 
 async function prepareArticle(
-  sourceId: SupportedSourceId,
+  source: SelectedSource,
   config: ReturnType<typeof readIngestRuntimeConfig>,
   detailUrl: string,
   onRetry?: (attempt: number, error: unknown) => Promise<void> | void,
 ): Promise<PreparedArticleResult> {
-  const source = resolveSelectedSources([sourceId])[0];
-  const adapter = getSourceAdapter(sourceId);
+  const adapter = getSourceAdapter(source.id);
   let html = "";
 
   try {
@@ -164,7 +162,7 @@ async function prepareArticle(
               timestamp: new Date().toISOString(),
               service: "ingestion",
               event: "community_content.flagged",
-              sourceId,
+              sourceId: source.id,
               detailUrl,
               reason: moderation.reason ?? "flagged",
             }),
@@ -191,6 +189,8 @@ async function prepareArticle(
           dedupKey: buildDedupKey(source.id, parsed.title, parsed.publishedAt),
           contentHash: buildContentHash(cleanedMarkdown),
           chunks,
+          moderationFlagged: moderation.flagged,
+          moderationReason: moderation.reason,
         };
       },
       config,
@@ -235,10 +235,11 @@ export async function runIngestionPipeline(sourceIds: string[]) {
   try {
     await store.initSchema();
     await store.upsertSources(sources);
+    const effectiveSources = await store.applySourceGovernanceOverrides(sources);
 
     const summaries: SourceRunSummary[] = [];
 
-    for (const source of sources) {
+    for (const source of effectiveSources) {
       const runId = await store.createRun(source.id);
       const summary: SourceRunSummary = {
         sourceId: source.id,
@@ -253,7 +254,7 @@ export async function runIngestionPipeline(sourceIds: string[]) {
       };
 
       try {
-        const discovery = await discoverDetailUrls(source.id, config);
+        const discovery = await discoverDetailUrls(source, config);
 
         summary.fetchedCount = discovery.detailUrls.length;
         summary.errors.push(...discovery.errors);
@@ -271,7 +272,7 @@ export async function runIngestionPipeline(sourceIds: string[]) {
         });
 
         const preparedResults = await runWithConcurrency(discovery.detailUrls, config.concurrency, async (detailUrl) =>
-          prepareArticle(source.id, config, detailUrl, async (attempt, error) => {
+          prepareArticle(source, config, detailUrl, async (attempt, error) => {
             await store.recordRunItem({
               runId,
               sourceId: source.id,
@@ -320,6 +321,17 @@ export async function runIngestionPipeline(sourceIds: string[]) {
             summary.chunkCount += outcome.chunkCount;
           } else {
             summary.dedupedCount += 1;
+          }
+
+          if (result.article.source.type === "community" && outcome.documentId) {
+            await store.recordCommunityReviewCandidate({
+              sourceId: result.article.source.id,
+              documentId: outcome.documentId,
+              canonicalUrl: result.article.canonicalUrl,
+              title: result.article.title,
+              moderationFlagged: result.article.moderationFlagged,
+              moderationReason: result.article.moderationReason,
+            });
           }
         }
 

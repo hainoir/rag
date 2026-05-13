@@ -18,6 +18,19 @@ function toNonNegativeInteger(value) {
   return Math.round(value);
 }
 
+function normalizeSourceIds(value) {
+  return Array.isArray(value)
+    ? value
+        .filter((item) => isNonEmptyString(item))
+        .map((item) => item.trim())
+        .slice(0, 20)
+    : [];
+}
+
+function normalizeSourceSnapshot(value) {
+  return Array.isArray(value) ? value.filter((item) => isRecord(item)).slice(0, 10) : undefined;
+}
+
 function parseSearchFeedbackPayload(value) {
   if (!isRecord(value)) {
     return {
@@ -145,11 +158,26 @@ function parseSearchQueryLogPayload(value) {
 
   const errorCode = isNonEmptyString(value.errorCode) ? value.errorCode.trim() : undefined;
   const durationMs = value.durationMs === undefined ? undefined : toNonNegativeInteger(value.durationMs);
+  const sourceIds = normalizeSourceIds(value.sourceIds);
+  const sourceSnapshot = normalizeSourceSnapshot(value.sourceSnapshot);
+  const answerSummary = isNonEmptyString(value.answerSummary) ? value.answerSummary.trim().slice(0, 1_000) : undefined;
+  const answerConfidence = typeof value.answerConfidence === "number" ? value.answerConfidence : undefined;
+  const resultGeneratedAt = isNonEmptyString(value.resultGeneratedAt) ? value.resultGeneratedAt.trim() : undefined;
 
   if (value.durationMs !== undefined && durationMs === null) {
     return {
       ok: false,
       error: "durationMs must be an integer >= 0 when provided.",
+    };
+  }
+
+  if (
+    answerConfidence !== undefined &&
+    (!Number.isFinite(answerConfidence) || answerConfidence < 0 || answerConfidence > 1)
+  ) {
+    return {
+      ok: false,
+      error: "answerConfidence must be between 0 and 1 when provided.",
     };
   }
 
@@ -170,6 +198,11 @@ function parseSearchQueryLogPayload(value) {
       ...(durationMs !== undefined ? { durationMs } : {}),
       ...(clientId ? { clientId } : {}),
       gatewayEvent,
+      sourceIds,
+      ...(sourceSnapshot ? { sourceSnapshot } : {}),
+      ...(answerSummary ? { answerSummary } : {}),
+      ...(answerConfidence !== undefined ? { answerConfidence } : {}),
+      ...(resultGeneratedAt ? { resultGeneratedAt } : {}),
     },
   };
 }

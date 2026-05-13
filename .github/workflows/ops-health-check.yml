@@ -20,6 +20,12 @@ jobs:
       OPS_MAX_UPSTREAM_TIMEOUTS: ${{ vars.OPS_MAX_UPSTREAM_TIMEOUTS || '5' }}
       OPS_MAX_RECENT_INGESTION_FAILURES: ${{ vars.OPS_MAX_RECENT_INGESTION_FAILURES || '0' }}
       OPS_OUTPUT_PATH: reports/ops-health-check.json
+      OPS_SUMMARY_OUTPUT_PATH: reports/ops-health-check.md
+      OPS_ALERT_WEBHOOK_URL: ${{ secrets.OPS_ALERT_WEBHOOK_URL || '' }}
+      OPS_ALERT_PROVIDER: ${{ vars.OPS_ALERT_PROVIDER || 'generic' }}
+      OPS_ALERT_NOTIFY_ON: ${{ vars.OPS_ALERT_NOTIFY_ON || 'failure' }}
+      OPS_ALERT_TIMEOUT_MS: ${{ vars.OPS_ALERT_TIMEOUT_MS || '5000' }}
+      OPS_ALERT_SOURCE: github-actions/ops-health-check
 
     steps:
       - uses: actions/checkout@v4
@@ -33,11 +39,32 @@ jobs:
         run: echo "Ops health check skipped because no search-service health/metrics endpoint is configured."
 
       - name: Run phase-three ops check
+        id: ops_check
         if: ${{ env.SEARCH_SERVICE_URL != '' || (env.SEARCH_SERVICE_HEALTH_URL != '' && env.SEARCH_SERVICE_METRICS_URL != '') }}
+        continue-on-error: true
         run: node --experimental-strip-types scripts/check-phase-three-ops.mjs
+
+      - name: Publish GitHub summary
+        if: ${{ always() && (env.SEARCH_SERVICE_URL != '' || (env.SEARCH_SERVICE_HEALTH_URL != '' && env.SEARCH_SERVICE_METRICS_URL != '')) }}
+        run: |
+          if [ -f reports/ops-health-check.md ]; then
+            cat reports/ops-health-check.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Ops health check summary file was not generated." >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - uses: actions/upload-artifact@v4
         if: ${{ always() && (env.SEARCH_SERVICE_URL != '' || (env.SEARCH_SERVICE_HEALTH_URL != '' && env.SEARCH_SERVICE_METRICS_URL != '')) }}
         with:
           name: ops-health-check-report
-          path: reports/ops-health-check.json
+          path: |
+            reports/ops-health-check.json
+            reports/ops-health-check.md
+
+      - name: Send webhook notification
+        if: ${{ always() && env.OPS_ALERT_WEBHOOK_URL != '' && (env.SEARCH_SERVICE_URL != '' || (env.SEARCH_SERVICE_HEALTH_URL != '' && env.SEARCH_SERVICE_METRICS_URL != '')) }}
+        run: node --experimental-strip-types scripts/notify-phase-three-ops.mjs
+
+      - name: Fail workflow when ops check failed
+        if: ${{ always() && steps.ops_check.outcome == 'failure' }}
+        run: exit 1

@@ -137,9 +137,14 @@ async function storeSearchQueryLog(payload) {
           duration_ms,
           client_hash,
           gateway_event,
+          source_ids,
+          source_snapshot,
+          answer_summary,
+          answer_confidence,
+          result_generated_at,
           created_at
         )
-        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, now())
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15, $16, $17, now())
       `,
       [
         payload.requestId,
@@ -154,6 +159,11 @@ async function storeSearchQueryLog(payload) {
         payload.durationMs ?? null,
         hashClientId(payload.clientId),
         payload.gatewayEvent,
+        payload.sourceIds ?? [],
+        payload.sourceSnapshot ? JSON.stringify(payload.sourceSnapshot) : null,
+        payload.answerSummary ?? null,
+        payload.answerConfidence ?? null,
+        payload.resultGeneratedAt ?? null,
       ],
     );
   });

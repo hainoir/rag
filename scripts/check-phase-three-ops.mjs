@@ -2,6 +2,10 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import {
+  createOperationsRuntimeErrorReport,
+  formatOperationsSummaryMarkdown,
+} from "../src/lib/search/operations-alert.ts";
+import {
   evaluateOperationsSnapshot,
   readOperationsCheckConfig,
 } from "../src/lib/search/operations-monitor.ts";
@@ -59,41 +63,68 @@ async function maybeWriteReport(report) {
   await fs.writeFile(resolvedPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
 }
 
-async function main() {
-  const config = readOperationsCheckConfig();
+async function maybeWriteSummary(report) {
+  const outputPath = process.env.OPS_SUMMARY_OUTPUT_PATH?.trim();
 
-  if (!config.healthUrl || !config.metricsUrl) {
-    throw new Error(
-      "SEARCH_SERVICE_URL or both SEARCH_SERVICE_HEALTH_URL and SEARCH_SERVICE_METRICS_URL must be configured.",
-    );
+  if (!outputPath) {
+    return;
   }
 
-  const [health, metrics] = await Promise.all([
-    requestJson(config.healthUrl, config.requestTimeoutMs),
-    requestJson(config.metricsUrl, config.requestTimeoutMs),
-  ]);
-  const evaluation = evaluateOperationsSnapshot(health, metrics, config);
-  const report = {
-    checkedAt: new Date().toISOString(),
-    endpoints: {
-      healthUrl: config.healthUrl,
-      metricsUrl: config.metricsUrl,
-    },
-    config: {
-      allowDegraded: config.allowDegraded,
-      requirePersistent: config.requirePersistent,
-      maxErrorRate: config.maxErrorRate,
-      maxAverageDurationMs: config.maxAverageDurationMs,
-      maxUpstreamTimeouts: config.maxUpstreamTimeouts,
-      maxRecentIngestionFailures: config.maxRecentIngestionFailures,
-    },
-    ...evaluation,
-  };
+  const resolvedPath = path.resolve(process.cwd(), outputPath);
+  await fs.mkdir(path.dirname(resolvedPath), { recursive: true });
+  await fs.writeFile(resolvedPath, formatOperationsSummaryMarkdown(report), "utf8");
+}
 
-  await maybeWriteReport(report);
-  console.log(JSON.stringify(report, null, 2));
+async function main() {
+  const config = readOperationsCheckConfig();
+  const checkedAt = new Date().toISOString();
 
-  if (!evaluation.ok) {
+  try {
+    if (!config.healthUrl || !config.metricsUrl) {
+      throw new Error(
+        "SEARCH_SERVICE_URL or both SEARCH_SERVICE_HEALTH_URL and SEARCH_SERVICE_METRICS_URL must be configured.",
+      );
+    }
+
+    const [health, metrics] = await Promise.all([
+      requestJson(config.healthUrl, config.requestTimeoutMs),
+      requestJson(config.metricsUrl, config.requestTimeoutMs),
+    ]);
+    const evaluation = evaluateOperationsSnapshot(health, metrics, config);
+    const report = {
+      checkedAt,
+      endpoints: {
+        healthUrl: config.healthUrl,
+        metricsUrl: config.metricsUrl,
+      },
+      config: {
+        allowDegraded: config.allowDegraded,
+        requirePersistent: config.requirePersistent,
+        maxErrorRate: config.maxErrorRate,
+        maxAverageDurationMs: config.maxAverageDurationMs,
+        maxUpstreamTimeouts: config.maxUpstreamTimeouts,
+        maxRecentIngestionFailures: config.maxRecentIngestionFailures,
+      },
+      ...evaluation,
+    };
+
+    await maybeWriteReport(report);
+    await maybeWriteSummary(report);
+    console.log(JSON.stringify(report, null, 2));
+
+    if (!evaluation.ok) {
+      process.exitCode = 1;
+    }
+  } catch (error) {
+    const report = createOperationsRuntimeErrorReport({
+      config,
+      checkedAt,
+      error,
+    });
+
+    await maybeWriteReport(report);
+    await maybeWriteSummary(report);
+    console.log(JSON.stringify(report, null, 2));
     process.exitCode = 1;
   }
 }

@@ -40,7 +40,7 @@
 - pgvector 检索：已接通 Qwen3 向量方案，本地 `vector:init -> embed:chunks -> smoke:vector` 已跑通，当前重点不再是“是否接通”，而是误召回抑制和排序收益。
 - rerank：代码链路、候选诊断和真实评估入口都已完成，且 `Qwen/Qwen3-Reranker-8B` 已在真实评估中跑通；但当前模型与参数组合会拉低排序质量，因此只保留为显式实验能力，不再建议默认开启。
 - evidence-bound LLM answer：具备接入点和回退路径，但还需要更系统的效果验证和错误观测。
-- feedback / query logs：前端入口已保留不变，但持久化已经统一收口到 `search-service`，并开始记录 `gateway_event` 与 `service_event_logs`；第二轮又补了仓库内告警检查脚本、定时 workflow，以及基于 `/health.databaseRequired` / `telemetryRequired` 的模式感知判定，但仍缺后台分析面板和外部通知链路。
+- feedback / query logs：前端入口已保留不变，但持久化已经统一收口到 `search-service`，并开始记录 `gateway_event` 与 `service_event_logs`；第二轮又补了仓库内告警检查脚本、定时 workflow、webhook 通知入口，以及基于 `/health.databaseRequired` / `telemetryRequired` 的模式感知判定，但仍缺后台分析面板和真实外部通知渠道验收。
 - metrics：现在已经同时包含进程内 runtime metrics 与 Postgres 聚合的 `persistent` 指标，并可以被 `check:phase-three-ops` 自动判定；seed / demo 模式也不会再因为本机残留数据库配置而被误判成必须通过 persistent 指标，但还没有外部监控平台。
 
 ### 2.3 还明显没有完成的部分
@@ -48,7 +48,7 @@
 - 生产级缓存、限流、告警、持久化观测与故障恢复
 - 管理后台、来源状态看板、失败重试看板、人工审核工作流
 - 社区来源长期治理策略和运营审计
-- 数据库备份、迁移、恢复和回滚流程的完整演练
+- 数据库备份、迁移、恢复和回滚流程的真实演练记录
 - 最终发布物料：上线 README、验收报告、release checklist、稳定演示脚本
 
 ## 3. 按阶段看当前所处位置
@@ -105,7 +105,7 @@
 
 ### 第三阶段：线上可靠性与运维能力
 
-当前状态：已经完成第一轮可靠性基线，但还不能算“生产运维完成”。
+当前状态：代码侧可靠性与运维基线已完成，真实线上运维验收后置。
 
 已经具备：
 
@@ -118,6 +118,8 @@
 - `test:telemetry:postgres`
 - `docs/phase-three-operations.md`
 - `check:phase-three-ops`
+- `notify:phase-three-ops`
+- `backup:drill`
 - `.github/workflows/ops-health-check.yml`
 - seed / demo 模式的本地运维检查入口：`SEARCH_SERVICE_DISABLE_ENV_FILE=1`
 
@@ -125,17 +127,19 @@
 
 - 缓存、超时、限流策略在真实部署环境下的持续回归验证
 - 外部监控平台接入
-- 外部通知链路
+- 真实外部通知渠道的密钥配置和发送验收记录
 - 备份、恢复、回滚的真实演练记录
 - 更完整的来源治理、失败看板和运维后台
 
-结论：第三阶段已经完成第二轮“仓库内可靠性与告警检查基线”，并补齐了 seed / 持久化两种运行模式的判定边界，但还没有完成完整的线上运维闭环。
+结论：第三阶段可以按“代码侧完成”进入第四阶段开发；真实外部监控、真实 webhook 发送、真实备份恢复回滚演练保留为上线前验收项，不能对外宣称 production-grade 运维闭环已完成。
 
 ### 第四阶段与第五阶段
 
-当前状态：基本未开始闭环。
+当前状态：第四阶段管理后台与运营闭环已经进入代码侧落地；第五阶段仍未开始闭环。
 
-- 第四阶段的管理后台、来源治理、人工审核、反馈处理仍主要停留在规划层。
+- 第四阶段已新增单密钥后台登录、`/admin` 工作台、`search-service` 管理 API、来源治理覆盖层、query / feedback 追踪字段和社区审核记录。
+- 代码侧已经可以覆盖来源状态看板、单来源同步触发、feedback 处理列表、社区审核与人工复核状态流转。
+- 后续仍需要在真实部署环境配置 `ADMIN_DASHBOARD_TOKEN`、`SEARCH_SERVICE_API_KEY`、`DATABASE_URL` 和 `REDIS_URL`，再跑一次后台验收。
 - 第五阶段的上线包装、验收报告、release checklist 也还没有形成最终版。
 
 ## 4. 下一步开发顺序
@@ -146,23 +150,27 @@
    - 在运行手册和项目报告中记录 2026-05-11 的本地与 GitHub Actions 验收结果
    - 记录当前稳定官方源集合与社区关闭策略
 
-2. 继续补第三阶段可靠性
-   - 把新的 `/health`、`/metrics.persistent`、`service_event_logs` 接到外部监控与通知平台
-   - 在真实部署环境里复验缓存、限流、超时和降级策略
-   - 做一次可复盘的备份、恢复和回滚演练
+2. 完成第四阶段代码侧复验
+   - `npm run test:admin`
+   - `npm run build`
+   - 有 Postgres 时补跑 `npm run test:admin:postgres`
+   - 有 Redis 时从后台触发单来源同步，再运行 `npm run ingest:worker -- --once`
 
-3. 最后再做后台与发布物料
-   - 来源状态看板
-   - 社区审核与人工复核流程
+3. 上线前补跑第三阶段真实验收
+   - 把 `/health`、`/metrics.persistent`、`service_event_logs` 接到外部监控与通知平台
+   - 在真实部署环境里复验缓存、限流、超时和降级策略
+   - 用 `backup:drill` 做一次可复盘的备份、恢复和回滚演练
+
+4. 最后再做发布物料
    - 上线 README、验收报告、release checklist
 
 ## 5. 当前最重要的里程碑
 
 下一个真正应该完成的里程碑不是“再补 PostgreSQL / Redis 接入功能”，而是：
 
-> 以当前已验证的真实数据链路和 Qwen3 评估结果为基础，进入第三阶段可靠性建设；第二阶段结论已经固定为“`hybrid` 是默认策略，`rerank` 仅保留实验能力”。
+> 以当前已验证的真实数据链路和 Qwen3 评估结果为基础，把第四阶段后台治理 MVP 在本地和准线上环境验收完成。
 
-阶段一和第二阶段已经把项目状态从“代码侧已准备”推进到了“真实数据链路已验证 + 默认检索策略已收口”；第三阶段现在进入“把可靠性基线接成真正运维闭环”的阶段。
+阶段一和第二阶段已经把项目状态从“代码侧已准备”推进到了“真实数据链路已验证 + 默认检索策略已收口”；第三阶段已经完成代码侧可靠性基线，真实运维验收保留到上线前执行。第四阶段现在已有代码侧后台治理 MVP，当前重点应切换为后台验收、真实 Redis 手动同步和 Postgres admin integration 复验。
 
 ## 6. 当前建议的文档阅读顺序
 

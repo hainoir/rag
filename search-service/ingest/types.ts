@@ -62,6 +62,8 @@ export type ParsedArticle = {
   dedupKey: string;
   contentHash: string;
   chunks: PreparedChunk[];
+  moderationFlagged?: boolean;
+  moderationReason?: string;
 };
 
 export type ListPageParseResult = {

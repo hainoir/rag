@@ -16,6 +16,16 @@ create table if not exists source_registry (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists source_governance_overrides (
+  source_id text primary key references source_registry(id) on delete cascade,
+  enabled_override boolean,
+  trust_weight_override numeric(4, 3) check (trust_weight_override >= 0 and trust_weight_override <= 1),
+  update_cadence_override text check (update_cadence_override in ('hourly', 'daily', 'weekly', 'manual')),
+  admin_note text,
+  updated_by text not null default 'admin',
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists documents (
   id uuid primary key default gen_random_uuid(),
   source_id text not null references source_registry(id),
@@ -94,6 +104,10 @@ create table if not exists search_feedback (
   rating text not null check (rating in ('up', 'down')),
   reason text,
   source_ids text[] not null default '{}',
+  status text not null default 'new' check (status in ('new', 'reviewing', 'resolved', 'dismissed')),
+  handled_at timestamptz,
+  handled_by text,
+  admin_note text,
   created_at timestamptz not null default now()
 );
 
@@ -111,11 +125,29 @@ create table if not exists search_query_logs (
   duration_ms integer,
   client_hash text,
   gateway_event text not null default 'search_response' check (gateway_event in ('search_response', 'rate_limited', 'gateway_error')),
+  source_ids text[] not null default '{}',
+  source_snapshot jsonb,
+  answer_summary text,
+  answer_confidence numeric(4, 3) check (answer_confidence >= 0 and answer_confidence <= 1),
+  result_generated_at timestamptz,
   created_at timestamptz not null default now()
 );
 
 alter table if exists search_query_logs
   add column if not exists gateway_event text not null default 'search_response';
+
+alter table if exists search_query_logs
+  add column if not exists source_ids text[] not null default '{}',
+  add column if not exists source_snapshot jsonb,
+  add column if not exists answer_summary text,
+  add column if not exists answer_confidence numeric(4, 3),
+  add column if not exists result_generated_at timestamptz;
+
+alter table if exists search_feedback
+  add column if not exists status text not null default 'new',
+  add column if not exists handled_at timestamptz,
+  add column if not exists handled_by text,
+  add column if not exists admin_note text;
 
 create table if not exists service_event_logs (
   id uuid primary key default gen_random_uuid(),
@@ -129,6 +161,41 @@ create table if not exists service_event_logs (
   created_at timestamptz not null default now()
 );
 
+create table if not exists community_review_records (
+  id uuid primary key default gen_random_uuid(),
+  source_id text not null references source_registry(id),
+  document_id uuid references documents(id) on delete cascade,
+  canonical_url text not null,
+  title text,
+  status text not null default 'pending' check (status in ('pending', 'approved', 'supplemental', 'rejected')),
+  risk_level text not null default 'medium' check (risk_level in ('low', 'medium', 'high')),
+  reason text,
+  reviewed_by text,
+  reviewed_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (canonical_url)
+);
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'search_query_logs_answer_confidence_check'
+  ) then
+    alter table search_query_logs
+      add constraint search_query_logs_answer_confidence_check
+      check (answer_confidence is null or (answer_confidence >= 0 and answer_confidence <= 1));
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint where conname = 'search_feedback_status_check'
+  ) then
+    alter table search_feedback
+      add constraint search_feedback_status_check
+      check (status in ('new', 'reviewing', 'resolved', 'dismissed'));
+  end if;
+end $$;
+
 create index if not exists documents_source_id_idx on documents (source_id);
 create index if not exists documents_published_at_idx on documents (published_at desc);
 create index if not exists documents_last_verified_at_idx on documents (last_verified_at desc);
@@ -138,11 +205,17 @@ create index if not exists chunks_snippet_trgm_idx on chunks using gin (snippet 
 create index if not exists chunks_full_snippet_trgm_idx on chunks using gin (full_snippet gin_trgm_ops);
 create index if not exists ingestion_runs_source_id_idx on ingestion_runs (source_id, started_at desc);
 create index if not exists ingestion_run_items_run_id_idx on ingestion_run_items (run_id);
+create index if not exists source_governance_overrides_updated_at_idx on source_governance_overrides (updated_at desc);
 create index if not exists search_feedback_request_id_idx on search_feedback (request_id);
 create index if not exists search_feedback_created_at_idx on search_feedback (created_at desc);
+create index if not exists search_feedback_status_idx on search_feedback (status, created_at desc);
 create index if not exists search_query_logs_request_id_idx on search_query_logs (request_id);
 create index if not exists search_query_logs_created_at_idx on search_query_logs (created_at desc);
 create index if not exists search_query_logs_status_idx on search_query_logs (status, created_at desc);
 create index if not exists search_query_logs_gateway_event_idx on search_query_logs (gateway_event, created_at desc);
+create index if not exists search_query_logs_source_ids_idx on search_query_logs using gin (source_ids);
 create index if not exists service_event_logs_event_idx on service_event_logs (event, created_at desc);
 create index if not exists service_event_logs_request_id_idx on service_event_logs (request_id);
+create index if not exists community_review_records_status_idx on community_review_records (status, updated_at desc);
+create index if not exists community_review_records_source_idx on community_review_records (source_id, status);
+create index if not exists community_review_records_document_idx on community_review_records (document_id);

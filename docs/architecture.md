@@ -2,7 +2,7 @@
 
 ## Summary
 
-这个项目是一个 **Next.js App Router + React + TypeScript + Tailwind CSS v4** 的前端产品原型，主题是“校园信息检索与可解释问答助手”。
+这个项目是一个 **Next.js App Router + React + TypeScript + Tailwind CSS v4** 的校园信息检索 / explainable RAG MVP，主题是“校园信息检索与可解释问答助手”。
 
 它现在的边界比早期 mock 版本清晰得多：前端通过 `src/app/api/search/route.ts` 请求结果，Route Handler 内部再调用 `searchServiceProvider` 访问外部搜索服务。这个仓库负责统一结果契约、状态编排和可信度表达；`search-service/` 负责最小可用的官方来源摄取、Postgres chunk 检索、seed fallback，以及可选的 evidence-bound LLM 回答生成。
 
@@ -69,12 +69,12 @@
 
 当前同时要明确说明：
 
-- `/api/search` 只是前端唯一入口，不代表仓库里已经包含完整搜索服务
+- `/api/search` 是前端唯一入口；仓库内的 `search-service/` 已经承担真实检索与摄取职责，但仍不是完整生产级搜索平台
 - `searchServiceProvider` 负责请求上游搜索服务，不直接读取数据库
 - `search-service/` 可以读取 Postgres chunks，默认生成 extractive answer，也可以在 `SEARCH_ANSWER_MODE=llm` 时调用 LLM 生成回答
 - pgvector hybrid retrieval 已完成真实验证，当前默认推荐策略是 `hybrid`
 - rerank 链路已接通且完成真实验证，但当前配置下效果回退，因此只保留为显式实验能力，不作为默认路径
-- 告警、缓存、限流和生产调度仍属于后续搜索服务能力
+- 真实外部告警、备份恢复、准线上管理员验收和长期生产调度仍属于上线前验收项
 
 ## 架构分层
 
@@ -166,7 +166,7 @@
 
 ### Hybrid 默认与实验性 rerank
 
-`search-service/rerank-client.cjs` 提供兼容 `/rerank` 的 cross-encoder 接入点。当前普通请求默认不启用 rerank，只有显式 `SEARCH_RERANK_MODE=on|auto` 时才会参与重排；失败时仍保留原排序。当前真实评估已经确认 `hybrid` 是默认推荐策略，而 `hybrid_rerank` 仅保留为实验入口。`/metrics` 提供进程内 JSON 计数器，记录 provider、status、fallback、error code 和平均耗时。
+`search-service/rerank-client.cjs` 提供兼容 `/rerank` 的 cross-encoder 接入点。当前普通请求默认不启用 rerank，只有显式 `SEARCH_RERANK_MODE=on|auto` 时才会参与重排；失败时仍保留原排序。当前真实评估已经确认 `hybrid` 是默认推荐策略，而 `hybrid_rerank` 仅保留为实验入口。`/metrics` 同时提供进程内 runtime 指标和 Postgres `persistent` 聚合指标，记录 provider、status、fallback、error code、平均耗时和近期 ingestion 失败。
 
 ### 无答案兜底
 
@@ -179,8 +179,8 @@
 - 这个仓库已经包含最小官方 / 社区来源摄取、Postgres-backed retrieval、已验证的 hybrid 检索和实验性 rerank 接入，但还不是完整生产检索平台
 - LLM 回答是可选生成层，不替代检索和来源校验；没有配置模型时仍是 extractive answer
 - `source-registry.ts` 已绑定天津商业大学官方 / 社区来源，社区来源默认只摄取一个低权重入口，不能当作权威事实
-- 当前已有上游错误码、seed / postgres 降级边界和轻量 metrics，但还没有完整的监控、告警、缓存和限流体系
-- 已有 unit / component / contract / e2e / Postgres integration 入口，也已有固定检索评估集和真实对比报告，但仍缺生产运行指标与长期监控体系
+- 当前已有上游错误码、seed / postgres 降级边界、runtime metrics、persistent metrics、运维检查脚本、webhook 通知入口和备份演练脚本，但还没有真实外部监控、真实通知和真实恢复演练留证
+- 已有 unit / component / contract / e2e / Postgres integration 入口，也已有固定检索评估集和真实对比报告，但 release candidate 仍需要按验收报告补齐当前环境的通过、失败或 blocked 记录
 
 ## Validation
 
@@ -190,4 +190,4 @@
 - 核心代码位于 `src/app`、`src/components`、`src/lib/search`
 - 当前已有 `src/app/api/search/route.ts` 作为统一搜索入口
 - 当前不再依赖 `mock-data.ts`，而是通过 `searchServiceProvider` 访问外部搜索服务
-- 仓库内新增了来源注册表、清洗 / 去重契约和入库表结构草案
+- 仓库内已经具备来源注册表、清洗 / 去重契约、Postgres 入库结构、后台治理结构和 release gate 文档入口

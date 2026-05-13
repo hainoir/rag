@@ -8,6 +8,7 @@
 > - `rerank` 已验证可用，但当前配置下效果回退，因此仅保留为显式实验能力
 > - 第三阶段可靠性与运维代码侧基线已完成，真实外部监控、通知和备份恢复验收流程后置到上线前执行
 > - 第四阶段管理后台与运营闭环代码侧 MVP 已接入，真实线上管理员验收后置
+> - 第五阶段发布文档与 release gate 入口已开始落地，真实验收结论以 `docs/release-acceptance-report.md` 为准
 
 ## 1. 项目目标
 
@@ -25,7 +26,7 @@
 
 ## 2. 当前基础
 
-当前项目已经具备完整主链路的雏形：
+当前项目已经具备上线候选版本所需的主链路基础：
 
 - 前端使用 Next.js App Router、React、TypeScript 和 Tailwind CSS。
 - 用户入口为首页搜索和结果页 `/search?q=...`。
@@ -34,14 +35,14 @@
 - `search-service/` 已包含 seed fallback、Postgres chunk 检索、官方来源摄取 CLI、社区来源摄取 CLI、可选 LLM 回答、可选 pgvector hybrid retrieval、可选 rerank 和 `/metrics`。
 - 文档中已经沉淀搜索契约、数据管线、Postgres schema、本地部署和演示部署说明。
 
-当前仍不能直接称为完整上线级 RAG 项目，主要缺口包括：
+当前仍不能直接称为完整生产级 RAG 平台，主要缺口已经从“代码是否存在”转为“真实环境验收是否留证”：
 
-- 真实数据同步需要在稳定数据库和调度环境中复验。
-- 检索质量缺少固定评估集和指标体系。
-- 线上缓存、限流、告警、日志留存和故障恢复还不完整。
+- 第一阶段真实数据链路已经在 2026-05-11 闭合，但 release candidate 仍需要按 `docs/release-acceptance-report.md` 复跑并记录当前环境结果。
+- 第二阶段已经有 54 条官方 Postgres 黄金集和 `lexical / hybrid / hybrid_rerank` 真实评估；后续检索策略变更仍必须保留对比报告。
+- 线上缓存、限流、告警、日志留存和故障恢复已有代码侧入口，但真实外部监控、webhook 通知和备份恢复演练仍待上线前验收。
 - 社区来源缺少长期治理、审核和降权策略。
-- 管理后台与反馈闭环已有代码侧 MVP，但真实管理员验收、内容回放和运营审计能力仍需补齐。
-- 部署形态仍偏本地 Compose 与演示说明，需要补齐生产环境拆分、密钥管理、备份和发布流程。
+- 管理后台与反馈闭环已有代码侧 MVP，但真实管理员验收、内容回放、Redis 手动同步和运营审计能力仍需补齐验收记录。
+- 第五阶段发布运行手册、release checklist、验收报告模板和固定演示脚本已经落地；真实发布结论仍以后续 release gate 结果为准。
 
 ## 3. 产品范围
 
@@ -174,7 +175,7 @@
 
 功能任务：
 
-- 固定 5 到 8 个高质量官方来源作为上线基线。
+- 固定 3 到 5 个高质量官方来源作为上线基线，并优先保证它们能重复同步。
 - 复验 `db:init -> ingest:official -> inspect:ingestion -> smoke:postgres -> test:ingestion:postgres`。
 - 为每个官方 adapter 增加 fixture 和解析规则测试。
 - 补齐 ingestion run 的错误分类和可读输出。
@@ -183,7 +184,7 @@
 
 验收标准：
 
-- 至少 5 个官方来源可重复同步。
+- 至少 3 到 5 个官方来源可重复同步。
 - 每个健康来源都有 documents、latest version 和 chunks。
 - 至少 20 个固定 query 能命中真实来源。
 - seed demo 和真实 Postgres 链路边界清晰，不互相冒充。
@@ -204,7 +205,7 @@
 
 验收标准：
 
-- 固定评估集不少于 50 个 query。
+- 固定评估集不少于 50 个 query；当前 Postgres 官方黄金集已达到 54 条。
 - 每次检索策略调整都能生成对比报告。
 - LLM 回答失败时系统仍返回可解释检索结果。
 - 回答 evidence 中引用的 source id 必须存在于 sources 列表。
@@ -267,23 +268,41 @@
 
 ### 第五阶段：发布、验收与项目包装
 
-目标：形成可展示、可维护、可复盘的上线版本。
+当前状态：代码侧发布准备已启动，真实 release gate 仍需按验收报告执行。
+
+目标：形成可展示、可维护、可复盘的上线候选版本。第五阶段不扩展 `SearchResponse`、搜索 API、Postgres schema 或后台管理 API，只做发布收口、验收编排和证据归档。
 
 功能任务：
 
-- 编写上线 README：部署架构、环境变量、启动命令、回滚方式和常见故障。
-- 编写产品演示脚本：覆盖正常命中、无答案、来源过期、社区来源和错误态。
-- 编写验收报告：列出功能范围、测试结果、评估结果和已知限制。
-- 补齐 CI：lint、format、contract、unit、component、e2e、build、search evaluation。
-- 准备 production seed 或演示数据，避免演示依赖不稳定外站。
-- 固化版本号、变更日志和 release checklist。
+- 已新增发布运行手册 `docs/release-readme.md`，覆盖部署架构、环境变量、启动顺序、回滚方式和常见故障。
+- 已新增 release checklist `docs/release-checklist.md`，把 local、Postgres、ops、admin、demo 和发布后观察拆成可勾选 gate。
+- 已新增验收报告模板 `docs/release-acceptance-report.md`，要求记录命令、环境、状态、报告路径、失败原因和阻断情况。
+- 已新增固定演示脚本 `docs/demo-script.md`，覆盖正常命中、无答案、来源分层、feedback、后台治理和错误态。
+- 已新增聚合命令 `verify:release:local`、`verify:release:postgres` 和 `verify:release:ops`，串联已有验证脚本。
+- 固化发布口径：项目是校园信息检索 / explainable RAG MVP 的上线候选版本，不包装成 production-grade RAG platform。
 
 验收标准：
 
 - 新环境可以按照文档完成部署。
 - 演示流程不依赖本地隐藏状态。
 - 所有核心命令有明确通过记录或失败说明。
-- 文档不会把项目夸大为无边界的生产级 AI 平台，而是准确描述为可上线的校园信息检索 RAG 项目。
+- 缺少真实 Postgres、Redis、webhook 或临时恢复库时，对应验收项写作 `blocked`，不能写作 `passed`。
+- 文档不会把项目夸大为无边界的生产级 AI 平台，而是准确描述为可上线候选的校园信息检索 RAG MVP。
+
+Release gate：
+
+```bash
+npm run verify:release:local
+npm run verify:release:postgres
+npm run verify:release:ops
+```
+
+发布候选收口：
+
+- 形成 `v0.1.0-rc.1` release note。
+- release note 包含完成能力、验证命令、报告路径和已知限制。
+- 发布后观察 24 小时 scheduled ingestion、`/health`、`/metrics.persistent`、`service_event_logs`、feedback 和后台来源状态。
+- 如观察失败，按 `docs/release-readme.md` 回滚，并在 `docs/release-acceptance-report.md` 中记录。
 
 ## 6. 功能优先级
 

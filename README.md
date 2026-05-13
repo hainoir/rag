@@ -1,30 +1,32 @@
 # 校园信息检索与可解释问答助手
 
-副标题：基于 RAG 思路的校园信息检索前端产品原型
+副标题：校园信息检索 / explainable RAG MVP 上线候选版本
 
-面向校园信息查询场景，聚合官方公开信息与社区讨论内容，提供带引用来源、来源分层和检索结果可视化的问答体验。项目重点不在于做一个聊天机器人，而在于把问答结果、检索证据与来源可信度用清晰的前端交互组织出来。
+面向校园信息查询场景，聚合官方公开信息与社区讨论内容，提供带引用来源、来源分层和检索结果可视化的问答体验。项目重点不在于做一个聊天机器人，而在于把问答结果、检索证据、来源可信度、数据摄取和验收边界组织成可演示、可复盘的 RAG MVP。
 
 ![首页搜索页占位图](./public/screenshots/home-placeholder.svg)
 ![结果页占位图](./public/screenshots/result-placeholder.svg)
 
 ## 项目概览
 
-这是一个 **Next.js App Router + React + TypeScript + Tailwind CSS v4** 的前端产品原型，主题是“校园信息检索与可解释问答助手”。
+这是一个 **Next.js App Router + React + TypeScript + Tailwind CSS v4** 的校园信息检索 / explainable RAG MVP，主题是“校园信息检索与可解释问答助手”。
 
 项目当前定位要点：
 
 - 前端统一通过 `/api/search` 获取 `SearchResponse`
 - Route Handler 内部调用 `searchServiceProvider`，再代理到外部搜索服务
 - `SearchSource` 已支持来源站点、发布时间、更新时间、抓取时间、最近校验时间和来源新鲜度
-- 仓库内已经补齐来源注册表、清洗规则、去重规则和入库表结构骨架，方便接真实数据链路
+- 仓库内已经具备来源注册表、清洗规则、去重规则、Postgres 入库结构和真实官方来源 ingestion 链路
 - 搜索服务可选接入 OpenAI-compatible LLM，把检索片段升级为生成式回答；未配置 key 时自动保持 extractive answer
-- Postgres 检索默认走 lexical / pg_trgm；配置 pgvector 与 embedding key 后可启用可选 hybrid retrieval
-- 可选接入 cross-encoder rerank；默认关闭，不影响 seed demo 和 Postgres lexical 路径
+- Postgres 检索支持 lexical / pg_trgm 与 pgvector hybrid retrieval；当前评估结论推荐 `hybrid` 作为默认策略
+- 可选接入 cross-encoder rerank；真实评估已跑通，但当前配置下效果回退，因此默认关闭，只作为显式实验能力
+- 第五阶段 release 文档、验收模板、演示脚本和聚合验证入口已经落地，真实 release 结论以验收报告为准
 
 这个项目适合作为：
 
 - 前端作品集项目
-- 可解释 AI / RAG 产品的交互原型
+- 校园信息检索 / explainable RAG MVP 的上线候选版本
+- 可解释 AI / RAG 产品的交互与工程边界案例
 - 面试中讲解状态设计、可信度表达和接口边界的案例
 
 ## 当前能力
@@ -49,14 +51,16 @@
 
 `SearchBox / SuggestedQuestions -> /api/search -> searchServiceProvider -> SEARCH_SERVICE_URL -> search-service -> SearchResponse -> ResultsShell -> 回答视图 / 检索视图`
 
-这条链路已经具备“前端只消费统一结果结构”的边界。当前仓库已经包含最小官方来源摄取、保守社区来源摄取、Postgres chunk 检索和可选 pgvector embedding 扩展；但它仍然**不等同于生产级 RAG 平台**，下面这些能力仍需要继续完善：
+这条链路已经具备“前端只消费统一结果结构”的边界。当前仓库已经包含官方来源摄取、保守社区来源摄取、Postgres chunk 检索、pgvector hybrid retrieval、实验性 rerank、query / feedback 持久化、基础运维检查和后台治理代码侧 MVP。
 
-- 大规模稳定抓取、失败重试和来源合规审计
-- BM25 / 评估集驱动的检索质量优化，以及 rerank 效果的真实评估
-- 线上监控、告警、限流和缓存策略
-- 社区内容的长期质量治理与人工复核流程
+当前仍然**不等同于生产级 RAG 平台**，上线前还需要继续完成并留证：
 
-这些能力现在通过仓库内的契约文件和文档留好了接口，而不是继续写死在前端页面里。第三阶段第一轮已经把 query log、feedback、service event 的持久化统一收口到 `search-service`，并补上了 `telemetry` 级别的健康检查与运行手册。
+- 第五阶段 release gate 的干净通过记录
+- 真实外部监控平台、webhook 成功 / 失败通知和备份恢复演练
+- 第四阶段后台在准线上环境里的管理员验收、真实 Redis 手动同步和 Postgres admin integration 复验
+- 社区内容的长期治理、审核规则和运营审计闭环
+
+第三阶段已经把 query log、feedback、service event 的持久化统一收口到 `search-service`，并补上了 `telemetry` 级别的健康检查、运维检查脚本、通知入口和备份恢复演练脚本。第四阶段已经接入后台治理代码侧 MVP；第五阶段已经把发布运行手册、release checklist、验收报告模板和固定演示脚本补齐。
 
 ## 数据源与更新链路
 
@@ -81,7 +85,7 @@
 
 ## 面试准备重点
 
-推荐把这个项目讲成“可解释 RAG 的前端产品原型”，重点放在：
+推荐把这个项目讲成“可演示的校园信息检索 / explainable RAG MVP”，重点放在：
 
 - 为什么校园信息查询更适合“检索优先”而不是聊天壳子
 - 为什么回答必须和来源片段一起展示
@@ -89,6 +93,7 @@
 - 为什么要把 `resultGeneratedAt` 和来源更新时间分开
 - 为什么来源卡片要展示发布时间、更新时间和最近校验时间
 - 这个仓库里哪些是前端表达，哪些应该由上游搜索服务负责
+- 为什么当前默认策略收口为 `hybrid`，而 `rerank` 只保留为显式实验能力
 
 详细拆解见 [docs/architecture.md](./docs/architecture.md)。  
 数据链路说明见 [docs/data-pipeline.md](./docs/data-pipeline.md)。  
@@ -194,6 +199,7 @@ RERANK_TOP_K=20
 ```
 
 search-service 会把候选 chunk 文本发送给 rerank API，并只重排服务端候选顺序；如果 rerank API 失败，会记录 `rerank.failed` 日志并保留原 lexical / hybrid 排序。
+当前真实评估已经确认 `hybrid_rerank` 可运行，但在 `Qwen/Qwen3-Reranker-8B` 当前配置下排序指标低于纯 `hybrid`，因此普通请求默认保持 `SEARCH_RERANK_MODE=off`。
 
 ## 真实来源 Ingestion v1
 
@@ -250,16 +256,17 @@ npm run backup:drill
 本地 Postgres 启动和真实检索闭环见 [docs/local-postgres.md](./docs/local-postgres.md)。演示 query 与部署边界见 [docs/demo-and-deploy.md](./docs/demo-and-deploy.md)。
 第三阶段运维、健康检查、备份恢复和回滚说明见 [docs/phase-three-operations.md](./docs/phase-three-operations.md)。
 第四阶段后台治理、来源覆盖层、反馈处理和社区审核说明见 [docs/phase-four-admin-ops.md](./docs/phase-four-admin-ops.md)。
+第五阶段发布、验收与项目包装入口见 [docs/release-readme.md](./docs/release-readme.md)、[docs/release-checklist.md](./docs/release-checklist.md)、[docs/release-acceptance-report.md](./docs/release-acceptance-report.md) 和 [docs/demo-script.md](./docs/demo-script.md)。
 如果已经有可访问的线上 `search-service`，可以直接用 `npm run check:phase-three-ops` 对 `/health`、`/metrics` 和 `persistent` 阈值做自动检查；配置 `OPS_ALERT_WEBHOOK_URL` 后可用 `npm run notify:phase-three-ops` 发送 webhook 告警；配置临时恢复库后可用 `npm run backup:drill` 生成备份 / 恢复演练报告。
 
-## 后续方向
+## 发布验收
 
-当前推荐的演进顺序是：
+第五阶段只做发布收口、验收编排和证据归档，不新增核心 RAG 接口。发布候选版本默认按以下命令分层验收：
 
-1. 固化本地真实闭环复验：`db:init -> ingest:official -> inspect:ingestion -> smoke:postgres -> /api/search`
-2. 配置 `SEARCH_ANSWER_MODE=llm` 做生成式回答演示，并保留无 key 时的 extractive fallback
-3. 配置 pgvector embedding，复验 `vector:init -> embed:chunks -> smoke:vector -> hybrid search`
-4. 配置 rerank 服务，用固定 query 对比 rerank 前后的命中顺序和答案依据
-5. 扩大官方来源 adapter 的实站验证范围，优先保证 3-5 个来源稳定重复同步
-6. 对社区来源补合规策略、质量阈值和人工复核记录，再扩大自动摄取范围
-7. 在当前 telemetry 基线之上补外部告警平台、来源治理后台和正式发布物料
+```bash
+npm run verify:release:local
+npm run verify:release:postgres
+npm run verify:release:ops
+```
+
+`verify:release:local` 是无数据库基础 gate；`verify:release:postgres` 要求真实 `DATABASE_URL`、真实 ingestion 数据和向量检索条件；`verify:release:ops` 要求可访问的 `search-service`、真实 webhook 和备份恢复配置。缺少真实环境的项目必须在验收报告中标记为 `blocked`，不能写作已通过。

@@ -22,7 +22,7 @@ npm run verify:demo
 - Next.js 前端：`npm run dev`，默认 `http://localhost:3000`。
 - 上游搜索服务：`npm run search-service`，默认 `http://127.0.0.1:8080/api/search`。
 - Postgres：通过 `docker compose up -d postgres` 或托管数据库提供。
-- 摄取任务：手动运行 `npm run ingest:official` 和按需运行 `npm run ingest:community`；后续部署时可放进 cron / scheduled job。
+- 摄取任务：手动运行 `npm run ingest:official` 和按需运行 `npm run ingest:community`；发布环境优先使用 `npm run ingest:scheduled:official` 和 scheduled ingestion workflow。
 - 可选向量任务：`npm run vector:init` 初始化一次，之后用 `npm run embed:chunks` 增量补 embedding。
 
 ## Docker 镜像
@@ -110,21 +110,14 @@ rerank 只重排 Postgres 候选来源，失败时会记录结构化日志并保
 ## 发布前检查
 
 ```bash
-npm run smoke:search-service
-npm run test:embedding-client
-npm run test:rerank-client
-npm run verify:demo
-npm run verify:search-contract
-npm run test:unit
-npm run verify:real-data
-npm run smoke:vector
-npm run build
-npm run e2e
+npm run verify:release:local
+npm run verify:release:postgres
+npm run verify:release:ops
 ```
 
-`npm run test:unit` 不依赖数据库，覆盖 adapter、清洗、去重、seed 搜索和搜索代理归一化逻辑。`npm run verify:real-data` 依赖 `DATABASE_URL`，会初始化 schema、同步官方来源、检查 ingestion 状态、跑 Postgres smoke 和 Postgres 集成测试。`npm run smoke:vector` 还要求 pgvector schema、已写入 embedding 的 chunks 和可用 embedding key。
+`verify:release:local` 不依赖数据库，串联格式、lint、契约、seed demo、unit、build 和 e2e。`verify:release:postgres` 依赖 `DATABASE_URL`、真实 ingestion 数据和 embedding 条件，会串联真实数据闭环、向量检索评估、telemetry Postgres 集成和后台 Postgres 集成。`verify:release:ops` 依赖可访问的 search-service、真实 webhook 和临时恢复库，会串联运维检查、通知和备份恢复演练。
 
-如果没有配置 `DATABASE_URL`，`npm run verify:real-data` 会失败；这时只能证明 seed demo 和前端流程可用，不能声称真实数据库闭环已验证。发布前至少要让 Postgres smoke 检查和 Postgres 集成测试都通过。
+如果没有配置 `DATABASE_URL`，`npm run verify:release:postgres` 会被环境检查阻断；这时只能证明 seed demo 和前端流程可用，不能声称当前 release 的真实数据库闭环已通过。所有通过、失败、blocked 和 skipped 结果都应写入 `docs/release-acceptance-report.md`。
 
 ## 定时摄取
 
@@ -152,10 +145,10 @@ npm run e2e
 
 `search-service` 暴露两个本地排查端点：
 
-- `/health`：服务存活、provider、数据库配置状态
-- `/metrics`：请求总数、平均耗时、状态分布、provider 分布、fallback 和错误分类计数
+- `/health`：服务存活、provider、数据库配置状态、telemetry 可写性和当前模式是否要求持久化
+- `/metrics`：runtime 请求统计、状态分布、provider 分布、fallback、错误分类计数，以及 Postgres `persistent` 聚合指标
 
-当前 metrics 是进程内 JSON 计数器，适合本地和 demo 排查；生产环境仍应接入日志聚合、告警和持久化指标平台。
+当前仓库还提供 `check:phase-three-ops`、`notify:phase-three-ops` 和 `backup:drill`。这些入口能生成运维检查、webhook 通知和备份恢复演练证据；生产发布仍需要接入真实外部监控平台，并在 release acceptance report 中记录真实通知和恢复结果。
 
 E2E 默认会启动 seed 搜索服务和 Next.js dev server，覆盖首页搜索、结果页渲染、来源展开、无结果和错误态。首次运行如果本机没有浏览器二进制，需要先执行：
 

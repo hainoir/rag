@@ -45,11 +45,11 @@
 
 ### 2.3 还明显没有完成的部分
 
-- 生产级缓存、限流、告警、持久化观测与故障恢复
+- 生产级缓存、限流、告警、持久化观测与故障恢复的真实部署回归记录
 - 第四阶段后台治理代码侧 MVP 已接入，但真实管理员验收、失败重试流程和运营审计仍未完成
 - 社区来源长期治理策略已经有代码侧审核入口，真实运营规则和审计闭环仍需继续验证
 - 数据库备份、迁移、恢复和回滚流程的真实演练记录
-- 最终发布物料：上线 README、验收报告、release checklist、稳定演示脚本
+- 第五阶段发布物料已经开始落地；真实验收结果仍需要按 release checklist 填入验收报告
 
 ## 3. 按阶段看当前所处位置
 
@@ -135,25 +135,26 @@
 
 ### 第四阶段与第五阶段
 
-当前状态：第四阶段管理后台与运营闭环代码侧 MVP 已完成；真实线上管理员验收、真实 Redis 手动同步和 Postgres admin integration 复验当前暂搁置，转为上线前 gate。第五阶段可以先启动代码侧开发。
+当前状态：第四阶段管理后台与运营闭环代码侧 MVP 已完成；真实线上管理员验收、真实 Redis 手动同步和 Postgres admin integration 复验当前暂搁置，转为上线前 gate。第五阶段发布准备已启动，代码侧重点是 release 文档、验收模板、固定演示脚本和聚合验证入口。
 
 - 第四阶段已新增单密钥后台登录、`/admin` 工作台、`search-service` 管理 API、来源治理覆盖层、query / feedback 追踪字段和社区审核记录。
 - 代码侧已经可以覆盖来源状态看板、单来源同步触发、feedback 处理列表、社区审核与人工复核状态流转。
 - 暂搁置不等于取消；后续仍需要在真实部署环境配置 `ADMIN_DASHBOARD_TOKEN`、`SEARCH_SERVICE_API_KEY`、`DATABASE_URL` 和 `REDIS_URL`，再跑一次后台验收。
-- 第五阶段可以先围绕上线包装、验收报告、release checklist 和稳定演示脚本做代码侧开发。
+- 第五阶段已经新增 release checklist、验收报告模板、稳定演示脚本和发布运行手册；后续重点是按这些文档补真实验收记录。
 
 ## 4. 下一步开发顺序
 
-当前建议按下面顺序推进：先做第五阶段代码侧发布准备，同时把第四阶段真实验收保留为上线前必须回收的 gate。
+当前建议按下面顺序推进：继续执行第五阶段 release gate 和验收证据归档，同时把第四阶段真实验收保留为上线前必须回收的 gate。
 
 1. 固化第一阶段验收记录
    - 在运行手册和项目报告中记录 2026-05-11 的本地与 GitHub Actions 验收结果
    - 记录当前稳定官方源集合与社区关闭策略
 
-2. 启动第五阶段代码侧开发
-   - 上线 README、验收报告模板、release checklist、稳定演示脚本
-   - 在第五阶段文档里明确区分 `已验证`、`代码侧完成`、`暂搁置待验收` 和 `不在本阶段`
-   - 不把第四阶段真实管理员验收、真实 Redis 手动同步或 Postgres admin integration 写成已完成
+2. 执行第五阶段 release gate
+   - 本地基础 gate：`npm run verify:release:local`
+   - 真实数据和后台 gate：`npm run verify:release:postgres`
+   - 运维 gate：`npm run verify:release:ops`
+   - 将通过、失败、blocked 和 skipped 结果写入 `docs/release-acceptance-report.md`
 
 3. 上线前回收第四阶段真实验收
    - `npm run test:admin`
@@ -168,14 +169,15 @@
 
 5. 最后做发布定稿
    - 把第五阶段产物、第四阶段真实验收记录和第三阶段上线前运维验收汇总成最终 release checklist
+   - 形成 `v0.1.0-rc.1` release note，明确完成能力、报告路径和已知限制
 
 ## 5. 当前最重要的里程碑
 
 下一个真正应该完成的里程碑不是“马上回收第四阶段全部真实验收”，而是：
 
-> 以当前已验证的真实数据链路、Qwen3 评估结果和第四阶段后台治理代码侧 MVP 为基础，先启动第五阶段发布准备与验收包装；第四阶段真实验收暂搁置并保留为上线前 gate。
+> 以当前已验证的真实数据链路、Qwen3 评估结果和第四阶段后台治理代码侧 MVP 为基础，执行第五阶段发布准备与验收包装；第四阶段真实验收暂搁置并保留为上线前 gate。
 
-阶段一和第二阶段已经把项目状态从“代码侧已准备”推进到了“真实数据链路已验证 + 默认检索策略已收口”；第三阶段已经完成代码侧可靠性基线，真实运维验收保留到上线前执行。第四阶段现在已有代码侧后台治理 MVP，真实 Redis 手动同步、Postgres admin integration 和管理员准线上验收先暂搁置；当前重点切换为第五阶段代码侧发布准备。
+阶段一和第二阶段已经把项目状态从“代码侧已准备”推进到了“真实数据链路已验证 + 默认检索策略已收口”；第三阶段已经完成代码侧可靠性基线，真实运维验收保留到上线前执行。第四阶段现在已有代码侧后台治理 MVP，真实 Redis 手动同步、Postgres admin integration 和管理员准线上验收先暂搁置；当前重点切换为第五阶段 release gate 执行和验收证据归档。
 
 ## 6. 当前建议的文档阅读顺序
 
@@ -184,9 +186,11 @@
 1. `docs/current-status-and-next-plan.md`
 2. `docs/search-quality-evaluation.md`
 3. `docs/phase-three-operations.md`
-4. `docs/local-postgres.md`
-5. `docs/full-rag-launch-plan.md`
-6. `docs/architecture.md`
-7. `docs/data-pipeline.md`
+4. `docs/release-readme.md`
+5. `docs/release-checklist.md`
+6. `docs/local-postgres.md`
+7. `docs/full-rag-launch-plan.md`
+8. `docs/architecture.md`
+9. `docs/data-pipeline.md`
 
 这样可以避免把较早的阶段快照误读成当前最终状态。

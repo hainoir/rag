@@ -56,6 +56,16 @@ async function main() {
   );
 
   results.push(
+    await runCase("uses conservative rerank defaults when env is missing", () => {
+      const config = readRerankConfig({});
+
+      assert.equal(config.topK, 8);
+      assert.equal(config.timeoutMs, 25000);
+      assert.equal(shouldUseRerank(config), false);
+    }),
+  );
+
+  results.push(
     await runCase("reranks documents through a cross-encoder endpoint", async () => {
       const previousFetch = globalThis.fetch;
       const calls = [];
@@ -99,6 +109,43 @@ async function main() {
         assert.equal(calls[0].url, "https://rerank.example.test/v1/rerank");
         assert.deepEqual(calls[0].body.documents, ["doc-a", "doc-b"]);
         assert.equal(calls[0].body.top_n, 2);
+      } finally {
+        globalThis.fetch = previousFetch;
+      }
+    }),
+  );
+
+  results.push(
+    await runCase("marks disabled rerank models with a specific error code", async () => {
+      const previousFetch = globalThis.fetch;
+
+      globalThis.fetch = async () =>
+        new Response(
+          JSON.stringify({
+            code: 30003,
+            message: "Model disabled.",
+            data: null,
+          }),
+          {
+            status: 403,
+            headers: {
+              "Content-Type": "application/json",
+            },
+          },
+        );
+
+      try {
+        await assert.rejects(
+          () =>
+            rerankDocuments("图书馆借书", ["doc-a"], {
+              apiKey: "key",
+              model: "cross-encoder",
+              baseUrl: "https://rerank.example.test/v1",
+              topK: 20,
+              timeoutMs: 1000,
+            }),
+          (error) => error instanceof Error && error.code === "model_disabled",
+        );
       } finally {
         globalThis.fetch = previousFetch;
       }

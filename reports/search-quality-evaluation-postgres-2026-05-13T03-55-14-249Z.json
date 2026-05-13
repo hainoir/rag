@@ -1,0 +1,44 @@
+{
+  "generatedAt": "2026-05-13T03:55:14.249Z",
+  "mode": "postgres",
+  "requestedStrategies": [
+    "hybrid_rerank"
+  ],
+  "primarySourceScope": "official",
+  "appendixSourceScope": "community",
+  "dataset": {
+    "path": "D:\\code\\Project\\rag\\fixtures\\golden-search-evaluation.postgres.json",
+    "cases": 54,
+    "officialCases": 54,
+    "communityCases": 0,
+    "byCategory": {
+      "招生": {
+        "official": 14,
+        "community": 0
+      },
+      "教务": {
+        "official": 10,
+        "community": 0
+      },
+      "图书馆": {
+        "official": 13,
+        "community": 0
+      },
+      "后勤": {
+        "official": 5,
+        "community": 0
+      },
+      "学生服务": {
+        "official": 12,
+        "community": 0
+      }
+    }
+  },
+  "strategies": [
+    {
+      "name": "hybrid_rerank",
+      "status": "failed",
+      "reason": "connect EACCES 198.18.0.28:5432"
+    }
+  ]
+}

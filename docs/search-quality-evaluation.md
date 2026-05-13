@@ -6,8 +6,9 @@
 
 补充说明：
 
-- 第二阶段第二批已经跑通真实 `lexical / hybrid / hybrid_rerank` 三档评估，最新报告显示 `hybrid` 已优于 `lexical`，但 `hybrid_rerank` 暂未优于 `hybrid`。
-- 当前第三批重点转向负样本拒答和 rerank 有效性验证，因此报告里会继续补充负样本误召回分析和 rerank 前后变化摘要。
+- 第二阶段第二批已经跑通真实 `lexical / hybrid / hybrid_rerank` 三档评估，第三批完成了一轮针对负样本拒答的检索精调，第四批则把 rerank 默认行为和最终结论收口。
+- 当前最新结论是：tuned `lexical` 保持 `recall@10=1` 且 `emptyAccuracy=0.5`；tuned `hybrid` 保持 `recall@10=1`，并将 `emptyAccuracy` 提升到 `1`。
+- `hybrid_rerank` 已经真实跑通，但当前 `Qwen/Qwen3-Reranker-8B` 配置下回退到 `mrr=0.9635`、`ndcg@10=0.9728`，因此只保留为显式实验能力，不推荐默认启用。
 - `postgres` 黄金集仍受真实官方来源覆盖约束。当前真实库稳定来源主要集中在研究生招生、图书馆、教务处、主站通知与单条本科招生动态；因此 `postgres` 数据集允许按真实来源覆盖优先扩展，并在文档或报告中显式记录覆盖不足的类别，而不是用错误命中反向固化真值。
 
 ## 1. 当前范围
@@ -146,14 +147,20 @@ SEARCH_RETRIEVAL_MODE=auto|lexical|hybrid
 SEARCH_RERANK_MODE=auto|off|on
 ```
 
-默认仍是：
+普通请求路径的默认行为是：
 
 ```bash
 SEARCH_RETRIEVAL_MODE=auto
-SEARCH_RERANK_MODE=auto
+SEARCH_RERANK_MODE=off
 ```
 
-这保证了普通请求路径仍保持 fail-open，不会因为本地缺 vector / rerank 条件而让正常搜索失败。
+评估脚本和显式实验入口仍可使用：
+
+```bash
+SEARCH_RERANK_MODE=auto|off|on
+```
+
+这保证了普通请求路径保持保守默认值，同时实验跑分仍可完整比较三档策略。
 
 ## 5. Skip 语义
 
@@ -200,6 +207,12 @@ JSON 主报告固定包含：
 
 - `negativeAnalysis`
 - `rerankImpact`
+
+当 rerank 已实际执行时，`rerankImpact` 会额外给出：
+
+- `changedTopOrderCount`
+- `improvedFirstRelevantRankCount`
+- rerank 候选使用原因，例如 `filtered_high_quality_head`、`fallback_initial_head`
 
 当前指标：
 
@@ -252,10 +265,12 @@ EMBEDDING_MODEL_COLUMN=embedding_model_qwen3_1024
 EMBEDDING_EMBEDDED_AT_COLUMN=embedded_at_qwen3_1024
 EMBEDDING_QUERY_INSTRUCTION=请将这个中文校园检索问题转换为检索向量，以便召回最相关的官方资料：
 RERANK_BASE_URL=https://api.siliconflow.com/v1
-RERANK_MODEL=Qwen/Qwen3-Reranker-4B
+RERANK_MODEL=Qwen/Qwen3-Reranker-8B
+RERANK_TOP_K=8
+RERANK_TIMEOUT_MS=25000
 ```
 
-这样 `vector:init`、`embed:chunks`、`smoke:vector` 和 `evaluate:search --mode postgres --strategy all` 会统一走新的 Qwen3 1024 向量列，不会覆盖原来的 `embedding` 列。
+这样 `vector:init`、`embed:chunks`、`smoke:vector` 和 `evaluate:search --mode postgres --strategy all` 会统一走新的 Qwen3 1024 向量列，不会覆盖原来的 `embedding` 列；而 rerank 仍作为显式实验能力存在。
 
 评估远端环境：
 
@@ -271,8 +286,9 @@ npm run evaluate:search -- --mode external --strategy lexical --output-dir repor
 1. 先跑 `seed + lexical`，确认评估脚本和报告结构正常
 2. 再跑 `postgres + lexical`，拿到真实数据基线
 3. 补齐 embedding 条件后跑 `postgres + hybrid`
-4. 补齐 rerank 条件后跑 `postgres + hybrid_rerank`
-5. 固定用同一份数据集和同一组 query 比较策略差异
+4. 跑 `postgres + hybrid_rerank`
+   - 当前应把它视为实验对比入口，而不是线上默认行为
+5. 固定用同一份数据集和同一组 query 比较策略差异，并以 `hybrid` 作为当前默认基线
 
 ## 9. 当前边界
 
@@ -287,4 +303,4 @@ npm run evaluate:search -- --mode external --strategy lexical --output-dir repor
 
 当前更准确的口径仍然是：
 
-> 这是一个已完成真实数据闭环、正在进入第二阶段检索质量评估与策略对比的 explainable RAG MVP。
+> 这是一个已完成真实数据闭环、且已经验证 `lexical / hybrid / hybrid_rerank` 三档检索效果的 explainable RAG MVP；当前默认推荐策略是 `hybrid`，`rerank` 仅保留为显式实验能力。

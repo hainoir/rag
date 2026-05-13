@@ -197,6 +197,22 @@ function normalizeRerankMode(value) {
   return ALLOWED_RERANK_MODES.has(mode) ? mode : "auto";
 }
 
+function resolveRerankMode(optionValue, envValue) {
+  const normalizedOption = String(optionValue ?? "").trim();
+
+  if (normalizedOption) {
+    return normalizeRerankMode(normalizedOption);
+  }
+
+  const normalizedEnv = String(envValue ?? "").trim();
+
+  if (normalizedEnv) {
+    return normalizeRerankMode(normalizedEnv);
+  }
+
+  return "off";
+}
+
 function resolvePostgresPoolCtor() {
   if (!PostgresPoolCtor) {
     ({ Pool: PostgresPoolCtor } = require("pg"));
@@ -1122,7 +1138,7 @@ function isTimelyNoticeIntentQuery(query, title = "") {
   return queryLooksTimely && titleLooksTimely;
 }
 
-function evaluateEmptyGate(query, selectedItems) {
+function evaluateEmptyGate(query, selectedItems, retrievalMode = "lexical") {
   const head = selectedItems.slice(0, 3);
   const top = head[0];
 
@@ -1178,6 +1194,46 @@ function evaluateEmptyGate(query, selectedItems) {
         queryIntentCoverage: roundMetricValue(top.searchSignals.queryIntentCoverage, 4),
         titleIntentCoverage: roundMetricValue(top.searchSignals.titleIntentCoverage, 4),
         topNoiseTags: top.searchSignals.noiseTags,
+      },
+    };
+  }
+
+  const topNoiseTags = top.searchSignals.noiseTags;
+  const isHybrid = retrievalMode === "hybrid";
+  const matchesHybridNoiseGate =
+    isHybrid &&
+    !top.searchSignals.hasExactQueryIntent &&
+    noisyHeadCount >= 1 &&
+    scoreMargin <= 14 &&
+    (
+      (
+        topNoiseTags.includes("library_system_page") &&
+        top.score <= 105 &&
+        top.searchSignals.queryIntentCoverage <= 0.25
+      ) ||
+      (
+        topNoiseTags.includes("year_heavy_title") &&
+        top.score <= 75 &&
+        top.searchSignals.titleIntentCoverage <= 0.125
+      ) ||
+      (
+        topNoiseTags.includes("generic_notice") &&
+        top.score <= 72 &&
+        top.searchSignals.queryIntentCoverage <= 0.125
+      )
+    );
+
+  if (matchesHybridNoiseGate) {
+    return {
+      shouldEmpty: true,
+      reason: "hybrid_noise_gate",
+      summary: {
+        topScore: roundMetricValue(top.score, 4),
+        scoreMargin: roundMetricValue(scoreMargin, 4),
+        noisyHeadCount,
+        queryIntentCoverage: roundMetricValue(top.searchSignals.queryIntentCoverage, 4),
+        titleIntentCoverage: roundMetricValue(top.searchSignals.titleIntentCoverage, 4),
+        topNoiseTags,
       },
     };
   }
@@ -1294,7 +1350,10 @@ async function maybeRerankScoredItems(query, items, limit, rerankMode = normaliz
       items,
       diagnostics: {
         applied: false,
-        reason: "request_failed",
+        reason:
+          error && typeof error === "object" && typeof error.code === "string"
+            ? error.code
+            : "request_failed",
         candidateCount: head.length,
         beforeTopSources: summarizeDiagnosticSources(head),
         afterTopSources: beforeTopSources,
@@ -1316,7 +1375,7 @@ async function searchPostgres(query, limit, options = {}) {
   const patterns = buildSearchPatterns(trimmedQuery, terms);
   const candidateLimit = clamp(limit * 8, limit, DEFAULT_CANDIDATE_LIMIT);
   const retrievalMode = normalizeRetrievalMode(options.retrievalMode ?? process.env.SEARCH_RETRIEVAL_MODE);
-  const rerankMode = normalizeRerankMode(options.rerankMode ?? process.env.SEARCH_RERANK_MODE);
+  const rerankMode = resolveRerankMode(options.rerankMode, process.env.SEARCH_RERANK_MODE);
   const embeddingConfig = readEmbeddingConfig();
   const vectorColumnIdentifier = quoteIdentifier(embeddingConfig.vectorColumn);
 
@@ -1505,7 +1564,7 @@ async function searchPostgres(query, limit, options = {}) {
   );
   const rerankedCandidates = rerankResult.items;
   const selected = rerankedCandidates.slice(0, limit);
-  const emptyGate = evaluateEmptyGate(trimmedQuery, selected);
+  const emptyGate = evaluateEmptyGate(trimmedQuery, selected, retrievalMode);
 
   if (emptyGate.shouldEmpty) {
     return attachDebug(buildEmptyResponse(trimmedQuery), {
@@ -1848,6 +1907,7 @@ module.exports = {
   getGenericTitlePenalty,
   normalizeRetrievalMode,
   normalizeRerankMode,
+  resolveRerankMode,
   pickRerankCandidates,
   search,
   searchPostgres,

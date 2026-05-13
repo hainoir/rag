@@ -101,11 +101,11 @@ EMBEDDING_DIMENSIONS=1536
 RERANK_API_KEY=...
 RERANK_BASE_URL=https://your-rerank-provider.example.com/v1
 RERANK_MODEL=your-rerank-model
-RERANK_TOP_K=20
-RERANK_TIMEOUT_MS=8000
+RERANK_TOP_K=8
+RERANK_TIMEOUT_MS=25000
 ```
 
-rerank 只重排 Postgres 候选来源，失败时会记录结构化日志并保留原排序。
+rerank 只重排 Postgres 候选来源，失败时会记录结构化日志并保留原排序。普通请求默认不启用 rerank；只有显式设置 `SEARCH_RERANK_MODE=on|auto` 时才会参与实验性重排。
 
 ## 发布前检查
 

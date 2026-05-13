@@ -35,6 +35,7 @@ const {
   normalizeRerankMode,
   normalizeRetrievalMode,
   pickRerankCandidates,
+  resolveRerankMode,
   searchPostgres,
   searchSeed,
   scorePostgresSource,
@@ -72,6 +73,7 @@ const {
         noiseTags: string[];
       };
     }>,
+    retrievalMode?: string,
   ) => {
     shouldEmpty: boolean;
     reason: string | null;
@@ -80,6 +82,7 @@ const {
   getGenericTitlePenalty: (title: string, titleSpecificHits: number) => number;
   normalizeRerankMode: (value?: string) => string;
   normalizeRetrievalMode: (value?: string) => string;
+  resolveRerankMode: (optionValue?: string, envValue?: string) => string;
   pickRerankCandidates: (
     items: Array<{
       score: number;
@@ -445,6 +448,9 @@ async function main() {
       assert.equal(normalizeRerankMode("off"), "off");
       assert.equal(normalizeRerankMode("ON"), "on");
       assert.equal(normalizeRerankMode("bad"), "auto");
+      assert.equal(resolveRerankMode(undefined, undefined), "off");
+      assert.equal(resolveRerankMode(undefined, "auto"), "auto");
+      assert.equal(resolveRerankMode("on", undefined), "on");
     }),
   );
 
@@ -564,12 +570,45 @@ async function main() {
           },
         },
       ]);
+      const hybridNoiseGate = evaluateEmptyGate(
+        "图书馆打印店会员卡怎么办",
+        [
+          {
+            score: 99,
+            source: {
+              title: "图书馆智能存包柜管理系统",
+            },
+            searchSignals: {
+              intentTermCount: 3,
+              hasExactQueryIntent: false,
+              titleIntentCoverage: 0.25,
+              queryIntentCoverage: 0.25,
+              bodyIntentCoverage: 0.2,
+              noiseTags: ["library_system_page"],
+            },
+          },
+          {
+            score: 92,
+            searchSignals: {
+              intentTermCount: 3,
+              hasExactQueryIntent: false,
+              titleIntentCoverage: 0.1,
+              queryIntentCoverage: 0.15,
+              bodyIntentCoverage: 0.1,
+              noiseTags: ["generic_notice"],
+            },
+          },
+        ],
+        "hybrid",
+      );
 
       assert.equal(weakNoisyGate.shouldEmpty, true);
       assert.equal(weakNoisyGate.reason, "weak_noisy_head");
       assert.deepEqual(weakNoisyGate.summary?.topNoiseTags, ["library_system_page", "generic_notice"]);
       assert.equal(targetedGate.shouldEmpty, false);
       assert.equal(timelyNoticeGate.shouldEmpty, false);
+      assert.equal(hybridNoiseGate.shouldEmpty, true);
+      assert.equal(hybridNoiseGate.reason, "hybrid_noise_gate");
     }),
   );
 
@@ -816,7 +855,9 @@ async function main() {
           assert.ok(rows[0].latestChunkCount > 0);
 
           const previousSchema = process.env.SEARCH_DATABASE_SCHEMA;
+          const previousRerankMode = process.env.SEARCH_RERANK_MODE;
           process.env.SEARCH_DATABASE_SCHEMA = schema;
+          delete process.env.SEARCH_RERANK_MODE;
 
           try {
             const searchResponse = await searchPostgres("校园网升级", 3);
@@ -824,11 +865,21 @@ async function main() {
               retrievalMode: "lexical",
               rerankMode: "off",
             });
+            const defaultRerankReason = (searchResponse as typeof searchResponse & {
+              __debug?: {
+                retrieval?: {
+                  rerank?: {
+                    reason?: string | null;
+                  };
+                };
+              };
+            }).__debug?.retrieval?.rerank?.reason;
 
             assert.equal(searchResponse.status, "partial");
             assert.equal(searchResponse.sources.length, 1);
             assert.match(searchResponse.sources[0].title, /校园网断网升级/);
             assert.ok(searchResponse.answer?.evidence?.length);
+            assert.equal(defaultRerankReason, "disabled");
             assert.equal(lexicalResponse.status, "partial");
             assert.equal(lexicalResponse.sources.length, 1);
             assert.match(lexicalResponse.sources[0].title, /校园网断网升级/);
@@ -842,6 +893,12 @@ async function main() {
               delete process.env.SEARCH_DATABASE_SCHEMA;
             } else {
               process.env.SEARCH_DATABASE_SCHEMA = previousSchema;
+            }
+
+            if (previousRerankMode === undefined) {
+              delete process.env.SEARCH_RERANK_MODE;
+            } else {
+              process.env.SEARCH_RERANK_MODE = previousRerankMode;
             }
 
             await closePostgresPool();

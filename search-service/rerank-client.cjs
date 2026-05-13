@@ -1,5 +1,5 @@
-const DEFAULT_TIMEOUT_MS = 8_000;
-const DEFAULT_TOP_K = 20;
+const DEFAULT_TIMEOUT_MS = 25_000;
+const DEFAULT_TOP_K = 8;
 const PLACEHOLDER_VALUE_PATTERNS = [/^your[-_]/i, /^replace[-_]?me/i, /^example[-_]?/i];
 
 function parsePositiveInteger(value, fallback) {
@@ -68,6 +68,23 @@ function normalizeRerankResults(payload, expectedCount) {
     );
 }
 
+function buildRerankError(status, detail) {
+  const message = `Rerank request failed with status ${status}: ${detail.slice(0, 240)}`;
+  const error = new Error(message);
+
+  if (status === 403 && /model disabled/i.test(detail)) {
+    error.code = "model_disabled";
+  } else if (status === 401) {
+    error.code = "unauthorized";
+  } else if (status === 429) {
+    error.code = "rate_limited";
+  } else {
+    error.code = "request_failed";
+  }
+
+  return error;
+}
+
 async function rerankDocuments(query, documents, config = readRerankConfig()) {
   if (!shouldUseRerank(config)) {
     throw new Error("RERANK_API_KEY, RERANK_MODEL and RERANK_BASE_URL are required to rerank documents.");
@@ -94,7 +111,7 @@ async function rerankDocuments(query, documents, config = readRerankConfig()) {
 
     if (!response.ok) {
       const detail = await response.text().catch(() => "");
-      throw new Error(`Rerank request failed with status ${response.status}: ${detail.slice(0, 240)}`);
+      throw buildRerankError(response.status, detail);
     }
 
     return normalizeRerankResults(await response.json(), documents.length);

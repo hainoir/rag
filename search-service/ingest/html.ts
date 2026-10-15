@@ -167,7 +167,7 @@ function scoreContentNode($candidate: Cheerio<AnyNode>) {
 }
 
 function pickContentRoot($: CheerioAPI, selectors: string[]) {
-  let imageOnlyNode: Cheerio<Element> | null = null;
+  let imageOnlyNode: Cheerio<AnyNode> | null = null;
 
   for (const selector of selectors) {
     const candidate = $(selector).first();

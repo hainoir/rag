@@ -1,0 +1,33 @@
+{
+  "checkedAt": "2026-10-15T12:07:27.951Z",
+  "endpoints": {
+    "healthUrl": "http://127.0.0.1:8280/health",
+    "metricsUrl": "http://127.0.0.1:8280/metrics"
+  },
+  "config": {
+    "allowDegraded": false,
+    "requirePersistent": "auto",
+    "maxErrorRate": 0.2,
+    "maxAverageDurationMs": 3000,
+    "maxUpstreamTimeouts": 5,
+    "maxRecentIngestionFailures": 0
+  },
+  "ok": true,
+  "failures": [],
+  "summary": {
+    "healthStatus": "ok",
+    "provider": "postgres",
+    "databaseConfigured": true,
+    "databaseRequired": true,
+    "databaseReachable": true,
+    "telemetryRequired": true,
+    "telemetryWritable": true,
+    "persistentEnabled": true,
+    "requestsTotal": 5,
+    "errorCount": 0,
+    "errorRate": 0,
+    "averageDurationMs": 49.5,
+    "upstreamTimeouts": 0,
+    "recentIngestionFailureCount": 0
+  }
+}

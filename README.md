@@ -256,7 +256,7 @@ npm run backup:drill
 本地 Postgres 启动和真实检索闭环见 [docs/local-postgres.md](./docs/local-postgres.md)。演示 query 与部署边界见 [docs/demo-and-deploy.md](./docs/demo-and-deploy.md)。
 第三阶段运维、健康检查、备份恢复和回滚说明见 [docs/phase-three-operations.md](./docs/phase-three-operations.md)。
 第四阶段后台治理、来源覆盖层、反馈处理和社区审核说明见 [docs/phase-four-admin-ops.md](./docs/phase-four-admin-ops.md)。
-第五阶段发布、验收与项目包装入口见 [docs/release-readme.md](./docs/release-readme.md)、[docs/release-checklist.md](./docs/release-checklist.md)、[docs/release-acceptance-report.md](./docs/release-acceptance-report.md) 和 [docs/demo-script.md](./docs/demo-script.md)。
+第五阶段发布、验收与项目包装入口见 [docs/release-readme.md](./docs/release-readme.md)、[docs/release-checklist.md](./docs/release-checklist.md)、[docs/release-acceptance-report.md](./docs/release-acceptance-report.md)、[docs/release-notes/v0.1.0-rc.1.md](./docs/release-notes/v0.1.0-rc.1.md) 和 [docs/demo-script.md](./docs/demo-script.md)。
 如果已经有可访问的线上 `search-service`，可以直接用 `npm run check:phase-three-ops` 对 `/health`、`/metrics` 和 `persistent` 阈值做自动检查；配置 `OPS_ALERT_WEBHOOK_URL` 后可用 `npm run notify:phase-three-ops` 发送 webhook 告警；配置临时恢复库后可用 `npm run backup:drill` 生成备份 / 恢复演练报告。
 
 ## 发布验收

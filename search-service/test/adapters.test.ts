@@ -36,6 +36,18 @@ test("main notices adapter discovers scoped detail URLs and parses cleaned conte
   assert.equal(detail.cleanedMarkdown.match(/请各单位提前做好业务安排。/g)?.length, 1);
 });
 
+test("main notices adapter reads the current vsb_content_4 article shell", () => {
+  const source = resolveSelectedSources(["tjcu-main-notices"])[0];
+  const adapter = getSourceAdapter(source.id);
+  const detail = adapter.parseDetailPage(
+    "https://www.tjcu.edu.cn/info/1080/28799.htm",
+    readFixture("main-notice-detail-vsb4.html"),
+  );
+
+  assert.equal(detail.title, "关于校园内树木消杀打药的通知");
+  assert.match(detail.cleanedMarkdown, /病虫害防治喷洒打药工作/);
+});
+
 test("undergrad admissions adapter restricts details to /info/1047 pages", () => {
   const source = resolveSelectedSources(["tjcu-undergrad-admissions"])[0];
   const adapter = getSourceAdapter(source.id);

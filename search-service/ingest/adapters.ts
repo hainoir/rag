@@ -27,6 +27,7 @@ function createOfficialHtmlAdapter({
   extraListPattern,
   titleSelectors = ["h1", ".article-title", ".arti_title", ".show_t", ".v_news_title"],
   contentSelectors = [
+    "#vsb_content_4",
     "#vsb_content_2",
     "#vsb_content",
     ".v_news_content",

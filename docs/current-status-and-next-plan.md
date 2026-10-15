@@ -1,6 +1,6 @@
 # 当前开发进度与下一步计划
 
-> 更新时间：2026-05-13
+> 更新时间：2026-10-15
 >
 > 阅读口径：
 >
@@ -45,11 +45,11 @@
 
 ### 2.3 还明显没有完成的部分
 
-- 生产级缓存、限流、告警、持久化观测与故障恢复的真实部署回归记录
-- 第四阶段后台治理代码侧 MVP 已接入，但真实管理员验收、失败重试流程和运营审计仍未完成
-- 社区来源长期治理策略已经有代码侧审核入口，真实运营规则和审计闭环仍需继续验证
-- 数据库备份、迁移、恢复和回滚流程的真实演练记录
-- 第五阶段发布物料已经开始落地；真实验收结果仍需要按 release checklist 填入验收报告
+- 生产级缓存、限流、告警和托管故障恢复。本地 `/health`、`/metrics.persistent` 和备份恢复已留证；托管 webhook 与 24 小时观察仍 blocked
+- 第四阶段本地管理员验收已复跑。托管 `ADMIN_DASHBOARD_TOKEN` / `SEARCH_SERVICE_API_KEY` 仍要由 kir 配置
+- 社区审核四个状态已在本地验证。长期运营规则和托管审计仍未闭环
+- 托管数据库的备份、迁移和回滚。本地一次性主库和 `campus_rag_restore` 已演练
+- 第五阶段本地 gate 和 `v0.1.0-rc.1` release note 已写入验收报告。定时同步、embedding 重评和托管通知仍 blocked，因此没有打 tag
 
 ## 3. 按阶段看当前所处位置
 
@@ -135,49 +135,39 @@
 
 ### 第四阶段与第五阶段
 
-当前状态：第四阶段管理后台与运营闭环代码侧 MVP 已完成；真实线上管理员验收、真实 Redis 手动同步和 Postgres admin integration 复验当前暂搁置，转为上线前 gate。第五阶段发布准备已启动，代码侧重点是 release 文档、验收模板、固定演示脚本和聚合验证入口。
+当前状态：2026-10-15 已完成本地 Phase 4 / Phase 5 可复跑验收。托管定时同步、托管通知、hybrid 重评和 24 小时观察仍 blocked。结论以 `docs/release-acceptance-report.md` 为准。
 
-- 第四阶段已新增单密钥后台登录、`/admin` 工作台、`search-service` 管理 API、来源治理覆盖层、query / feedback 追踪字段和社区审核记录。
-- 代码侧已经可以覆盖来源状态看板、单来源同步触发、feedback 处理列表、社区审核与人工复核状态流转。
-- 暂搁置不等于取消；后续仍需要在真实部署环境配置 `ADMIN_DASHBOARD_TOKEN`、`SEARCH_SERVICE_API_KEY`、`DATABASE_URL` 和 `REDIS_URL`，再跑一次后台验收。
-- 第五阶段已经新增 release checklist、验收报告模板、稳定演示脚本和发布运行手册；后续重点是按这些文档补真实验收记录。
+- 第四阶段本地后台已登录，来源看板、禁用召回、单源 Redis 同步、feedback 追踪和四个社区审核状态都有记录。
+- 主站通知解析已改为 `#vsb_content_4` / `.v_news_content`。修复前 8 篇详情页无法入库。
+- 后台保存成功提示不再被同一次刷新清掉。
+- 本地 `verify:release:local`、官方四源摄取、`smoke:postgres`、admin/telemetry Postgres 测试和本地 `backup:drill` 已通过。
+- 仍 blocked 的托管材料列在验收报告第 9 节。核心是更换 Actions secret `REDIS_URL`（`in-burro-41364.upstash.io` 已不存在），并提供 `OPS_SEARCH_SERVICE_URL`、`OPS_ALERT_WEBHOOK_URL` 和 `EMBEDDING_API_KEY`。
 
 ## 4. 下一步开发顺序
 
-当前建议按下面顺序推进：继续执行第五阶段 release gate 和验收证据归档，同时把第四阶段真实验收保留为上线前必须回收的 gate。
+2026-10-15 之后，本地可复跑的第四、第五阶段项已经归档。下一步只剩验收报告第 9 节里要 kir 提供的托管材料，不要在材料缺失时打 `v0.1.0-rc.1` tag。
 
-1. 固化第一阶段验收记录
-   - 在运行手册和项目报告中记录 2026-05-11 的本地与 GitHub Actions 验收结果
-   - 记录当前稳定官方源集合与社区关闭策略
+1. 本地 Phase 4 / Phase 5 已归档
+   - `npm run verify:release:local` 通过
+   - 本地官方四源、`test:admin:postgres`、`test:telemetry:postgres`、后台 UI 和本地 `backup:drill` 通过
+   - release note：`docs/release-notes/v0.1.0-rc.1.md`
 
-2. 执行第五阶段 release gate
-   - 本地基础 gate：`npm run verify:release:local`
-   - 真实数据和后台 gate：`npm run verify:release:postgres`
-   - 运维 gate：`npm run verify:release:ops`
-   - 将通过、失败、blocked 和 skipped 结果写入 `docs/release-acceptance-report.md`
+2. 等 kir 更换托管材料后再重跑被挡住的门
+   - `REDIS_URL`：`in-burro-41364.upstash.io` 已不存在
+   - `OPS_SEARCH_SERVICE_URL` 与 `OPS_ALERT_WEBHOOK_URL`
+   - `EMBEDDING_API_KEY` 和带 `vector` 扩展的 Postgres
+   - 托管主库与单独的 `BACKUP_DRILL_RESTORE_DATABASE_URL`
 
-3. 上线前回收第四阶段真实验收
-   - `npm run test:admin`
-   - `npm run build`
-   - 有 Postgres 时补跑 `npm run test:admin:postgres`
-   - 有 Redis 时从后台触发单来源同步，再运行 `npm run ingest:worker -- --once`
-
-4. 上线前补跑第三阶段真实验收
-   - 把 `/health`、`/metrics.persistent`、`service_event_logs` 接到外部监控与通知平台
-   - 在真实部署环境里复验缓存、限流、超时和降级策略
-   - 用 `backup:drill` 做一次可复盘的备份、恢复和回滚演练
-
-5. 最后做发布定稿
-   - 把第五阶段产物、第四阶段真实验收记录和第三阶段上线前运维验收汇总成最终 release checklist
-   - 形成 `v0.1.0-rc.1` release note，明确完成能力、报告路径和已知限制
+3. 材料到齐后才做发布定稿
+   - 重跑 `verify:release:postgres`、`verify:release:ops` 和 Scheduled Ingestion
+   - 观察 24 小时
+   - 那时才可以打 `v0.1.0-rc.1` tag
 
 ## 5. 当前最重要的里程碑
 
-下一个真正应该完成的里程碑不是“马上回收第四阶段全部真实验收”，而是：
+> 本地验收已经收口。下一个里程碑是 kir 换掉失效的 Redis secret 并补齐托管监控、webhook 和 embedding 条件；在此之前不要打 tag。
 
-> 以当前已验证的真实数据链路、Qwen3 评估结果和第四阶段后台治理代码侧 MVP 为基础，执行第五阶段发布准备与验收包装；第四阶段真实验收暂搁置并保留为上线前 gate。
-
-阶段一和第二阶段已经把项目状态从“代码侧已准备”推进到了“真实数据链路已验证 + 默认检索策略已收口”；第三阶段已经完成代码侧可靠性基线，真实运维验收保留到上线前执行。第四阶段现在已有代码侧后台治理 MVP，真实 Redis 手动同步、Postgres admin integration 和管理员准线上验收先暂搁置；当前重点切换为第五阶段 release gate 执行和验收证据归档。
+阶段一和第二阶段的真实数据链路与 `hybrid` 默认策略仍然有效。2026-10-15 把第四阶段本地后台和第五阶段本地 release gate 补进了验收报告。托管定时同步、托管通知和 hybrid 重评保持 blocked。
 
 ## 6. 当前建议的文档阅读顺序
 

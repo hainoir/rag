@@ -145,7 +145,7 @@ npm run e2e -- --reporter=line
 
 ## 6. 上线前限制
 
-第四阶段代码侧完成不等于 production-grade 后台已经上线。上线前还需要：
+2026-10-15 已在本地 Postgres / Redis 复跑登录、来源禁用、单源同步、feedback 和社区审核。保存成功提示原先会被 `refresh()` 清掉，现已改为刷新完成后再显示。托管环境仍不等于 production-grade 后台。上线前还需要：
 
 - 使用真实 `ADMIN_DASHBOARD_TOKEN` 和 `SEARCH_SERVICE_API_KEY`，并确认密钥没有进入仓库。
 - 在真实 Postgres 上跑 `npm run test:admin:postgres`。

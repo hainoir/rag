@@ -18,13 +18,14 @@ function test(name: string, task: () => void) {
 }
 
 const env = {
+  NODE_ENV: "test" as const,
   ADMIN_DASHBOARD_TOKEN: "secret-token",
 };
 
 test("verifies the configured admin login token", () => {
   assert.equal(verifyAdminLoginToken(" secret-token ", env), true);
   assert.equal(verifyAdminLoginToken("wrong", env), false);
-  assert.equal(verifyAdminLoginToken("secret-token", {}), false);
+  assert.equal(verifyAdminLoginToken("secret-token", { NODE_ENV: "test" }), false);
 });
 
 test("creates and verifies signed admin session cookies", () => {
@@ -32,7 +33,13 @@ test("creates and verifies signed admin session cookies", () => {
   const value = createAdminSessionValue(now, env);
 
   assert.equal(verifyAdminSessionValue(value, now + 1_000, env), true);
-  assert.equal(verifyAdminSessionValue(value, now + 1_000, { ADMIN_DASHBOARD_TOKEN: "other" }), false);
+  assert.equal(
+    verifyAdminSessionValue(value, now + 1_000, {
+      NODE_ENV: "test",
+      ADMIN_DASHBOARD_TOKEN: "other",
+    }),
+    false,
+  );
 });
 
 test("rejects expired or malformed admin session cookies", () => {

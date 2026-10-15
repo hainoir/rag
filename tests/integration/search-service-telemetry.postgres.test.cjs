@@ -8,7 +8,7 @@ async function main() {
     throw new Error("DATABASE_URL is required for telemetry integration tests.");
   }
 
-  process.env.SEARCH_SERVICE_PROVIDER = "seed";
+  process.env.SEARCH_SERVICE_PROVIDER = "postgres";
   process.env.SEARCH_ANSWER_MODE = "extractive";
   process.env.SEARCH_SERVICE_API_KEY = "";
   process.env.SEARCH_SERVICE_AUTH_HEADER = "Authorization";

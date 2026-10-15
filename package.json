@@ -48,6 +48,7 @@
     "verify:release:ops": "node scripts/verify-release-env.mjs ops && npm run check:phase-three-ops && npm run notify:phase-three-ops && npm run backup:drill",
     "verify:search-contract": "node scripts/validate-search-contract.mjs",
     "verify:demo": "node scripts/verify-demo-queries.mjs",
+    "verify:ui": "node .cursor/skills/verify-campus-rag/bin/verify-campus-rag.mjs",
     "check:phase-three-ops": "node --experimental-strip-types scripts/check-phase-three-ops.mjs",
     "notify:phase-three-ops": "node --experimental-strip-types scripts/notify-phase-three-ops.mjs",
     "backup:drill": "node --experimental-strip-types scripts/run-backup-drill.mjs",

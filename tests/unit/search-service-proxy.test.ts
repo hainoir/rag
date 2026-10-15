@@ -44,8 +44,9 @@ async function withEnv<T>(overrides: Record<string, string | undefined>, task: (
 
 test("derives sibling telemetry endpoints from SEARCH_SERVICE_URL", () => {
   const endpoint = resolveSearchServiceSiblingEndpoint("/api/query-logs", {
+    NODE_ENV: "test",
     SEARCH_SERVICE_URL: "http://127.0.0.1:8080/api/search",
-  } as NodeJS.ProcessEnv);
+  });
 
   assert.equal(endpoint, "http://127.0.0.1:8080/api/query-logs");
 });

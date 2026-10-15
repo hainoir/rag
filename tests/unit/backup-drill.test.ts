@@ -20,7 +20,7 @@ function test(name: string, task: () => void | Promise<void>) {
 }
 
 test("reads backup drill config with defaults", () => {
-  const config = readBackupDrillConfig({} as NodeJS.ProcessEnv);
+  const config = readBackupDrillConfig({ NODE_ENV: "test" });
 
   assert.equal(config.databaseUrl, null);
   assert.equal(config.restoreDatabaseUrl, null);
@@ -32,6 +32,7 @@ test("reads backup drill config with defaults", () => {
 
 test("reads backup drill config overrides", () => {
   const config = readBackupDrillConfig({
+    NODE_ENV: "test",
     DATABASE_URL: "postgres://source",
     BACKUP_DRILL_RESTORE_DATABASE_URL: "postgres://restore",
     BACKUP_DRILL_OUTPUT_DIR: "tmp/drills",
@@ -50,6 +51,7 @@ test("reads backup drill config overrides", () => {
 
 test("builds stable artifact paths using a slugged label", () => {
   const config = readBackupDrillConfig({
+    NODE_ENV: "test",
     DATABASE_URL: "postgres://source",
     BACKUP_DRILL_OUTPUT_DIR: "reports/backup-drills",
     BACKUP_DRILL_LABEL: "Release Candidate 1",
@@ -69,6 +71,7 @@ test("builds stable artifact paths using a slugged label", () => {
 
 test("builds backup drill manifests for reporting", () => {
   const config = readBackupDrillConfig({
+    NODE_ENV: "test",
     DATABASE_URL: "postgres://source",
     BACKUP_DRILL_RESTORE_DATABASE_URL: "postgres://restore",
     BACKUP_DRILL_LABEL: "drill",

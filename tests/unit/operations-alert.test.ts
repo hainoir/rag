@@ -67,6 +67,7 @@ function sampleReport(ok: boolean): OperationsScriptReport {
 
 test("reads alert config with provider and notify defaults", () => {
   const config = readOperationsAlertConfig({
+    NODE_ENV: "test",
     OPS_ALERT_WEBHOOK_URL: " https://hooks.example.test/ops ",
     OPS_ALERT_PROVIDER: "slack",
     OPS_ALERT_NOTIFY_ON: "always",
@@ -83,9 +84,11 @@ test("reads alert config with provider and notify defaults", () => {
 
 test("sends alerts on failures by default and can notify on success", () => {
   const config = readOperationsAlertConfig({
+    NODE_ENV: "test",
     OPS_ALERT_WEBHOOK_URL: "https://hooks.example.test/ops",
-  } as NodeJS.ProcessEnv);
+  });
   const alwaysConfig = readOperationsAlertConfig({
+    NODE_ENV: "test",
     OPS_ALERT_WEBHOOK_URL: "https://hooks.example.test/ops",
     OPS_ALERT_NOTIFY_ON: "always",
   } as NodeJS.ProcessEnv);
@@ -103,7 +106,9 @@ test("builds generic, slack, and feishu webhook payloads", () => {
 
   assert.equal(generic.status, "alert");
   assert.match(generic.text, /\[ALERT\] ci/);
-  assert.equal(slack.blocks[0].type, "section");
+  assert.ok(slack.blocks);
+  assert.equal(slack.blocks[0]?.type, "section");
+  assert.ok(slack.text);
   assert.match(slack.text, /persistent_metrics_disabled/);
   assert.equal(feishu.msg_type, "text");
   assert.match(feishu.content.text, /persistent_metrics_disabled/);

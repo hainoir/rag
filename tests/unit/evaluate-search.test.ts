@@ -101,14 +101,15 @@ test("checks local strategy availability with explicit skip reasons", () => {
   });
   assert.deepEqual(
     checkStrategyAvailability("postgres", "hybrid", {
+      NODE_ENV: "test",
       DATABASE_URL: "",
-    } as NodeJS.ProcessEnv),
+    }),
     {
       available: false,
       reason: "database_url_missing",
     },
   );
-  assert.deepEqual(checkStrategyAvailability("external", "lexical", {} as NodeJS.ProcessEnv), {
+  assert.deepEqual(checkStrategyAvailability("external", "lexical", { NODE_ENV: "test" }), {
     available: false,
     reason: "search_eval_base_url_missing",
   });

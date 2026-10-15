@@ -20,6 +20,7 @@ function test(name: string, task: () => void | Promise<void>) {
 
 test("derives health and metrics endpoints from SEARCH_SERVICE_URL", () => {
   const config = readOperationsCheckConfig({
+    NODE_ENV: "test",
     SEARCH_SERVICE_URL: "http://127.0.0.1:8080/api/search",
   } as NodeJS.ProcessEnv);
 
@@ -29,6 +30,7 @@ test("derives health and metrics endpoints from SEARCH_SERVICE_URL", () => {
 
 test("honors direct health and metrics overrides", () => {
   const config = readOperationsCheckConfig({
+    NODE_ENV: "test",
     SEARCH_SERVICE_URL: "http://127.0.0.1:8080/api/search",
     SEARCH_SERVICE_HEALTH_URL: "https://ops.example.com/custom-health",
     SEARCH_SERVICE_METRICS_URL: "https://ops.example.com/custom-metrics",
@@ -40,6 +42,7 @@ test("honors direct health and metrics overrides", () => {
 
 test("passes healthy snapshots when persistent metrics are within thresholds", () => {
   const config = readOperationsCheckConfig({
+    NODE_ENV: "test",
     SEARCH_SERVICE_URL: "http://127.0.0.1:8080/api/search",
     OPS_REQUIRE_PERSISTENT: "always",
     OPS_MAX_ERROR_RATE: "0.1",
@@ -82,6 +85,7 @@ test("passes healthy snapshots when persistent metrics are within thresholds", (
 
 test("fails degraded health when OPS_ALLOW_DEGRADED=false", () => {
   const config = readOperationsCheckConfig({
+    NODE_ENV: "test",
     SEARCH_SERVICE_URL: "http://127.0.0.1:8080/api/search",
     OPS_ALLOW_DEGRADED: "false",
     OPS_REQUIRE_PERSISTENT: "never",
@@ -108,6 +112,7 @@ test("fails degraded health when OPS_ALLOW_DEGRADED=false", () => {
 
 test("auto-requires persistent metrics when the database is configured", () => {
   const config = readOperationsCheckConfig({
+    NODE_ENV: "test",
     SEARCH_SERVICE_URL: "http://127.0.0.1:8080/api/search",
     OPS_REQUIRE_PERSISTENT: "auto",
   } as NodeJS.ProcessEnv);
@@ -139,6 +144,7 @@ test("auto-requires persistent metrics when the database is configured", () => {
 
 test("does not require persistent metrics for seed mode even if DATABASE_URL is configured", () => {
   const config = readOperationsCheckConfig({
+    NODE_ENV: "test",
     SEARCH_SERVICE_URL: "http://127.0.0.1:8080/api/search",
     OPS_REQUIRE_PERSISTENT: "auto",
   } as NodeJS.ProcessEnv);
@@ -173,6 +179,7 @@ test("does not require persistent metrics for seed mode even if DATABASE_URL is 
 
 test("fails when ingestion failures or timeout counts exceed thresholds", () => {
   const config = readOperationsCheckConfig({
+    NODE_ENV: "test",
     SEARCH_SERVICE_URL: "http://127.0.0.1:8080/api/search",
     OPS_REQUIRE_PERSISTENT: "always",
     OPS_MAX_UPSTREAM_TIMEOUTS: "0",

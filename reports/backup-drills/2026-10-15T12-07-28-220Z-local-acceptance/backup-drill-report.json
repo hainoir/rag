@@ -1,0 +1,19 @@
+{
+  "checkedAt": "2026-10-15T12-07-28-220Z",
+  "label": "local-acceptance",
+  "databaseConfigured": true,
+  "restoreDatabaseConfigured": true,
+  "runVerify": true,
+  "keepArtifacts": true,
+  "artifacts": {
+    "runDir": "reports/backup-drills/2026-10-15T12-07-28-220Z-local-acceptance",
+    "dumpFile": "reports/backup-drills/2026-10-15T12-07-28-220Z-local-acceptance/campus-rag-backup.dump",
+    "schemaFile": "reports/backup-drills/2026-10-15T12-07-28-220Z-local-acceptance/campus-rag-schema.sql",
+    "manifestFile": "reports/backup-drills/2026-10-15T12-07-28-220Z-local-acceptance/backup-drill-report.json"
+  },
+  "status": {
+    "backup": "completed",
+    "restore": "completed",
+    "verify": "completed"
+  }
+}

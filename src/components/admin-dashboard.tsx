@@ -184,9 +184,12 @@ export function AdminDashboard() {
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  async function refresh() {
+  async function refresh({ preserveMessage = false } = {}) {
     setLoading(true);
-    setMessage(null);
+
+    if (!preserveMessage) {
+      setMessage(null);
+    }
 
     try {
       const [summaryPayload, sourcePayload, queryPayload, feedbackPayload, communityPayload] = await Promise.all([
@@ -218,8 +221,10 @@ export function AdminDashboard() {
       setQueryLogs(queryPayload.items);
       setFeedback(feedbackPayload.items);
       setCommunityReview(communityPayload.items);
+      return true;
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "后台数据加载失败。");
+      return false;
     } finally {
       setLoading(false);
     }
@@ -253,42 +258,67 @@ export function AdminDashboard() {
       adminNote: String(formData.get("adminNote") ?? ""),
     };
 
-    await writeJson(`/api/admin/sources/${encodeURIComponent(sourceId)}`, "PATCH", payload);
-    setMessage(`已更新 ${sourceId}`);
-    await refresh();
+    try {
+      await writeJson(`/api/admin/sources/${encodeURIComponent(sourceId)}`, "PATCH", payload);
+      const refreshed = await refresh({ preserveMessage: true });
+
+      if (refreshed) {
+        setMessage(`已更新 ${sourceId}`);
+      }
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "来源更新失败。");
+    }
   }
 
   async function enqueueSource(sourceId: string) {
-    const payload = await writeJson<{ job: { id: string } }>(
-      `/api/admin/sources/${encodeURIComponent(sourceId)}/ingest`,
-      "POST",
-    );
-    setMessage(`已加入同步队列：${payload.job.id}`);
+    try {
+      const payload = await writeJson<{ job: { id: string } }>(
+        `/api/admin/sources/${encodeURIComponent(sourceId)}/ingest`,
+        "POST",
+      );
+      setMessage(`已加入同步队列：${payload.job.id}`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "同步入队失败。");
+    }
   }
 
   async function updateFeedback(event: FormEvent<HTMLFormElement>, feedbackId: string) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
 
-    await writeJson(`/api/admin/feedback/${encodeURIComponent(feedbackId)}`, "PATCH", {
-      status: String(formData.get("status")),
-      adminNote: String(formData.get("adminNote") ?? ""),
-    });
-    setMessage("反馈状态已更新。");
-    await refresh();
+    try {
+      await writeJson(`/api/admin/feedback/${encodeURIComponent(feedbackId)}`, "PATCH", {
+        status: String(formData.get("status")),
+        adminNote: String(formData.get("adminNote") ?? ""),
+      });
+      const refreshed = await refresh({ preserveMessage: true });
+
+      if (refreshed) {
+        setMessage("反馈状态已更新。");
+      }
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "反馈更新失败。");
+    }
   }
 
   async function updateCommunityReview(event: FormEvent<HTMLFormElement>, reviewId: string) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
 
-    await writeJson(`/api/admin/community-review/${encodeURIComponent(reviewId)}`, "PATCH", {
-      status: String(formData.get("status")),
-      riskLevel: String(formData.get("riskLevel")),
-      reason: String(formData.get("reason") ?? ""),
-    });
-    setMessage("社区审核状态已更新。");
-    await refresh();
+    try {
+      await writeJson(`/api/admin/community-review/${encodeURIComponent(reviewId)}`, "PATCH", {
+        status: String(formData.get("status")),
+        riskLevel: String(formData.get("riskLevel")),
+        reason: String(formData.get("reason") ?? ""),
+      });
+      const refreshed = await refresh({ preserveMessage: true });
+
+      if (refreshed) {
+        setMessage("社区审核状态已更新。");
+      }
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "社区审核更新失败。");
+    }
   }
 
   return (

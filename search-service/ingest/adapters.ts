@@ -140,17 +140,17 @@ const adapters: Record<SupportedSourceId, SourceAdapter> = {
       parseArticlePage({
         html,
         pageUrl,
-        titleSelectors: ["h1", ".article-title", ".arti_title", ".show_t"],
+        titleSelectors: [".nr_title", "h1", ".article-title", ".arti_title", ".show_t"],
         contentSelectors: [
-          "#vsb_content_4",
           ".v_news_content",
+          "[id^='vsb_content']",
           "#vsb_content_2",
           "#vsb_content",
           ".TRS_Editor",
           ".wp_articlecontent",
           ".article-content",
         ],
-        metaSelectors: [".arti_metas", ".show_info", ".article-info", ".wp_article_detail"],
+        metaSelectors: [".nr_date", ".arti_metas", ".show_info", ".article-info", ".wp_article_detail"],
       }),
   },
   "tjcu-library": createOfficialHtmlAdapter({
@@ -201,8 +201,8 @@ const adapters: Record<SupportedSourceId, SourceAdapter> = {
       parseArticlePage({
         html,
         pageUrl,
-        titleSelectors: ["h1", ".arti_title", ".show_t", ".article-title"],
-        contentSelectors: [".v_news_content", "#vsb_content_2", "#vsb_content", ".TRS_Editor"],
+        titleSelectors: [".ar_article_box > h5", ".arti_title", ".show_t", ".article-title", "h1"],
+        contentSelectors: [".v_news_content", "[id^='vsb_content']", "#vsb_content_2", "#vsb_content", ".TRS_Editor"],
         metaSelectors: [".show_info", ".article-info", ".v_news_detail", ".news_meta"],
       }),
   },

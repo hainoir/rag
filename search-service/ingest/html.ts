@@ -167,12 +167,26 @@ function scoreContentNode($candidate: Cheerio<AnyNode>) {
 }
 
 function pickContentRoot($: CheerioAPI, selectors: string[]) {
+  let imageOnlyNode: Cheerio<AnyNode> | null = null;
+
   for (const selector of selectors) {
     const candidate = $(selector).first();
 
-    if (candidate.length && scoreContentNode(candidate) > 0) {
+    if (!candidate.length) {
+      continue;
+    }
+
+    if (scoreContentNode(candidate) > 0) {
       return candidate.clone();
     }
+
+    if (!imageOnlyNode && candidate.find("img[src]").length > 0) {
+      imageOnlyNode = candidate;
+    }
+  }
+
+  if (imageOnlyNode) {
+    return imageOnlyNode.clone();
   }
 
   let bestNode: Cheerio<Element> | null = null;
@@ -197,7 +211,18 @@ function pickContentRoot($: CheerioAPI, selectors: string[]) {
   return bestNode;
 }
 
+const ARTICLE_FORM_SELECTOR = "[id^='vsb_content'], .v_news_content";
+const IMAGE_HOST_SELECTOR = "[id^='vsb_content'], .v_news_content, .TRS_Editor, .wp_articlecontent, .article-content";
+
 function stripNoise($root: Cheerio<AnyNode>, $: CheerioAPI, pageUrl: string) {
+  $root.find("form").each((_, element) => {
+    const $form = $(element);
+
+    if ($form.find(ARTICLE_FORM_SELECTOR).length > 0) {
+      $form.replaceWith($form.contents());
+    }
+  });
+
   $root.find(NOISE_SELECTOR).remove();
   $root.find("br").replaceWith("\n");
 
@@ -289,6 +314,26 @@ function dedupeBlocks(blocks: string[], title: string) {
   return unique;
 }
 
+function collectContentImageMarkdown($root: Cheerio<AnyNode>, $: CheerioAPI, pageUrl: string) {
+  const hosts = $root.filter(IMAGE_HOST_SELECTOR).add($root.find(IMAGE_HOST_SELECTOR));
+  const lines: string[] = [];
+  const seen = new Set<string>();
+
+  hosts.find("img[src]").each((_, element) => {
+    const source = resolveAbsoluteUrl(pageUrl, $(element).attr("src") ?? "");
+
+    if (!source || seen.has(source)) {
+      return;
+    }
+
+    seen.add(source);
+    const alt = normalizeBlockText($(element).attr("alt") ?? "");
+    lines.push(alt ? `![${alt}](${source})` : `![](${source})`);
+  });
+
+  return lines;
+}
+
 function collectMetaTexts($: CheerioAPI, selectors: string[]) {
   const values: string[] = [];
 
@@ -322,7 +367,15 @@ export function parseArticlePage({
   stripNoise(contentRoot, $, pageUrl);
 
   const blocks = dedupeBlocks(collectContentBlocks(contentRoot, $), title);
-  const cleanedMarkdown = blocks.join("\n\n").trim();
+  let cleanedMarkdown = blocks.join("\n\n").trim();
+
+  if (!cleanedMarkdown) {
+    const images = collectContentImageMarkdown(contentRoot, $, pageUrl);
+
+    if (images.length > 0) {
+      cleanedMarkdown = [title, ...images].join("\n\n");
+    }
+  }
 
   if (!cleanedMarkdown) {
     throw new Error(`No article content extracted for ${pageUrl}`);

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { AnswerPanel } from "@/components/answer-panel";
+import { AgentStepsPanel } from "@/components/agent-steps-panel";
 import { EmptyState } from "@/components/empty-state";
 import { ErrorState } from "@/components/error-state";
 import { RelatedQuestionsPanel } from "@/components/related-questions-panel";
@@ -18,6 +19,7 @@ type LoadingPhase = "idle" | "retrieving" | "summarizing" | "done";
 
 type ResultsShellProps = {
   initialQuery: string;
+  agentMode?: boolean;
 };
 
 const SEARCH_DELAY_MS = 420;
@@ -58,7 +60,7 @@ async function fetchSearchResponse(query: string, signal: AbortSignal) {
   return (await response.json()) as SearchResponse;
 }
 
-export function ResultsShell({ initialQuery }: ResultsShellProps) {
+export function ResultsShell({ initialQuery, agentMode = false }: ResultsShellProps) {
   const [response, setResponse] = useState<SearchResponse | null>(null);
   const [loadingPhase, setLoadingPhase] = useState<LoadingPhase>("idle");
   const [filter, setFilter] = useState<"all" | SourceType>("all");
@@ -177,7 +179,19 @@ export function ResultsShell({ initialQuery }: ResultsShellProps) {
               <div className="mt-6">
                 <SearchBox compact initialValue={initialQuery} onSameQuery={handleSameQuery} />
               </div>
+              {initialQuery.trim() ? (
+                <a
+                  className="mt-3 inline-block text-sm font-semibold text-[var(--accent)] underline"
+                  href={`/search?q=${encodeURIComponent(initialQuery)}${agentMode ? "" : "&agent=1"}`}
+                >
+                  {agentMode ? "返回普通检索" : "查看 Agent 步骤"}
+                </a>
+              ) : null}
             </section>
+
+            {agentMode && initialQuery.trim() ? (
+              <AgentStepsPanel key={`${initialQuery}-${reloadToken}`} query={initialQuery} />
+            ) : null}
 
             <StatusPanel loadingPhase={loadingPhase} response={response} />
 

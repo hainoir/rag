@@ -1,5 +1,11 @@
 import { createRequire } from "node:module";
 
+import { toErrorMessage } from "../ingest/errors.ts";
+import {
+  formatIngestionJobExitLine,
+  readIngestionJobFailurePolicy,
+  resolveIngestionJobExit,
+} from "../ingest/job-status.ts";
 import { dequeueIngestionJob } from "../ingest/queue.ts";
 import { runIngestionPipeline } from "../ingest/pipeline.ts";
 
@@ -21,7 +27,10 @@ function parsePositiveInteger(value: string | undefined, fallback: number) {
   return parsed;
 }
 
-function summarizeJobPayload(job: { id: string; kind: string; sourceIds: string[] }, summaries: Awaited<ReturnType<typeof runIngestionPipeline>>) {
+function summarizeJobPayload(
+  job: { id: string; kind: string; sourceIds: string[] },
+  summaries: Awaited<ReturnType<typeof runIngestionPipeline>>,
+) {
   return {
     jobId: job.id,
     kind: job.kind,
@@ -100,20 +109,27 @@ async function processOneJob() {
     }
   }
 
-  const hasFatalFailure = summaries.some(
-    (summary) => summary.errorCount > 0 && summary.storedCount === 0 && summary.dedupedCount === 0,
-  );
-  const hasAnyFailure = summaries.some((summary) => summary.errorCount > 0);
+  const decision = resolveIngestionJobExit(summaries, readIngestionJobFailurePolicy());
+  console.log(formatIngestionJobExitLine(decision));
 
   await recordIngestionEventFailOpen({
-    level: hasAnyFailure ? "error" : "info",
-    event: hasAnyFailure ? "scheduled_ingestion.failed" : "scheduled_ingestion.completed",
-    details: summarizeJobPayload(job, summaries),
+    level: decision.status === "succeeded" ? "info" : "error",
+    event:
+      decision.status === "failed"
+        ? "scheduled_ingestion.failed"
+        : decision.status === "partial"
+          ? "scheduled_ingestion.partial"
+          : "scheduled_ingestion.completed",
+    message: formatIngestionJobExitLine(decision),
+    details: {
+      ...summarizeJobPayload(job, summaries),
+      jobStatus: decision.status,
+      failurePolicy: decision.policy,
+      exitCode: decision.exitCode,
+    },
   });
 
-  if (hasFatalFailure) {
-    process.exitCode = 1;
-  }
+  process.exitCode = decision.exitCode;
 
   return true;
 }
@@ -140,7 +156,7 @@ async function main() {
 
 main()
   .catch(async (error) => {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = toErrorMessage(error);
     await recordIngestionEventFailOpen({
       level: "error",
       event: "ingestion_worker.failed",

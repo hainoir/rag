@@ -64,6 +64,8 @@ RSS / sitemap 来源的增量候选检测已经沉淀在 `search-service/ingest/
 1. `fetch`
    - 根据来源注册表抓取增量页面
    - 记录本次同步开始时间和抓取数量
+   - 传输失败保留 `cause` / `code` / `errno` / `name`。默认重试 5 次，指数退避，上限 8 秒，可用 `INGEST_RETRY_ATTEMPTS`、`INGEST_RETRY_DELAY_MS`、`INGEST_RETRY_MAX_DELAY_MS` 覆盖
+   - 多来源作业的退出码见 `docs/demo-and-deploy.md` 的定时摄取一节。GitHub-hosted runner 访问 `.tjcu.edu.cn` 会间歇性失败
 2. `clean`
    - 按 `cleaningProfile` 执行清洗
    - 抽取标题、正文、发布时间、更新时间、来源站点

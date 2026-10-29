@@ -1,8 +1,10 @@
 import { getSourceAdapter } from "./adapters.ts";
 import { readIngestRuntimeConfig, resolveSelectedSources } from "./config.ts";
+import { toErrorMessage } from "./errors.ts";
 import { fetchHtml } from "./http.ts";
 import { moderateCommunityMarkdown } from "./moderation.ts";
 import { PostgresStore } from "./postgres-store.ts";
+import { runWithRetry } from "./retry.ts";
 import type { ParsedArticle, SelectedSource, SourceRunSummary } from "./types.ts";
 import {
   buildChunksFromMarkdown,
@@ -37,36 +39,8 @@ function summarizeErrors(errors: string[]) {
   return errors.join("\n").slice(0, 4_000);
 }
 
-function sleep(ms: number) {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
-
 function buildModerationBlockedError(detailUrl: string, reason: string | undefined) {
   return new Error(`MODERATION_BLOCKED:${detailUrl}:${reason ?? "flagged"}`);
-}
-
-async function runWithRetry<T>(
-  task: () => Promise<T>,
-  config: ReturnType<typeof readIngestRuntimeConfig>,
-  onRetry?: (attempt: number, error: unknown) => Promise<void> | void,
-) {
-  let attempt = 1;
-
-  while (true) {
-    try {
-      return await task();
-    } catch (error) {
-      if (attempt >= config.retryAttempts) {
-        throw error;
-      }
-
-      attempt += 1;
-      await onRetry?.(attempt, error);
-      await sleep(config.retryDelayMs * (attempt - 1));
-    }
-  }
 }
 
 export function sanitizeCommunityMarkdown(markdown: string) {
@@ -97,9 +71,7 @@ async function discoverDetailUrls(source: SelectedSource, config: ReturnType<typ
         () => fetchHtml(pageUrl, config),
         config,
         (attempt, error) => {
-          errors.push(
-            `List page retry ${attempt} for ${pageUrl}: ${error instanceof Error ? error.message : String(error)}`,
-          );
+          errors.push(`List page retry ${attempt} for ${pageUrl}: ${toErrorMessage(error)}`);
         },
       );
       const parsed = adapter.parseListPage(source, pageUrl, html);
@@ -115,7 +87,7 @@ async function discoverDetailUrls(source: SelectedSource, config: ReturnType<typ
         }
       });
     } catch (error) {
-      errors.push(`List page failed for ${pageUrl}: ${error instanceof Error ? error.message : String(error)}`);
+      errors.push(`List page failed for ${pageUrl}: ${toErrorMessage(error)}`);
     }
   }
 
@@ -202,7 +174,7 @@ async function prepareArticle(
       article,
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = toErrorMessage(error);
 
     if (message.includes("No article content extracted") && html.includes("NewsvoteDWR.getNewsLinkUrl")) {
       return {
@@ -280,7 +252,7 @@ export async function runIngestionPipeline(sourceIds: string[]) {
               itemUrl: detailUrl,
               status: "retried",
               attempt,
-              errorMessage: error instanceof Error ? error.message : String(error),
+              errorMessage: toErrorMessage(error),
             });
           }).then(async (result) => {
             await store.recordRunItem({
@@ -369,7 +341,7 @@ export async function runIngestionPipeline(sourceIds: string[]) {
 
         summaries.push(summary);
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
+        const message = toErrorMessage(error);
 
         summary.errorCount += 1;
         summary.errors.push(message);

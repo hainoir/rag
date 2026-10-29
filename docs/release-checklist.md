@@ -145,8 +145,8 @@ npm run ingest:worker -- --once
 
 ## 8. 发布后 24 小时观察
 
-- [ ] scheduled ingestion 正常执行或失败可追踪。blocked：GitHub Actions run `38709421953` 在 `getaddrinfo ENOTFOUND in-burro-41364.upstash.io` 失败。kir 必须更换 Actions secret `REDIS_URL`。
-- [ ] `/health` 持续可用。blocked：Ops Health Check run `38709402812` 因没有 `OPS_SEARCH_SERVICE_URL` 而跳过。本次无法做 24 小时观察。
+- [ ] scheduled ingestion 正常执行或失败可追踪。failed：当前问题是 hosted runner 间歇性抓不到 TJCU 列表页，例 run `40591519263`。run `38709421953` 的 `in-burro-41364.upstash.io` `ENOTFOUND` 是历史 Redis 失败；Actions `REDIS_URL` 现已配置，那次入队已经能成功。还不能签 24 小时观察。
+- [ ] `/health` 持续可用。blocked：Ops Health Check run `38709402812` 和 `40827602734` 都因为没有 `OPS_SEARCH_SERVICE_URL` 而跳过，当时 workflow 仍是绿的。缺端点现在应失败。本次无法做 24 小时观察。
 - [ ] `/metrics.persistent` 有真实请求数据。blocked：同上，没有托管 search-service 地址。
 - [ ] `service_event_logs` 没有新增阻断错误。blocked：同上。
 - [ ] feedback 可以正常写入和处理。本地已验证；托管环境 24 小时观察 blocked。

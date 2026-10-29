@@ -135,6 +135,14 @@ npm run verify:release:ops
 
 默认不在定时任务里自动跑社区来源；把 `RUN_COMMUNITY_INGESTION=true` 后，workflow 才会额外执行 `npm run ingest:scheduled:community`。这样可以先把官方来源作为稳定基线，社区来源按合规和质量策略逐步打开。
 
+GitHub-hosted runner 到 `www.tjcu.edu.cn`、`lib.tjcu.edu.cn`、`jwc.tjcu.edu.cn`、`zs.tjcu.edu.cn` 的出口不稳定。run `40591519263` 里四个官方源都是列表页 `fetch failed`，接着 `No detail URLs discovered`。这是抓取传输失败，不是选择器或正文抽取失败。2026-10-15 以来该 workflow 有 80 次 success、11 次 failure；其中 run `38709421953` 是已经换掉的 Redis 主机 `in-burro-41364.upstash.io` `ENOTFOUND`，抽查的后续失败是同一类列表页 `fetch failed`。加长重试不能证明下一次 hosted runner 一定能连上 `.edu.cn`。
+
+抓取失败会把 `cause`、`code`、`errno` 和 `name` 写进错误文本。重试仍由环境变量控制，默认值是 `INGEST_RETRY_ATTEMPTS=5`、`INGEST_RETRY_DELAY_MS=1000`、`INGEST_RETRY_MAX_DELAY_MS=8000`，间隔按指数增加并被上限截断。确定性的解析失败和 4xx（除 408 / 429）不重试。
+
+如果整段时间都连不上校园站，可以改用能访问这些域名的 self-hosted runner，或给 workflow 配 HTTPS 代理。Node 22 的 `fetch` 默认不读 `HTTPS_PROXY`，需要同时设置 `NODE_USE_ENV_PROXY=1`。
+
+作业退出默认 `INGEST_JOB_FAILURE_POLICY=all-sources`：至少一个来源 `stored` 或 `deduped` 成功时进程退出 0，并打印 `job_status=partial` 和各源计数。只有每个来源都失败（有错误，且 `stored=0`、`deduped=0`），或一个来源都没有跑，才退出 1。`INGEST_JOB_FAILURE_POLICY=any-error` 时，任意来源错误都让进程退出 1。部分成功仍记录 `scheduled_ingestion.partial`，level 为 `error`，因此会计入 `recentIngestionFailures`；进程退出码仍按上面的策略。
+
 ## 错误分类与降级
 
 上游 search-service 的 HTTP 错误 payload 会返回稳定 `error` code，例如 `invalid_json`、`database_unavailable`、`upstream_timeout` 和 `search_service_error`。Next.js 搜索代理不会把这些字段扩展进 `SearchResponse`，而是记录结构化日志并继续给前端返回既有 `status: "error"`。

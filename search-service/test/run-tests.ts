@@ -5,6 +5,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 
 import { getSourceAdapter } from "../ingest/adapters.ts";
+import { runIngestResilienceCases } from "./ingest-resilience.test.ts";
 import { resolveSelectedSources } from "../ingest/config.ts";
 import {
   filterIncrementalCandidates,
@@ -200,6 +201,8 @@ async function runCase(name: string, task: () => Promise<void> | void) {
 
 async function main() {
   const results: boolean[] = [];
+
+  results.push(...(await runIngestResilienceCases(runCase)));
 
   results.push(
     await runCase("main notices adapter", () => {

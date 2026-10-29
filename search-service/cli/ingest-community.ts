@@ -1,6 +1,12 @@
 import { createRequire } from "node:module";
 
 import { readIngestRuntimeConfig, requireDatabaseUrl } from "../ingest/config.ts";
+import { toErrorMessage } from "../ingest/errors.ts";
+import {
+  formatIngestionJobExitLine,
+  readIngestionJobFailurePolicy,
+  resolveIngestionJobExit,
+} from "../ingest/job-status.ts";
 import { runIngestionPipeline } from "../ingest/pipeline.ts";
 import { DEFAULT_COMMUNITY_SOURCE_IDS } from "../ingest/types.ts";
 
@@ -42,12 +48,12 @@ async function main() {
     }
   }
 
-  if (summaries.some((summary) => summary.errorCount > 0)) {
-    process.exitCode = 1;
-  }
+  const decision = resolveIngestionJobExit(summaries, readIngestionJobFailurePolicy());
+  console.log(formatIngestionJobExitLine(decision));
+  process.exitCode = decision.exitCode;
 }
 
 main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error));
+  console.error(toErrorMessage(error));
   process.exitCode = 1;
 });

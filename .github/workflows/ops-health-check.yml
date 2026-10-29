@@ -34,9 +34,12 @@ jobs:
         with:
           node-version: 22
 
-      - name: Skip when endpoints are not configured
+      - name: Fail when search-service endpoint is not configured
         if: ${{ env.SEARCH_SERVICE_URL == '' && (env.SEARCH_SERVICE_HEALTH_URL == '' || env.SEARCH_SERVICE_METRICS_URL == '') }}
-        run: echo "Ops health check skipped because no search-service health/metrics endpoint is configured."
+        run: |
+          echo "::error::Ops health check failed: set secret OPS_SEARCH_SERVICE_URL, or set both OPS_SEARCH_SERVICE_HEALTH_URL and OPS_SEARCH_SERVICE_METRICS_URL. A missing endpoint is a failed gate, not a successful skip."
+          echo "Ops health check failed because no search-service health/metrics endpoint is configured." >> "$GITHUB_STEP_SUMMARY"
+          exit 1
 
       - name: Run phase-three ops check
         id: ops_check

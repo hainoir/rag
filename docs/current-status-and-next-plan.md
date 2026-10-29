@@ -141,33 +141,38 @@
 - 主站通知解析已改为 `#vsb_content_4` / `.v_news_content`。修复前 8 篇详情页无法入库。
 - 后台保存成功提示不再被同一次刷新清掉。
 - 本地 `verify:release:local`、官方四源摄取、`smoke:postgres`、admin/telemetry Postgres 测试和本地 `backup:drill` 已通过。
-- 仍 blocked 的托管材料列在验收报告第 9 节。核心是更换 Actions secret `REDIS_URL`（`in-burro-41364.upstash.io` 已不存在），并提供 `OPS_SEARCH_SERVICE_URL`、`OPS_ALERT_WEBHOOK_URL` 和 `EMBEDDING_API_KEY`。
+- 仍 blocked 的托管材料列在验收报告第 9 节。Actions `REDIS_URL` 已经配置，2026-10-15 的 `in-burro-41364.upstash.io` `ENOTFOUND` 是历史失败。当前定时同步失败是 hosted runner 间歇性抓不到 TJCU 列表页。`OPS_SEARCH_SERVICE_URL`、`OPS_ALERT_WEBHOOK_URL` 和 `EMBEDDING_API_KEY` 仍然没有验收证据。
 
 ## 4. 下一步开发顺序
 
-2026-10-15 之后，本地可复跑的第四、第五阶段项已经归档。下一步只剩验收报告第 9 节里要 kir 提供的托管材料，不要在材料缺失时打 `v0.1.0-rc.1` tag。
+2026-10-15 之后，本地可复跑的第四、第五阶段项已经归档。2026-10-29 把三类托管问题拆开：间歇性 TJCU 列表页抓取、仍缺的托管密钥、历史 Redis `ENOTFOUND`。不要在材料缺失时打 `v0.1.0-rc.1` tag。
 
 1. 本地 Phase 4 / Phase 5 已归档
    - `npm run verify:release:local` 通过
    - 本地官方四源、`test:admin:postgres`、`test:telemetry:postgres`、后台 UI 和本地 `backup:drill` 通过
    - release note：`docs/release-notes/v0.1.0-rc.1.md`
 
-2. 等 kir 更换托管材料后再重跑被挡住的门
-   - `REDIS_URL`：`in-burro-41364.upstash.io` 已不存在
-   - `OPS_SEARCH_SERVICE_URL` 与 `OPS_ALERT_WEBHOOK_URL`
+2. 定时同步的当前失败不是 Redis
+   - Actions `DATABASE_URL` 和 `REDIS_URL` 已配置。run `40591519263` 跳过了缺密钥分支，入队成功，然后四个源列表页 `fetch failed`
+   - run `38709421953` 的 `in-burro-41364.upstash.io` `ENOTFOUND` 只代表 2026-10-15 那次历史失败
+   - 2026-10-15 以来 Scheduled Ingestion 为 80 success / 11 failure。代码侧加长了重试并让部分来源成功时退出 0；这还没有新的 hosted 运行证据
+
+3. 仍然要 kir 提供、且这次没有证据的材料
+   - `OPS_SEARCH_SERVICE_URL`。未配置时 Ops Health Check 现在失败，不再把 skip 当成成功。run `40827602734` 仍是旧的绿 skip
+   - `OPS_ALERT_WEBHOOK_URL`
    - `EMBEDDING_API_KEY` 和带 `vector` 扩展的 Postgres
    - 托管主库与单独的 `BACKUP_DRILL_RESTORE_DATABASE_URL`
 
-3. 材料到齐后才做发布定稿
+4. 材料到齐后才做发布定稿
    - 重跑 `verify:release:postgres`、`verify:release:ops` 和 Scheduled Ingestion
    - 观察 24 小时
    - 那时才可以打 `v0.1.0-rc.1` tag
 
 ## 5. 当前最重要的里程碑
 
-> 本地验收已经收口。下一个里程碑是 kir 换掉失效的 Redis secret 并补齐托管监控、webhook 和 embedding 条件；在此之前不要打 tag。
+> 本地验收已经收口。Actions Redis 密钥已经可用。下一个里程碑是让定时抓取能扛住 `.tjcu.edu.cn` 间歇性不可达，并补齐托管监控、webhook 和 embedding 条件；在此之前不要打 tag。
 
-阶段一和第二阶段的真实数据链路与 `hybrid` 默认策略仍然有效。2026-10-15 把第四阶段本地后台和第五阶段本地 release gate 补进了验收报告。托管定时同步、托管通知和 hybrid 重评保持 blocked。
+阶段一和第二阶段的真实数据链路与 `hybrid` 默认策略仍然有效。2026-10-15 把第四阶段本地后台和第五阶段本地 release gate 补进了验收报告。定时同步当前是间歇性 `failed`，托管通知和 hybrid 重评保持 blocked。
 
 ## 6. 当前建议的文档阅读顺序
 

@@ -1,22 +1,32 @@
 import iconv from "iconv-lite";
 
 import type { IngestRuntimeConfig } from "./config.ts";
+import { formatErrorDetail } from "./errors.ts";
 
 function sniffEncoding(buffer: Buffer, contentType: string | null) {
-  const headerCharset = contentType?.match(/charset=([^;]+)/i)?.[1]?.trim().toLowerCase();
+  const headerCharset = contentType
+    ?.match(/charset=([^;]+)/i)?.[1]
+    ?.trim()
+    .toLowerCase();
 
   if (headerCharset) {
     return headerCharset;
   }
 
   const head = buffer.subarray(0, 2048).toString("ascii");
-  const metaCharset = head.match(/<meta[^>]+charset=["']?([^"'>\s]+)/i)?.[1]?.trim().toLowerCase();
+  const metaCharset = head
+    .match(/<meta[^>]+charset=["']?([^"'>\s]+)/i)?.[1]
+    ?.trim()
+    .toLowerCase();
 
   if (metaCharset) {
     return metaCharset;
   }
 
-  const httpEquivCharset = head.match(/content=["'][^"']*charset=([^"'>\s;]+)/i)?.[1]?.trim().toLowerCase();
+  const httpEquivCharset = head
+    .match(/content=["'][^"']*charset=([^"'>\s;]+)/i)?.[1]
+    ?.trim()
+    .toLowerCase();
 
   return httpEquivCharset ?? "utf-8";
 }
@@ -56,6 +66,15 @@ export async function fetchHtml(url: string, config: IngestRuntimeConfig) {
     const encoding = sniffEncoding(buffer, response.headers.get("content-type"));
 
     return decodeBuffer(buffer, encoding);
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("Unexpected response status ")) {
+      throw error;
+    }
+
+    const detail = formatErrorDetail(error);
+    const message = controller.signal.aborted ? `Fetch timed out after ${config.httpTimeoutMs}ms: ${detail}` : detail;
+
+    throw new Error(message, { cause: error });
   } finally {
     clearTimeout(timeout);
   }

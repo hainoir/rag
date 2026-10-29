@@ -9,8 +9,9 @@ import {
 const DEFAULT_FETCH_LIMIT = 12;
 const DEFAULT_HTTP_TIMEOUT_MS = 15_000;
 const DEFAULT_CONCURRENCY = 4;
-const DEFAULT_RETRY_ATTEMPTS = 2;
-const DEFAULT_RETRY_DELAY_MS = 500;
+const DEFAULT_RETRY_ATTEMPTS = 5;
+const DEFAULT_RETRY_DELAY_MS = 1_000;
+const DEFAULT_RETRY_MAX_DELAY_MS = 8_000;
 const DEFAULT_USER_AGENT = "campus-rag-ingestion/1.0 (+https://www.tjcu.edu.cn/)";
 const DEFAULT_MODERATION_BASE_URL = "https://api.openai.com/v1";
 const DEFAULT_MODERATION_MODEL = "omni-moderation-latest";
@@ -25,6 +26,7 @@ export type IngestRuntimeConfig = {
   concurrency: number;
   retryAttempts: number;
   retryDelayMs: number;
+  retryMaxDelayMs: number;
   userAgent: string;
   moderationMode: "off" | "report" | "enforce";
   moderationApiKey: string;
@@ -104,7 +106,7 @@ export function resolveCliSourceIds(argv: string[], env = process.env) {
   return fromEnv.length > 0 ? fromEnv : [...DEFAULT_OFFICIAL_SOURCE_IDS];
 }
 
-export function readIngestRuntimeConfig(env = process.env): IngestRuntimeConfig {
+export function readIngestRuntimeConfig(env: Record<string, string | undefined> = process.env): IngestRuntimeConfig {
   const moderationMode = String(env.CONTENT_MODERATION_MODE ?? "off").trim();
 
   return {
@@ -114,6 +116,7 @@ export function readIngestRuntimeConfig(env = process.env): IngestRuntimeConfig 
     concurrency: parsePositiveInteger(env.INGEST_CONCURRENCY, DEFAULT_CONCURRENCY),
     retryAttempts: parsePositiveInteger(env.INGEST_RETRY_ATTEMPTS, DEFAULT_RETRY_ATTEMPTS),
     retryDelayMs: parsePositiveInteger(env.INGEST_RETRY_DELAY_MS, DEFAULT_RETRY_DELAY_MS),
+    retryMaxDelayMs: parsePositiveInteger(env.INGEST_RETRY_MAX_DELAY_MS, DEFAULT_RETRY_MAX_DELAY_MS),
     userAgent: String(env.INGEST_USER_AGENT ?? DEFAULT_USER_AGENT).trim() || DEFAULT_USER_AGENT,
     moderationMode: moderationMode === "report" || moderationMode === "enforce" ? moderationMode : "off",
     moderationApiKey: String(env.CONTENT_MODERATION_API_KEY ?? "").trim(),

@@ -5,30 +5,46 @@ import type { AgentCitation, AgentEvent } from "./types.ts";
 export type RunCampusAgentOptions = {
   emit: (event: AgentEvent) => void;
   search?: SearchProvider["search"];
+  signal?: AbortSignal;
+  requestId?: string;
 };
 
-export async function runCampusAgent(query: string, { emit, search }: RunCampusAgentOptions): Promise<void> {
+export async function runCampusAgent(
+  query: string,
+  { emit, search, signal, requestId }: RunCampusAgentOptions,
+): Promise<void> {
   emit({ type: "phase", phase: "received" });
   emit({ type: "phase", phase: "retrieving" });
 
   const trimmedQuery = query.trim();
   const searchId = "search-1";
-  emit({ type: "phase", phase: "tool", detail: "search_notices" });
-  emit({ type: "tool_call", id: searchId, name: "search_notices", args: { query: trimmedQuery } });
 
   let summary = "";
   let sourceSummary = "";
   let citations: AgentCitation[] = [];
   let fallback = false;
+  let result: Awaited<ReturnType<typeof toolRegistry.search_notices.run>> | undefined;
 
-  try {
-    const result = await toolRegistry.search_notices.run({ query: trimmedQuery }, { search });
-    if (result.status === "error") {
+  if (!signal?.aborted) {
+    emit({ type: "phase", phase: "tool", detail: "search_notices" });
+    emit({ type: "tool_call", id: searchId, name: "search_notices", args: { query: trimmedQuery } });
+
+    try {
+      result = await toolRegistry.search_notices.run({ query: trimmedQuery }, { search, requestId });
+    } catch (error) {
+      fallback = true;
+      console.error(error);
+      emit({ type: "tool_result", id: searchId, name: "search_notices", ok: false, summary: "校园信息检索失败。" });
+      emit({ type: "error", message: "校园信息检索失败。", code: "search_failed" });
+      emit({ type: "phase", phase: "fallback", detail: "检索服务未返回可用结果" });
+    }
+
+    if (result?.status === "error") {
       fallback = true;
       emit({ type: "tool_result", id: searchId, name: "search_notices", ok: false, summary: "校园信息检索失败。" });
       emit({ type: "error", message: "校园信息检索暂时不可用。", code: result.errorCode ?? "search_failed" });
       emit({ type: "phase", phase: "fallback", detail: "检索服务未返回可用结果" });
-    } else {
+    } else if (result) {
       emit({
         type: "tool_result",
         id: searchId,
@@ -38,38 +54,36 @@ export async function runCampusAgent(query: string, { emit, search }: RunCampusA
       });
     }
 
-    summary = result.answer?.summary?.trim() ?? "";
-    sourceSummary = result.sources.map((source) => `${source.title}（${source.sourceName}）`).join("；");
-
-    if (result.sources.length > 0) {
-      const exportId = "export-2";
-      emit({ type: "phase", phase: "tool", detail: "export_citations" });
-      emit({
-        type: "tool_call",
-        id: exportId,
-        name: "export_citations",
-        args: { sourceCount: result.sources.length },
-      });
-
-      try {
-        const exported = toolRegistry.export_citations.run({
-          sources: result.sources,
-          evidence: result.answer?.evidence,
-        });
-        citations = exported.citations;
-        emit({ type: "tool_result", id: exportId, name: "export_citations", ok: true, summary: exported.text });
-      } catch (error) {
-        fallback = true;
-        emit({ type: "tool_result", id: exportId, name: "export_citations", ok: false, summary: "引用导出失败。" });
-        emit({ type: "error", message: error instanceof Error ? error.message : "引用导出失败。", code: "export_failed" });
-        emit({ type: "phase", phase: "fallback", detail: "保留已检索到的回答" });
-      }
+    if (result) {
+      summary = result.answer?.summary?.trim() ?? "";
+      sourceSummary = result.sources.map((source) => `${source.title}（${source.sourceName}）`).join("；");
     }
-  } catch (error) {
-    fallback = true;
-    emit({ type: "tool_result", id: searchId, name: "search_notices", ok: false, summary: "校园信息检索失败。" });
-    emit({ type: "error", message: error instanceof Error ? error.message : "校园信息检索失败。", code: "search_failed" });
-    emit({ type: "phase", phase: "fallback", detail: "检索服务未返回可用结果" });
+  }
+
+  if (result && result.sources.length > 0 && !signal?.aborted) {
+    const exportId = "export-2";
+    emit({ type: "phase", phase: "tool", detail: "export_citations" });
+    emit({
+      type: "tool_call",
+      id: exportId,
+      name: "export_citations",
+      args: { sourceCount: result.sources.length },
+    });
+
+    try {
+      const exported = toolRegistry.export_citations.run({
+        sources: result.sources,
+        evidence: result.answer?.evidence,
+      });
+      citations = exported.citations;
+      emit({ type: "tool_result", id: exportId, name: "export_citations", ok: true, summary: exported.text });
+    } catch (error) {
+      fallback = true;
+      console.error(error);
+      emit({ type: "tool_result", id: exportId, name: "export_citations", ok: false, summary: "引用导出失败。" });
+      emit({ type: "error", message: "引用导出失败。", code: "export_failed" });
+      emit({ type: "phase", phase: "fallback", detail: "保留已检索到的回答" });
+    }
   }
 
   if (!summary) {

@@ -51,3 +51,14 @@ test("handles sources without evidence and empty sources", () => {
   assert.match(exportCitations([source]).text, /原始摘要/);
   assert.deepEqual(exportCitations([]), { text: "", citations: [] });
 });
+
+test("keeps the first evidence hit and falls back through blank urls", () => {
+  const withBlankCanonical = { ...source, canonicalUrl: "", url: "https://campus.test/from-url" };
+  const result = exportCitations([withBlankCanonical], [
+    { sourceId: "notice-1", title: "借阅规则", snippet: "" },
+    { sourceId: "notice-1", title: "借阅规则", snippet: "第二条不应覆盖" },
+  ]);
+
+  assert.equal(result.citations[0]?.url, "https://campus.test/from-url");
+  assert.equal(result.citations[0]?.snippet, "原始摘要");
+});

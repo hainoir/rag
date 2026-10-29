@@ -58,8 +58,12 @@ export function AgentStepsPanel({ query }: { query: string }) {
           <button
             className="rounded-full border border-[var(--line-strong)] px-3 py-1 text-xs font-semibold"
             onClick={async () => {
-              await navigator.clipboard.writeText(exportedText);
-              setCopied(true);
+              try {
+                await navigator.clipboard.writeText(exportedText);
+                setCopied(true);
+              } catch {
+                setCopied(false);
+              }
             }}
             type="button"
           >

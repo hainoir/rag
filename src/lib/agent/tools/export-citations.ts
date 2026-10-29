@@ -7,7 +7,14 @@ export function exportCitations(
   sources: SearchSource[],
   evidence: SearchAnswerEvidence[] = [],
 ): CitationExport {
-  const evidenceBySource = new Map(evidence.map((item) => [item.sourceId, item]));
+  const evidenceBySource = new Map<string, SearchAnswerEvidence>();
+
+  for (const item of evidence) {
+    if (!evidenceBySource.has(item.sourceId)) {
+      evidenceBySource.set(item.sourceId, item);
+    }
+  }
+
   const citations = sources.map((source) => {
     const matchingEvidence = evidenceBySource.get(source.id);
 
@@ -15,9 +22,9 @@ export function exportCitations(
       sourceId: source.id,
       title: source.title,
       sourceName: source.sourceName,
-      ...(source.url || source.canonicalUrl ? { url: source.canonicalUrl ?? source.url } : {}),
+      ...(source.url || source.canonicalUrl ? { url: source.canonicalUrl || source.url } : {}),
       ...(matchingEvidence?.snippet || source.snippet
-        ? { snippet: matchingEvidence?.snippet ?? source.snippet }
+        ? { snippet: matchingEvidence?.snippet || source.snippet }
         : {}),
     } satisfies AgentCitation;
   });

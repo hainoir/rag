@@ -6,7 +6,10 @@ import { searchNotices } from "./search-notices.ts";
 type ToolRegistry = {
   search_notices: {
     description: string;
-    run: (args: { query: string }, deps?: { search?: SearchProvider["search"] }) => ReturnType<typeof searchNotices>;
+    run: (
+      args: { query: string },
+      deps?: { search?: SearchProvider["search"]; requestId?: string },
+    ) => ReturnType<typeof searchNotices>;
   };
   export_citations: {
     description: string;
@@ -17,7 +20,7 @@ type ToolRegistry = {
 export const toolRegistry: ToolRegistry = {
   search_notices: {
     description: "Search campus notices and return an answer with sources.",
-    run: ({ query }, deps) => searchNotices(query, deps?.search),
+    run: ({ query }, deps) => searchNotices(query, deps?.search, deps?.requestId),
   },
   export_citations: {
     description: "Format retrieved sources as copyable citations.",

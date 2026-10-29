@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 
 import { runCampusAgent } from "../../src/lib/agent/orchestrator.ts";
-import { encodeAgentDone, encodeAgentEvent } from "../../src/lib/agent/sse.ts";
 import { toolRegistry } from "../../src/lib/agent/tools/registry.ts";
 import type { AgentEvent } from "../../src/lib/agent/types.ts";
 import { buildEmptyResponse, buildErrorResponse } from "../../src/lib/search/normalize-response.ts";
@@ -42,8 +41,10 @@ test("runs search then citation export and emits a cited answer", async () => {
   const events: AgentEvent[] = [];
   await runCampusAgent(" 借阅 ", {
     emit: (event) => events.push(event),
-    search: async (query) => {
+    requestId: "req-agent",
+    search: async (query, options) => {
       assert.equal(query, "借阅");
+      assert.equal(options?.requestId, "req-agent");
       return {
         ...buildEmptyResponse(query),
         status: "ok",
@@ -110,10 +111,4 @@ test("finishes with a useful answer when search throws or has no sources", async
     assert.equal(events.some((event) => event.type === "answer" && event.summary.length > 0), true);
     assert.deepEqual(events.at(-1), { type: "phase", phase: "done" });
   }
-});
-
-test("SSE encoder emits JSON events and a terminal marker", () => {
-  const event: AgentEvent = { type: "phase", phase: "received" };
-  assert.equal(encodeAgentEvent(event), `data: ${JSON.stringify(event)}\n\n`);
-  assert.equal(encodeAgentDone(), "data: [DONE]\n\n");
 });

@@ -50,22 +50,13 @@ export async function fetchHtml(url: string, config: IngestRuntimeConfig) {
   const timeout = setTimeout(() => controller.abort(), config.httpTimeoutMs);
 
   try {
-    let response: Response;
-
-    try {
-      response = await fetch(url, {
-        headers: {
-          "User-Agent": config.userAgent,
-          Accept: "text/html,application/xhtml+xml",
-        },
-        signal: controller.signal,
-      });
-    } catch (error) {
-      const detail = formatErrorDetail(error);
-      const message = controller.signal.aborted ? `Fetch timed out after ${config.httpTimeoutMs}ms: ${detail}` : detail;
-
-      throw new Error(message, { cause: error });
-    }
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": config.userAgent,
+        Accept: "text/html,application/xhtml+xml",
+      },
+      signal: controller.signal,
+    });
 
     if (!response.ok) {
       throw new Error(`Unexpected response status ${response.status} for ${url}`);
@@ -75,6 +66,15 @@ export async function fetchHtml(url: string, config: IngestRuntimeConfig) {
     const encoding = sniffEncoding(buffer, response.headers.get("content-type"));
 
     return decodeBuffer(buffer, encoding);
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("Unexpected response status ")) {
+      throw error;
+    }
+
+    const detail = formatErrorDetail(error);
+    const message = controller.signal.aborted ? `Fetch timed out after ${config.httpTimeoutMs}ms: ${detail}` : detail;
+
+    throw new Error(message, { cause: error });
   } finally {
     clearTimeout(timeout);
   }

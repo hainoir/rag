@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import http from "node:http";
 
 import { readIngestRuntimeConfig } from "../ingest/config.ts";
 import { formatErrorDetail, toErrorMessage } from "../ingest/errors.ts";
@@ -113,6 +114,44 @@ export async function runIngestResilienceCases(runCase: RunCase) {
         });
       } finally {
         globalThis.fetch = previousFetch;
+      }
+    }),
+  );
+
+  results.push(
+    await runCase("fetchHtml labels a stalled response body as a timeout", async () => {
+      const server = http.createServer((_request, response) => {
+        response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+        response.write("<html><body>");
+      });
+
+      await new Promise<void>((resolve) => {
+        server.listen(0, "127.0.0.1", () => resolve());
+      });
+
+      const address = server.address();
+
+      if (!address || typeof address === "string") {
+        throw new Error("stall server did not bind a port");
+      }
+
+      const config = readIngestRuntimeConfig({
+        INGEST_HTTP_TIMEOUT_MS: "100",
+      });
+
+      try {
+        await assert.rejects(fetchHtml(`http://127.0.0.1:${address.port}/notice.htm`, config), (error: unknown) => {
+          const message = toErrorMessage(error);
+
+          assert.match(message, /Fetch timed out after 100ms/);
+          assert.match(message, /name=AbortError/);
+          assert.equal(isRetryableIngestError(error), true);
+          return true;
+        });
+      } finally {
+        await new Promise<void>((resolve) => {
+          server.close(() => resolve());
+        });
       }
     }),
   );

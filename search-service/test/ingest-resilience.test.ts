@@ -6,6 +6,9 @@ import { formatErrorDetail, toErrorMessage } from "../ingest/errors.ts";
 import { fetchHtml } from "../ingest/http.ts";
 import {
   formatIngestionJobExitLine,
+  formatIngestionJobWarningLines,
+  isNetworkUnreachableMessage,
+  readIngestUnreachableExit,
   readIngestionJobFailurePolicy,
   resolveIngestionJobExit,
 } from "../ingest/job-status.ts";
@@ -282,6 +285,73 @@ export async function runIngestResilienceCases(runCase: RunCase) {
       assert.equal(readIngestionJobFailurePolicy({}), "all-sources");
       assert.equal(readIngestionJobFailurePolicy({ INGEST_JOB_FAILURE_POLICY: "any" }), "any-error");
       assert.equal(readIngestionJobFailurePolicy({ INGEST_JOB_FAILURE_POLICY: "any-error" }), "any-error");
+    }),
+  );
+
+  results.push(
+    await runCase("all network-only source failures soft-fail with an Actions warning", () => {
+      const sources = ["tjcu-main-notices", "tjcu-library", "tjcu-academic-affairs", "tjcu-undergrad-admissions"].map(
+        (sourceId) => ({
+          sourceId,
+          errorCount: 1,
+          storedCount: 0,
+          dedupedCount: 0,
+          errors: ["fetch failed: ETIMEDOUT"],
+        }),
+      );
+      const soft = resolveIngestionJobExit(sources, "all-sources", "soft");
+      const strict = resolveIngestionJobExit(sources, "any-error", "soft");
+      const fail = resolveIngestionJobExit(
+        sources,
+        "all-sources",
+        readIngestUnreachableExit({ INGEST_UNREACHABLE_EXIT: "fail" }),
+      );
+
+      assert.equal(soft.status, "unreachable");
+      assert.equal(soft.exitCode, 0);
+      assert.deepEqual(formatIngestionJobWarningLines(soft), ["::warning::all sources unreachable from runner"]);
+      assert.equal(strict.status, "unreachable");
+      assert.equal(strict.exitCode, 1);
+      assert.equal(fail.status, "unreachable");
+      assert.equal(fail.exitCode, 1);
+      assert.equal(readIngestUnreachableExit({}), "soft");
+    }),
+  );
+
+  results.push(
+    await runCase("mixed network and parse failures remain hard failures", () => {
+      const source = { errorCount: 1, storedCount: 0, dedupedCount: 0 };
+      const decision = resolveIngestionJobExit(
+        [
+          { ...source, sourceId: "network", errors: ["ENETUNREACH"] },
+          { ...source, sourceId: "parse", errors: ["invalid HTML markup"] },
+        ],
+        "all-sources",
+        "soft",
+      );
+      assert.equal(decision.status, "failed");
+      assert.equal(decision.exitCode, 1);
+      assert.deepEqual(formatIngestionJobWarningLines(decision), []);
+      assert.equal(isNetworkUnreachableMessage("ETIMEDOUT"), true);
+      assert.equal(isNetworkUnreachableMessage("enetunreach"), true);
+      assert.equal(isNetworkUnreachableMessage("Fetch Failed"), true);
+      assert.equal(isNetworkUnreachableMessage("invalid HTML markup"), false);
+      assert.equal(
+        resolveIngestionJobExit(
+          [{ ...source, sourceId: "mixed-errors", errors: ["ETIMEDOUT", "invalid HTML markup"] }],
+          "all-sources",
+          "soft",
+        ).status,
+        "failed",
+      );
+      assert.equal(
+        resolveIngestionJobExit(
+          [{ ...source, sourceId: "empty-errors", errors: [], networkOnly: true }],
+          "all-sources",
+          "soft",
+        ).status,
+        "failed",
+      );
     }),
   );
 

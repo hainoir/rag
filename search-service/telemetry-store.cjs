@@ -423,8 +423,7 @@ async function getPersistentMetrics(windowHours = 24) {
       `
         select created_at
         from service_event_logs
-        where event = 'scheduled_ingestion.completed'
-          and level = 'info'
+        where event in ('scheduled_ingestion.completed', 'scheduled_ingestion.partial')
           and payload->>'kind' = 'official'
         order by created_at desc
         limit 1

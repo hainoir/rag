@@ -36,7 +36,15 @@ export function isFailedSourceRun(summary: IngestionSourceExitSummary) {
 }
 
 export function isNetworkUnreachableMessage(message: string): boolean {
-  return /ETIMEDOUT|ENETUNREACH|EHOSTUNREACH|ECONNREFUSED|ECONNRESET|EAI_AGAIN|ENOTFOUND|fetch failed/i.test(message);
+  return /ETIMEDOUT|ENETUNREACH|EHOSTUNREACH|ECONNREFUSED|ECONNRESET|EAI_AGAIN|ENOTFOUND|fetch failed|AbortError|Fetch timed out/i.test(message);
+}
+
+export function noDetailUrlsDiscoveredMessage(sourceId: string): string {
+  return `No detail URLs discovered for ${sourceId}.`;
+}
+
+export function isNoDetailUrlsDiscoveredMessage(message: string, sourceId: string): boolean {
+  return message === noDetailUrlsDiscoveredMessage(sourceId);
 }
 
 export function readIngestUnreachableExit(env: Record<string, string | undefined> = process.env): "fail" | "soft" {
@@ -50,7 +58,12 @@ export function readIngestUnreachableExit(env: Record<string, string | undefined
 function isNetworkOnlySourceRun(summary: IngestionSourceExitSummary): boolean {
   if (!isFailedSourceRun(summary)) return false;
   if (summary.errors !== undefined) {
-    return summary.errors.length > 0 && summary.errors.every(isNetworkUnreachableMessage);
+    return (
+      summary.errors.some(isNetworkUnreachableMessage) &&
+      summary.errors.every(
+        (error) => isNetworkUnreachableMessage(error) || isNoDetailUrlsDiscoveredMessage(error, summary.sourceId),
+      )
+    );
   }
   return summary.networkOnly === true;
 }

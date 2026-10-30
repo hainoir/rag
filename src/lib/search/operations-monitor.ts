@@ -208,7 +208,7 @@ export function readOperationsCheckConfig(env = process.env): OperationsCheckCon
     maxAverageDurationMs: parseNonNegativeNumber(env.OPS_MAX_AVERAGE_DURATION_MS, 3_000),
     maxUpstreamTimeouts: parseNonNegativeNumber(env.OPS_MAX_UPSTREAM_TIMEOUTS, 5),
     maxRecentIngestionFailures: parseNonNegativeNumber(env.OPS_MAX_RECENT_INGESTION_FAILURES, 0),
-    maxRecentIngestionUnreachable: parseNonNegativeNumber(env.OPS_MAX_RECENT_INGESTION_UNREACHABLE, 100),
+    maxRecentIngestionUnreachable: parseNonNegativeNumber(env.OPS_MAX_RECENT_INGESTION_UNREACHABLE, 3),
     maxOfficialIngestionAgeHours: parseNonNegativeNumber(env.OPS_MAX_OFFICIAL_INGESTION_AGE_HOURS, 48),
   };
 }

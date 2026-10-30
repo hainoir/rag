@@ -256,16 +256,20 @@ test("counts unreachable ingestion separately from failures", () => {
       enabled: true,
       recentIngestionFailures: [],
       recentIngestionUnreachable: [{ event: "scheduled_ingestion.unreachable" }],
-      recentIngestionUnreachableCount: 12,
+      recentIngestionUnreachableCount: 3,
     },
   };
   const report = evaluateOperationsSnapshot(health, metrics, config);
   assert.equal(report.ok, true);
   assert.equal(report.summary.recentIngestionFailureCount, 0);
-  assert.equal(report.summary.recentIngestionUnreachableCount, 12);
-  assert.equal(config.maxRecentIngestionUnreachable, 100);
+  assert.equal(report.summary.recentIngestionUnreachableCount, 3);
+  assert.equal(config.maxRecentIngestionUnreachable, 3);
 
-  const exceeded = evaluateOperationsSnapshot(health, metrics, { ...config, maxRecentIngestionUnreachable: 10 });
+  const exceeded = evaluateOperationsSnapshot(
+    health,
+    { persistent: { ...metrics.persistent, recentIngestionUnreachableCount: 4 } },
+    config,
+  );
   assert.deepEqual(
     exceeded.failures.map((failure) => failure.code),
     ["recent_ingestion_unreachable_exceeded"],

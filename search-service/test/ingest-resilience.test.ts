@@ -319,6 +319,41 @@ export async function runIngestResilienceCases(runCase: RunCase) {
   );
 
   results.push(
+    await runCase("pipeline network errors with no discovered URLs resolve as unreachable", () => {
+      const sourceId = "tjcu-main-notices";
+      const networkError =
+        "List page failed for https://www.tjcu.edu.cn/xxgk/tzgg.htm: fetch failed (name=TypeError); cause: connect ETIMEDOUT 203.0.113.1:443 (code=ETIMEDOUT)";
+      const timeoutError =
+        "List page failed for https://www.tjcu.edu.cn/xxgk/tzgg.htm: Fetch timed out after 20ms: The operation was aborted (name=AbortError)";
+      const noDetailsError = "No detail URLs discovered for tjcu-main-notices.";
+      assert.equal(isNetworkUnreachableMessage("name=AbortError"), true);
+      assert.equal(isNetworkUnreachableMessage("Fetch timed out after 20ms"), true);
+      const summary = (errors: string[]) => ({
+        sourceId,
+        errorCount: errors.length,
+        storedCount: 0,
+        dedupedCount: 0,
+        errors,
+      });
+
+      for (const networkMessage of [networkError, timeoutError]) {
+        const decision = resolveIngestionJobExit([summary([networkMessage, noDetailsError])], "all-sources", "soft");
+        assert.equal(decision.status, "unreachable");
+        assert.equal(decision.exitCode, 0);
+      }
+
+      const mixed = resolveIngestionJobExit(
+        [summary([networkError, "Detail page parse failed for https://www.tjcu.edu.cn/notice.htm", noDetailsError])],
+        "all-sources",
+        "soft",
+      );
+      assert.equal(mixed.status, "failed");
+      assert.equal(mixed.exitCode, 1);
+      assert.equal(resolveIngestionJobExit([summary([noDetailsError])], "all-sources", "soft").status, "failed");
+    }),
+  );
+
+  results.push(
     await runCase("mixed network and parse failures remain hard failures", () => {
       const source = { errorCount: 1, storedCount: 0, dedupedCount: 0 };
       const decision = resolveIngestionJobExit(

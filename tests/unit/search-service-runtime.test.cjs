@@ -127,6 +127,24 @@ test("summarizes persistent metrics rows into JSON buckets", () => {
   assert.equal(snapshot.lastSuccessfulOfficialIngestionAt, "2026-05-13T00:00:00.000Z");
 });
 
+test("accepts an official partial ingestion row as the freshness baseline", () => {
+  const snapshot = buildPersistentMetricsSnapshot({
+    windowHours: 24,
+    summaryRow: null,
+    statusRows: [],
+    cacheRows: [],
+    errorRows: [],
+    ingestionFailureRows: [],
+    lastSuccessfulOfficialIngestionRow: {
+      event: "scheduled_ingestion.partial",
+      payload: { kind: "official" },
+      created_at: new Date("2026-05-13T03:00:00.000Z"),
+    },
+  });
+
+  assert.equal(snapshot.lastSuccessfulOfficialIngestionAt, "2026-05-13T03:00:00.000Z");
+});
+
 test("validates feedback and query log telemetry payloads", () => {
   const feedback = parseSearchFeedbackPayload({
     requestId: "req-1",

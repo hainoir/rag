@@ -143,7 +143,7 @@ GitHub-hosted runner 到 `www.tjcu.edu.cn`、`lib.tjcu.edu.cn`、`jwc.tjcu.edu.c
 
 作业退出默认 `INGEST_JOB_FAILURE_POLICY=all-sources`：至少一个来源 `stored` 或 `deduped` 成功时进程退出 0，并打印 `job_status=partial` 和各源计数。每个来源都失败且包含非网络错误（有错误，且 `stored=0`、`deduped=0`），或一个来源都没有跑时，退出 1。`INGEST_JOB_FAILURE_POLICY=any-error` 时，任意来源错误都让进程退出 1。部分成功仍记录 `scheduled_ingestion.partial`，level 为 `error`，因此会计入 `recentIngestionFailures`；进程退出码仍按上面的策略。
 
-若全部来源仅因网络错误失败，作业打印 `job_status=unreachable` 和 GitHub Actions warning，默认退出 0；设置 `INGEST_UNREACHABLE_EXIT=fail` 可改为退出 1。`any-error` 策略仍退出 1。定时 worker 以 info 级记录 `scheduled_ingestion.unreachable`，单独计数，不计入 `recentIngestionFailures`；ops 检查通过 official 成功时间的 48 小时阈值发现持续不可达。
+若全部来源仅因网络错误失败，作业打印 `job_status=unreachable` 和 GitHub Actions warning，默认退出 0；设置 `INGEST_UNREACHABLE_EXIT=fail` 可改为退出 1。`any-error` 策略仍退出 1。定时 worker 以 info 级记录 `scheduled_ingestion.unreachable`，单独计数，不计入 `recentIngestionFailures`；ops 检查通过 24 小时内不可达次数（默认超过 3 次）和最近一次 official `completed` 或 `partial` 的 48 小时阈值发现持续不可达。
 
 ## 错误分类与降级
 

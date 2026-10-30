@@ -4,6 +4,7 @@ on:
   workflow_dispatch:
   schedule:
     - cron: "0 18 * * *"
+    - cron: "0 0 * * *"
     - cron: "0 * * * *"
 
 jobs:
@@ -23,6 +24,7 @@ jobs:
       RUN_COMMUNITY_INGESTION: ${{ vars.RUN_COMMUNITY_INGESTION || 'false' }}
       INGEST_COMMUNITY_SOURCE_IDS: ${{ vars.INGEST_COMMUNITY_SOURCE_IDS || 'tjcu-tieba' }}
       INGEST_QUEUE_NAME: ${{ vars.INGEST_QUEUE_NAME || 'campus-rag:ingestion' }}
+      INGEST_UNREACHABLE_EXIT: ${{ vars.INGEST_UNREACHABLE_EXIT || 'soft' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -43,7 +45,7 @@ jobs:
         run: echo "REDIS_URL secret is not configured; queued scheduled ingestion skipped."
 
       - name: Run official ingestion
-        if: ${{ env.DATABASE_URL != '' && env.REDIS_URL != '' && (github.event_name == 'workflow_dispatch' || github.event.schedule == '0 18 * * *') }}
+        if: ${{ env.DATABASE_URL != '' && env.REDIS_URL != '' && (github.event_name == 'workflow_dispatch' || github.event.schedule == '0 18 * * *' || github.event.schedule == '0 0 * * *') }}
         run: npm run ingest:scheduled:official
 
       - name: Run community ingestion

@@ -2,6 +2,7 @@ import { getSourceAdapter } from "./adapters.ts";
 import { readIngestRuntimeConfig, resolveSelectedSources } from "./config.ts";
 import { toErrorMessage } from "./errors.ts";
 import { fetchHtml } from "./http.ts";
+import { noDetailUrlsDiscoveredMessage } from "./job-status.ts";
 import { moderateCommunityMarkdown } from "./moderation.ts";
 import { PostgresStore } from "./postgres-store.ts";
 import { runWithRetry } from "./retry.ts";
@@ -233,7 +234,7 @@ export async function runIngestionPipeline(sourceIds: string[]) {
         summary.errorCount += discovery.errors.length;
 
         if (summary.fetchedCount === 0) {
-          summary.errors.push(`No detail URLs discovered for ${source.id}.`);
+          summary.errors.push(noDetailUrlsDiscoveredMessage(source.id));
           summary.errorCount += 1;
         }
 

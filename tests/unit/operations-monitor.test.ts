@@ -1,9 +1,6 @@
 import assert from "node:assert/strict";
 
-import {
-  evaluateOperationsSnapshot,
-  readOperationsCheckConfig,
-} from "../../src/lib/search/operations-monitor.ts";
+import { evaluateOperationsSnapshot, readOperationsCheckConfig } from "../../src/lib/search/operations-monitor.ts";
 
 function test(name: string, task: () => void | Promise<void>) {
   Promise.resolve()
@@ -13,7 +10,7 @@ function test(name: string, task: () => void | Promise<void>) {
     })
     .catch((error) => {
       console.error(`FAIL ${name}`);
-      console.error(error instanceof Error ? error.stack ?? error.message : String(error));
+      console.error(error instanceof Error ? (error.stack ?? error.message) : String(error));
       process.exitCode = 1;
     });
 }
@@ -216,5 +213,65 @@ test("fails when ingestion failures or timeout counts exceed thresholds", () => 
   assert.deepEqual(
     report.failures.map((failure) => failure.code),
     ["upstream_timeouts_too_high", "recent_ingestion_failures_present"],
+  );
+});
+
+test("checks official ingestion freshness at the 48-hour boundary", () => {
+  const config = readOperationsCheckConfig({ NODE_ENV: "test", OPS_REQUIRE_PERSISTENT: "always" } as NodeJS.ProcessEnv);
+  const health = { status: "ok", provider: "postgres", databaseConfigured: true };
+  const now = new Date("2026-10-30T12:00:00.000Z");
+  const metrics = (lastSuccessfulOfficialIngestionAt: string | null) => ({
+    persistent: { enabled: true, lastSuccessfulOfficialIngestionAt },
+  });
+
+  assert.equal(config.maxOfficialIngestionAgeHours, 48);
+  assert.equal(evaluateOperationsSnapshot(health, metrics("2026-10-28T12:00:00.000Z"), config, now).ok, true);
+  const stale = evaluateOperationsSnapshot(health, metrics("2026-10-28T11:59:59.000Z"), config, now);
+  assert.deepEqual(
+    stale.failures.map((failure) => failure.code),
+    ["official_ingestion_stale"],
+  );
+  assert.equal(stale.summary.lastSuccessfulOfficialIngestionAt, "2026-10-28T11:59:59.000Z");
+  assert.equal(evaluateOperationsSnapshot(health, metrics(null), config, now).ok, true);
+  assert.equal(
+    evaluateOperationsSnapshot(
+      health,
+      { persistent: { enabled: false, lastSuccessfulOfficialIngestionAt: "2026-10-01T00:00:00.000Z" } },
+      { ...config, requirePersistent: "never" },
+      now,
+    ).ok,
+    true,
+  );
+});
+
+test("counts unreachable ingestion separately from failures", () => {
+  const config = readOperationsCheckConfig({
+    NODE_ENV: "test",
+    OPS_REQUIRE_PERSISTENT: "always",
+    OPS_MAX_RECENT_INGESTION_FAILURES: "0",
+  } as NodeJS.ProcessEnv);
+  const health = { status: "ok", provider: "postgres", databaseConfigured: true };
+  const metrics = {
+    persistent: {
+      enabled: true,
+      recentIngestionFailures: [],
+      recentIngestionUnreachable: [{ event: "scheduled_ingestion.unreachable" }],
+      recentIngestionUnreachableCount: 3,
+    },
+  };
+  const report = evaluateOperationsSnapshot(health, metrics, config);
+  assert.equal(report.ok, true);
+  assert.equal(report.summary.recentIngestionFailureCount, 0);
+  assert.equal(report.summary.recentIngestionUnreachableCount, 3);
+  assert.equal(config.maxRecentIngestionUnreachable, 3);
+
+  const exceeded = evaluateOperationsSnapshot(
+    health,
+    { persistent: { ...metrics.persistent, recentIngestionUnreachableCount: 4 } },
+    config,
+  );
+  assert.deepEqual(
+    exceeded.failures.map((failure) => failure.code),
+    ["recent_ingestion_unreachable_exceeded"],
   );
 });

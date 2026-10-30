@@ -1,9 +1,10 @@
 const assert = require("node:assert/strict");
 
-const { buildHealthSnapshot, readSearchServiceRuntimePreflight } = require("../../search-service/runtime-preflight.cjs");
 const {
-  buildPersistentMetricsSnapshot,
-} = require("../../search-service/telemetry-store.cjs");
+  buildHealthSnapshot,
+  readSearchServiceRuntimePreflight,
+} = require("../../search-service/runtime-preflight.cjs");
+const { buildPersistentMetricsSnapshot } = require("../../search-service/telemetry-store.cjs");
 const {
   parseSearchFeedbackPayload,
   parseSearchQueryLogPayload,
@@ -17,7 +18,7 @@ function test(name, task) {
     })
     .catch((error) => {
       console.error(`FAIL ${name}`);
-      console.error(error instanceof Error ? error.stack ?? error.message : String(error));
+      console.error(error instanceof Error ? (error.stack ?? error.message) : String(error));
       process.exitCode = 1;
     });
 }
@@ -105,12 +106,43 @@ test("summarizes persistent metrics rows into JSON buckets", () => {
         created_at: new Date("2026-05-13T01:00:00.000Z"),
       },
     ],
+    ingestionUnreachableRows: [
+      {
+        service: "ingestion-worker",
+        level: "info",
+        event: "scheduled_ingestion.unreachable",
+        created_at: new Date("2026-05-13T02:00:00.000Z"),
+      },
+    ],
+    ingestionUnreachableCountRow: { count: 12 },
+    lastSuccessfulOfficialIngestionRow: { created_at: new Date("2026-05-13T00:00:00.000Z") },
   });
 
   assert.deepEqual(snapshot.byStatus, { ok: 2, error: 1 });
   assert.deepEqual(snapshot.byCacheStatus, { hit: 1, miss: 2 });
   assert.deepEqual(snapshot.byErrorCode, { upstream_timeout: 1 });
   assert.equal(snapshot.recentIngestionFailures[0].event, "scheduled_ingestion.failed");
+  assert.equal(snapshot.recentIngestionUnreachable[0].event, "scheduled_ingestion.unreachable");
+  assert.equal(snapshot.recentIngestionUnreachableCount, 12);
+  assert.equal(snapshot.lastSuccessfulOfficialIngestionAt, "2026-05-13T00:00:00.000Z");
+});
+
+test("accepts an official partial ingestion row as the freshness baseline", () => {
+  const snapshot = buildPersistentMetricsSnapshot({
+    windowHours: 24,
+    summaryRow: null,
+    statusRows: [],
+    cacheRows: [],
+    errorRows: [],
+    ingestionFailureRows: [],
+    lastSuccessfulOfficialIngestionRow: {
+      event: "scheduled_ingestion.partial",
+      payload: { kind: "official" },
+      created_at: new Date("2026-05-13T03:00:00.000Z"),
+    },
+  });
+
+  assert.equal(snapshot.lastSuccessfulOfficialIngestionAt, "2026-05-13T03:00:00.000Z");
 });
 
 test("validates feedback and query log telemetry payloads", () => {

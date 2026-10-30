@@ -14,6 +14,8 @@ export type OperationsScriptReport = OperationsCheckReport & {
     | "maxAverageDurationMs"
     | "maxUpstreamTimeouts"
     | "maxRecentIngestionFailures"
+    | "maxRecentIngestionUnreachable"
+    | "maxOfficialIngestionAgeHours"
   >;
   error?: {
     name?: string;
@@ -49,6 +51,8 @@ export function createEmptyOperationsSummary() {
     averageDurationMs: 0,
     upstreamTimeouts: 0,
     recentIngestionFailureCount: 0,
+    recentIngestionUnreachableCount: 0,
+    lastSuccessfulOfficialIngestionAt: null,
   };
 }
 
@@ -67,7 +71,9 @@ function parseNonNegativeNumber(value: string | undefined, fallback: number) {
 }
 
 function normalizeProvider(value: string | undefined): OperationsAlertProvider {
-  const provider = String(value ?? "generic").trim().toLowerCase();
+  const provider = String(value ?? "generic")
+    .trim()
+    .toLowerCase();
 
   if (provider === "slack" || provider === "feishu") {
     return provider;
@@ -77,7 +83,9 @@ function normalizeProvider(value: string | undefined): OperationsAlertProvider {
 }
 
 function normalizeNotifyMode(value: string | undefined): OperationsAlertNotifyMode {
-  const mode = String(value ?? "failure").trim().toLowerCase();
+  const mode = String(value ?? "failure")
+    .trim()
+    .toLowerCase();
   return mode === "always" ? "always" : "failure";
 }
 
@@ -139,6 +147,8 @@ export function formatOperationsAlertText(report: OperationsScriptReport, source
     `averageDurationMs=${report.summary.averageDurationMs}`,
     `upstreamTimeouts=${report.summary.upstreamTimeouts}`,
     `recentIngestionFailureCount=${report.summary.recentIngestionFailureCount}`,
+    `recentIngestionUnreachableCount=${report.summary.recentIngestionUnreachableCount}`,
+    `lastSuccessfulOfficialIngestionAt=${report.summary.lastSuccessfulOfficialIngestionAt ?? "-"}`,
   ];
 
   if (report.error?.message) {
@@ -171,6 +181,8 @@ export function formatOperationsSummaryMarkdown(report: OperationsScriptReport, 
     `| averageDurationMs | ${report.summary.averageDurationMs} |`,
     `| upstreamTimeouts | ${report.summary.upstreamTimeouts} |`,
     `| recentIngestionFailureCount | ${report.summary.recentIngestionFailureCount} |`,
+    `| recentIngestionUnreachableCount | ${report.summary.recentIngestionUnreachableCount} |`,
+    `| lastSuccessfulOfficialIngestionAt | ${report.summary.lastSuccessfulOfficialIngestionAt ?? "-"} |`,
   ];
 
   const sections = [`## ${title}`, "", ...summaryRows];
@@ -241,6 +253,8 @@ export function createOperationsRuntimeErrorReport({
       | "maxAverageDurationMs"
       | "maxUpstreamTimeouts"
       | "maxRecentIngestionFailures"
+      | "maxRecentIngestionUnreachable"
+      | "maxOfficialIngestionAgeHours"
     >;
   checkedAt?: string;
   error: unknown;
@@ -260,6 +274,8 @@ export function createOperationsRuntimeErrorReport({
       maxAverageDurationMs: config.maxAverageDurationMs,
       maxUpstreamTimeouts: config.maxUpstreamTimeouts,
       maxRecentIngestionFailures: config.maxRecentIngestionFailures,
+      maxRecentIngestionUnreachable: config.maxRecentIngestionUnreachable,
+      maxOfficialIngestionAgeHours: config.maxOfficialIngestionAgeHours,
     },
     ok: false,
     failures: [

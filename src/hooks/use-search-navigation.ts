@@ -39,7 +39,10 @@ export function useSearchNavigation(options?: UseSearchNavigationOptions) {
     }
 
     startTransition(() => {
-      router.push(`/search?q=${encodeURIComponent(query)}`);
+      const agentMode =
+        typeof window !== "undefined" &&
+        new URLSearchParams(window.location.search).get("agent") === "1";
+      router.push(`/search?q=${encodeURIComponent(query)}${agentMode ? "&agent=1" : ""}`);
     });
 
     return true;

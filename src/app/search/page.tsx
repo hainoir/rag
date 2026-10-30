@@ -5,6 +5,7 @@ import { ResultsShell } from "@/components/results-shell";
 type SearchPageProps = {
   searchParams: Promise<{
     q?: string;
+    agent?: string;
   }>;
 };
 
@@ -29,7 +30,7 @@ export async function generateMetadata({
 }
 
 export default async function SearchPage({ searchParams }: SearchPageProps) {
-  const { q = "" } = await searchParams;
+  const { q = "", agent } = await searchParams;
 
-  return <ResultsShell initialQuery={q} />;
+  return <ResultsShell agentMode={agent === "1"} initialQuery={q} />;
 }

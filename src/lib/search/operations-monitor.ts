@@ -24,6 +24,9 @@ export type PersistentMetricsSnapshot = {
   byCacheStatus?: Record<string, number>;
   byErrorCode?: Record<string, number>;
   recentIngestionFailures?: Array<Record<string, unknown>>;
+  recentIngestionUnreachable?: Array<Record<string, unknown>>;
+  recentIngestionUnreachableCount?: number;
+  lastSuccessfulOfficialIngestionAt?: string | null;
 };
 
 export type SearchServiceMetricsSnapshot = {
@@ -46,6 +49,8 @@ export type OperationsCheckConfig = {
   maxAverageDurationMs: number;
   maxUpstreamTimeouts: number;
   maxRecentIngestionFailures: number;
+  maxRecentIngestionUnreachable: number;
+  maxOfficialIngestionAgeHours: number;
 };
 
 export type OperationsCheckFailure = {
@@ -72,6 +77,8 @@ export type OperationsCheckReport = {
     averageDurationMs: number;
     upstreamTimeouts: number;
     recentIngestionFailureCount: number;
+    recentIngestionUnreachableCount: number;
+    lastSuccessfulOfficialIngestionAt: string | null;
   };
 };
 
@@ -80,7 +87,9 @@ function isNonEmptyString(value: unknown): value is string {
 }
 
 function parseBooleanFlag(value: string | undefined, fallback: boolean) {
-  const normalized = String(value ?? "").trim().toLowerCase();
+  const normalized = String(value ?? "")
+    .trim()
+    .toLowerCase();
 
   if (!normalized) {
     return fallback;
@@ -122,7 +131,9 @@ function resolveOperationsEndpoint(
 }
 
 function normalizeRequirePersistent(value: string | undefined): "auto" | "always" | "never" {
-  const normalized = String(value ?? "auto").trim().toLowerCase();
+  const normalized = String(value ?? "auto")
+    .trim()
+    .toLowerCase();
 
   if (normalized === "always" || normalized === "never") {
     return normalized;
@@ -141,7 +152,9 @@ function readBucketCount(bucket: Record<string, number> | undefined, key: string
 }
 
 function normalizeProvider(value: unknown) {
-  const provider = String(value ?? "").trim().toLowerCase();
+  const provider = String(value ?? "")
+    .trim()
+    .toLowerCase();
 
   return provider === "seed" || provider === "postgres" || provider === "auto" ? provider : "unknown";
 }
@@ -195,6 +208,8 @@ export function readOperationsCheckConfig(env = process.env): OperationsCheckCon
     maxAverageDurationMs: parseNonNegativeNumber(env.OPS_MAX_AVERAGE_DURATION_MS, 3_000),
     maxUpstreamTimeouts: parseNonNegativeNumber(env.OPS_MAX_UPSTREAM_TIMEOUTS, 5),
     maxRecentIngestionFailures: parseNonNegativeNumber(env.OPS_MAX_RECENT_INGESTION_FAILURES, 0),
+    maxRecentIngestionUnreachable: parseNonNegativeNumber(env.OPS_MAX_RECENT_INGESTION_UNREACHABLE, 100),
+    maxOfficialIngestionAgeHours: parseNonNegativeNumber(env.OPS_MAX_OFFICIAL_INGESTION_AGE_HOURS, 48),
   };
 }
 
@@ -202,6 +217,7 @@ export function evaluateOperationsSnapshot(
   health: SearchServiceHealthSnapshot,
   metrics: SearchServiceMetricsSnapshot,
   config: OperationsCheckConfig,
+  now: Date = new Date(),
 ): OperationsCheckReport {
   const failures: OperationsCheckFailure[] = [];
   const persistent = metrics.persistent;
@@ -215,6 +231,13 @@ export function evaluateOperationsSnapshot(
   const recentIngestionFailureCount = Array.isArray(persistent?.recentIngestionFailures)
     ? persistent.recentIngestionFailures.length
     : 0;
+  const recentIngestionUnreachableCount =
+    typeof persistent?.recentIngestionUnreachableCount === "number"
+      ? persistent.recentIngestionUnreachableCount
+      : Array.isArray(persistent?.recentIngestionUnreachable)
+        ? persistent.recentIngestionUnreachable.length
+        : 0;
+  const lastSuccessfulOfficialIngestionAt = persistent?.lastSuccessfulOfficialIngestionAt ?? null;
   const healthStatus = isNonEmptyString(health.status) ? health.status : "unknown";
   const provider = normalizeProvider(health.provider);
   const databaseConfigured = health.databaseConfigured === true;
@@ -290,6 +313,25 @@ export function evaluateOperationsSnapshot(
     });
   }
 
+  if (persistentEnabled && recentIngestionUnreachableCount > config.maxRecentIngestionUnreachable) {
+    failures.push({
+      code: "recent_ingestion_unreachable_exceeded",
+      message: `Persistent recent ingestion unreachable count ${recentIngestionUnreachableCount} exceeded OPS_MAX_RECENT_INGESTION_UNREACHABLE=${config.maxRecentIngestionUnreachable}.`,
+    });
+  }
+
+  const lastSuccessMs = lastSuccessfulOfficialIngestionAt ? Date.parse(lastSuccessfulOfficialIngestionAt) : NaN;
+  if (
+    persistentEnabled &&
+    Number.isFinite(lastSuccessMs) &&
+    now.getTime() - lastSuccessMs > config.maxOfficialIngestionAgeHours * 3_600_000
+  ) {
+    failures.push({
+      code: "official_ingestion_stale",
+      message: `Last successful official ingestion at ${lastSuccessfulOfficialIngestionAt} is older than OPS_MAX_OFFICIAL_INGESTION_AGE_HOURS=${config.maxOfficialIngestionAgeHours}.`,
+    });
+  }
+
   return {
     ok: failures.length === 0,
     failures,
@@ -309,6 +351,8 @@ export function evaluateOperationsSnapshot(
       averageDurationMs,
       upstreamTimeouts,
       recentIngestionFailureCount,
+      recentIngestionUnreachableCount,
+      lastSuccessfulOfficialIngestionAt,
     },
   };
 }

@@ -98,13 +98,7 @@ async function storeSearchFeedback(feedback) {
         )
         values ($1, $2, $3, $4, $5, now())
       `,
-      [
-        feedback.requestId,
-        feedback.query,
-        feedback.rating,
-        feedback.reason ?? null,
-        feedback.sourceIds ?? [],
-      ],
+      [feedback.requestId, feedback.query, feedback.rating, feedback.reason ?? null, feedback.sourceIds ?? []],
     );
   });
 
@@ -291,9 +285,23 @@ function buildPersistentMetricsSnapshot({
   cacheRows,
   errorRows,
   ingestionFailureRows,
+  ingestionUnreachableRows = [],
+  ingestionUnreachableCountRow = null,
+  lastSuccessfulOfficialIngestionRow = null,
 }) {
   const requestsTotal = Number(summaryRow?.requests_total ?? 0);
   const averageDurationMs = Number(summaryRow?.average_duration_ms ?? 0);
+
+  const toServiceEvent = (row) => ({
+    service: row.service,
+    level: row.level,
+    event: row.event,
+    requestId: row.request_id ?? undefined,
+    errorCode: row.error_code ?? undefined,
+    message: row.message ?? undefined,
+    payload: row.payload ?? {},
+    createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
+  });
 
   return {
     enabled: true,
@@ -303,16 +311,13 @@ function buildPersistentMetricsSnapshot({
     byStatus: rowsToCountMap(statusRows, "status"),
     byCacheStatus: rowsToCountMap(cacheRows, "cache_status"),
     byErrorCode: rowsToCountMap(errorRows, "error_code"),
-    recentIngestionFailures: ingestionFailureRows.map((row) => ({
-      service: row.service,
-      level: row.level,
-      event: row.event,
-      requestId: row.request_id ?? undefined,
-      errorCode: row.error_code ?? undefined,
-      message: row.message ?? undefined,
-      payload: row.payload ?? {},
-      createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
-    })),
+    recentIngestionFailures: ingestionFailureRows.map(toServiceEvent),
+    recentIngestionUnreachable: ingestionUnreachableRows.map(toServiceEvent),
+    recentIngestionUnreachableCount: Number(ingestionUnreachableCountRow?.count ?? ingestionUnreachableRows.length),
+    lastSuccessfulOfficialIngestionAt:
+      lastSuccessfulOfficialIngestionRow?.created_at instanceof Date
+        ? lastSuccessfulOfficialIngestionRow.created_at.toISOString()
+        : (lastSuccessfulOfficialIngestionRow?.created_at ?? null),
   };
 }
 
@@ -394,6 +399,37 @@ async function getPersistentMetrics(windowHours = 24) {
       `,
       [windowHours],
     );
+    const ingestionUnreachableResult = await client.query(
+      `
+        select service, level, event, request_id, error_code, message, payload, created_at
+        from service_event_logs
+        where created_at >= now() - make_interval(hours => $1)
+          and event = 'scheduled_ingestion.unreachable'
+        order by created_at desc
+        limit 10
+      `,
+      [windowHours],
+    );
+    const ingestionUnreachableCountResult = await client.query(
+      `
+        select count(*)::int as count
+        from service_event_logs
+        where created_at >= now() - make_interval(hours => $1)
+          and event = 'scheduled_ingestion.unreachable'
+      `,
+      [windowHours],
+    );
+    const lastSuccessfulOfficialIngestionResult = await client.query(
+      `
+        select created_at
+        from service_event_logs
+        where event = 'scheduled_ingestion.completed'
+          and level = 'info'
+          and payload->>'kind' = 'official'
+        order by created_at desc
+        limit 1
+      `,
+    );
 
     return buildPersistentMetricsSnapshot({
       windowHours,
@@ -402,6 +438,9 @@ async function getPersistentMetrics(windowHours = 24) {
       cacheRows: cacheResult.rows,
       errorRows: errorResult.rows,
       ingestionFailureRows: ingestionFailureResult.rows,
+      ingestionUnreachableRows: ingestionUnreachableResult.rows,
+      ingestionUnreachableCountRow: ingestionUnreachableCountResult.rows[0] ?? null,
+      lastSuccessfulOfficialIngestionRow: lastSuccessfulOfficialIngestionResult.rows[0] ?? null,
     });
   });
 }

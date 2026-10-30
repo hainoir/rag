@@ -190,6 +190,8 @@ curl http://127.0.0.1:8080/health
 - `persistent.byCacheStatus`
 - `persistent.byErrorCode`
 - `persistent.recentIngestionFailures`
+- `persistent.recentIngestionUnreachable` / `persistent.recentIngestionUnreachableCount`（与 error 级失败分开统计）
+- `persistent.lastSuccessfulOfficialIngestionAt`（最近一次 `kind=official` 的成功完成时间；无基线时为 `null`）
 
 手工检查命令：
 
@@ -219,6 +221,8 @@ OPS_MAX_ERROR_RATE=0.2
 OPS_MAX_AVERAGE_DURATION_MS=3000
 OPS_MAX_UPSTREAM_TIMEOUTS=5
 OPS_MAX_RECENT_INGESTION_FAILURES=0
+OPS_MAX_RECENT_INGESTION_UNREACHABLE=100
+OPS_MAX_OFFICIAL_INGESTION_AGE_HOURS=48
 OPS_REQUEST_TIMEOUT_MS=5000
 OPS_OUTPUT_PATH=reports/ops-health-check.json
 OPS_SUMMARY_OUTPUT_PATH=reports/ops-health-check.md
@@ -229,7 +233,7 @@ OPS_SUMMARY_OUTPUT_PATH=reports/ops-health-check.md
 - 拉取 `/health`
 - 拉取 `/metrics`
 - 校验 `status`、`databaseRequired`、`telemetryRequired`、`databaseReachable`、`telemetryWritable`
-- 按阈值检查 `persistent.errorRate`、平均耗时、`upstream_timeout` 数量和最近 ingestion 失败数
+- 按阈值检查 `persistent.errorRate`、平均耗时、`upstream_timeout` 数量、最近 ingestion 失败数及 official 成功时间是否超过 48 小时；未记录过成功时间时暂不触发 freshness 告警
 - 输出 JSON 与 Markdown 报告，并在违规时返回非零退出码
 - 即使 `/health` 或 `/metrics` 不可达，也会尽量生成带 `ops_check_runtime_error` 的报告，便于 CI artifact 和通知链路留痕
 
@@ -273,6 +277,8 @@ npm run check:phase-three-ops
 - `OPS_MAX_AVERAGE_DURATION_MS`
 - `OPS_MAX_UPSTREAM_TIMEOUTS`
 - `OPS_MAX_RECENT_INGESTION_FAILURES`
+- `OPS_MAX_RECENT_INGESTION_UNREACHABLE`
+- `OPS_MAX_OFFICIAL_INGESTION_AGE_HOURS`
 - `OPS_ALERT_PROVIDER`
 - `OPS_ALERT_NOTIFY_ON`
 - `OPS_ALERT_TIMEOUT_MS`

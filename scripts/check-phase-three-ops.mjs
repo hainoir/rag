@@ -5,10 +5,7 @@ import {
   createOperationsRuntimeErrorReport,
   formatOperationsSummaryMarkdown,
 } from "../src/lib/search/operations-alert.ts";
-import {
-  evaluateOperationsSnapshot,
-  readOperationsCheckConfig,
-} from "../src/lib/search/operations-monitor.ts";
+import { evaluateOperationsSnapshot, readOperationsCheckConfig } from "../src/lib/search/operations-monitor.ts";
 
 async function requestJson(url, timeoutMs) {
   const controller = new AbortController();
@@ -30,11 +27,7 @@ async function requestJson(url, timeoutMs) {
       try {
         if (contentType.includes("application/json")) {
           const payload = await response.clone().json();
-          detail =
-            payload?.message ??
-            payload?.error ??
-            payload?.errorCode ??
-            JSON.stringify(payload).slice(0, 240);
+          detail = payload?.message ?? payload?.error ?? payload?.errorCode ?? JSON.stringify(payload).slice(0, 240);
         } else {
           detail = (await response.text()).trim().slice(0, 240) || response.statusText;
         }
@@ -104,6 +97,8 @@ async function main() {
         maxAverageDurationMs: config.maxAverageDurationMs,
         maxUpstreamTimeouts: config.maxUpstreamTimeouts,
         maxRecentIngestionFailures: config.maxRecentIngestionFailures,
+        maxRecentIngestionUnreachable: config.maxRecentIngestionUnreachable,
+        maxOfficialIngestionAgeHours: config.maxOfficialIngestionAgeHours,
       },
       ...evaluation,
     };
@@ -130,6 +125,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(error instanceof Error ? error.stack ?? error.message : String(error));
+  console.error(error instanceof Error ? (error.stack ?? error.message) : String(error));
   process.exitCode = 1;
 });

@@ -17,7 +17,7 @@ function test(name: string, task: () => void | Promise<void>) {
     })
     .catch((error) => {
       console.error(`FAIL ${name}`);
-      console.error(error instanceof Error ? error.stack ?? error.message : String(error));
+      console.error(error instanceof Error ? (error.stack ?? error.message) : String(error));
       process.exitCode = 1;
     });
 }
@@ -36,6 +36,8 @@ function sampleReport(ok: boolean): OperationsScriptReport {
       maxAverageDurationMs: 3000,
       maxUpstreamTimeouts: 5,
       maxRecentIngestionFailures: 0,
+      maxRecentIngestionUnreachable: 100,
+      maxOfficialIngestionAgeHours: 48,
     },
     ok,
     failures: ok
@@ -61,6 +63,8 @@ function sampleReport(ok: boolean): OperationsScriptReport {
       averageDurationMs: 420,
       upstreamTimeouts: ok ? 0 : 1,
       recentIngestionFailureCount: 0,
+      recentIngestionUnreachableCount: 0,
+      lastSuccessfulOfficialIngestionAt: null,
     },
   };
 }
@@ -127,6 +131,8 @@ test("renders markdown summaries and runtime error reports", () => {
       maxAverageDurationMs: 3000,
       maxUpstreamTimeouts: 5,
       maxRecentIngestionFailures: 0,
+      maxRecentIngestionUnreachable: 100,
+      maxOfficialIngestionAgeHours: 48,
     },
     error: new Error("missing endpoint"),
   });

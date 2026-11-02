@@ -3,6 +3,7 @@ import { createRequire } from "node:module";
 import { toErrorMessage } from "../ingest/errors.ts";
 import {
   formatIngestionJobExitLine,
+  formatIngestionJobWarningLines,
   readIngestionJobFailurePolicy,
   resolveIngestionJobExit,
 } from "../ingest/job-status.ts";
@@ -111,15 +112,18 @@ async function processOneJob() {
 
   const decision = resolveIngestionJobExit(summaries, readIngestionJobFailurePolicy());
   console.log(formatIngestionJobExitLine(decision));
+  formatIngestionJobWarningLines(decision).forEach((line) => console.log(line));
 
   await recordIngestionEventFailOpen({
-    level: decision.status === "succeeded" ? "info" : "error",
+    level: decision.status === "succeeded" || decision.status === "unreachable" ? "info" : "error",
     event:
       decision.status === "failed"
         ? "scheduled_ingestion.failed"
-        : decision.status === "partial"
-          ? "scheduled_ingestion.partial"
-          : "scheduled_ingestion.completed",
+        : decision.status === "unreachable"
+          ? "scheduled_ingestion.unreachable"
+          : decision.status === "partial"
+            ? "scheduled_ingestion.partial"
+            : "scheduled_ingestion.completed",
     message: formatIngestionJobExitLine(decision),
     details: {
       ...summarizeJobPayload(job, summaries),

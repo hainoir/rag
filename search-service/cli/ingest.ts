@@ -4,6 +4,7 @@ import { readIngestRuntimeConfig, requireDatabaseUrl, resolveCliSourceIds } from
 import { toErrorMessage } from "../ingest/errors.ts";
 import {
   formatIngestionJobExitLine,
+  formatIngestionJobWarningLines,
   readIngestionJobFailurePolicy,
   resolveIngestionJobExit,
 } from "../ingest/job-status.ts";
@@ -40,6 +41,7 @@ async function main() {
 
   const decision = resolveIngestionJobExit(summaries, readIngestionJobFailurePolicy());
   console.log(formatIngestionJobExitLine(decision));
+  formatIngestionJobWarningLines(decision).forEach((line) => console.log(line));
   process.exitCode = decision.exitCode;
 }
 

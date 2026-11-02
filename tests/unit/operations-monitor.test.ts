@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 
 import { evaluateOperationsSnapshot, readOperationsCheckConfig } from "../../src/lib/search/operations-monitor.ts";
 
@@ -14,6 +16,23 @@ function test(name: string, task: () => void | Promise<void>) {
       process.exitCode = 1;
     });
 }
+
+test("workflow OPS_MAX fallbacks match code defaults", () => {
+  const workflow = fs.readFileSync(path.join(process.cwd(), ".github/workflows/ops-health-check.yml"), "utf8");
+  const fallbacks = [
+    ...workflow.matchAll(/^\s*(OPS_MAX_[A-Z0-9_]+):\s*\$\{\{\s*vars\.\1\s*\|\|\s*'([^']*)'\s*\}\}\s*$/gm),
+  ];
+  const defaults = readOperationsCheckConfig({ NODE_ENV: "test" } as NodeJS.ProcessEnv);
+
+  assert.ok(fallbacks.length >= 6, `Expected at least 6 OPS_MAX workflow fallbacks, found ${fallbacks.length}`);
+  for (const [, name, value] of fallbacks) {
+    assert.deepEqual(
+      readOperationsCheckConfig({ NODE_ENV: "test", [name]: value } as NodeJS.ProcessEnv),
+      defaults,
+      `${name} workflow fallback must match the code default`,
+    );
+  }
+});
 
 test("derives health and metrics endpoints from SEARCH_SERVICE_URL", () => {
   const config = readOperationsCheckConfig({

@@ -56,8 +56,23 @@ const answer: SearchAnswer = {
   ],
 };
 
+const answerPanelProps = {
+  answer,
+  query: "图书馆借书需要什么？",
+  sources: [source],
+  resultGeneratedAt: "2026-05-05T08:30:00.000Z",
+  status: "ok" as const,
+};
+const writeText = vi.fn<(value: string) => Promise<void>>();
+
 beforeEach(() => {
   navigationMocks.submitQuery.mockClear();
+  writeText.mockReset();
+  writeText.mockResolvedValue();
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: { writeText },
+  });
 });
 
 describe("core React components", () => {
@@ -129,11 +144,95 @@ describe("core React components", () => {
   });
 
   test("AnswerPanel renders answer confidence and evidence", () => {
-    render(<AnswerPanel answer={answer} status="ok" />);
+    render(<AnswerPanel {...answerPanelProps} />);
 
     expect(screen.getByText("高置信回答")).toBeInTheDocument();
     expect(screen.getByText("置信度 86%")).toBeInTheDocument();
     expect(screen.getByText("图书馆借阅规则")).toBeInTheDocument();
+  });
+
+  test("AnswerPanel copies the full answer with its canonical evidence URL", async () => {
+    render(
+      <AnswerPanel
+        {...answerPanelProps}
+        sources={[{ ...source, canonicalUrl: "https://lib.tjcu.edu.cn/canonical/1.htm" }]}
+        status="partial"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "复制回答与来源" }));
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledOnce());
+    const copiedText = writeText.mock.calls[0][0];
+    expect(copiedText).toContain(`问题：${answerPanelProps.query}`);
+    expect(copiedText).toContain(`回答摘要：${answer.summary}`);
+    expect(copiedText).toContain(`信息来源：${answer.sourceNote}`);
+    expect(copiedText).toContain(`补充说明：${answer.disclaimer}`);
+    expect(copiedText).toContain(answerPanelProps.resultGeneratedAt);
+    expect(copiedText).toContain("图书馆借阅规则");
+    expect(copiedText).toContain("https://lib.tjcu.edu.cn/canonical/1.htm");
+    expect(copiedText).not.toContain(source.url);
+    expect(await screen.findByText("已复制回答与来源。")).toBeInTheDocument();
+  });
+
+  test("AnswerPanel keeps evidence titles and disclaimer when URLs are unavailable", async () => {
+    render(
+      <AnswerPanel
+        {...answerPanelProps}
+        answer={{
+          ...answer,
+          evidence: [...(answer.evidence ?? []), { sourceId: "missing", title: "另一条依据" }],
+        }}
+        sources={[{ ...source, canonicalUrl: "javascript:alert(1)", url: "file:///local" }]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "复制回答与来源" }));
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledOnce());
+    const copiedText = writeText.mock.calls[0][0];
+    expect(copiedText).toContain("图书馆借阅规则");
+    expect(copiedText).toContain("另一条依据");
+    expect(copiedText.match(/链接未提供/g)).toHaveLength(2);
+    expect(copiedText).toContain(answer.disclaimer);
+    expect(copiedText).not.toContain("javascript:");
+    expect(copiedText).not.toContain("file://");
+  });
+
+  test("AnswerPanel falls back to a valid source URL", async () => {
+    render(<AnswerPanel {...answerPanelProps} sources={[{ ...source, canonicalUrl: "javascript:alert(1)" }]} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "复制回答与来源" }));
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledOnce());
+    expect(writeText.mock.calls[0][0]).toContain(source.url);
+  });
+
+  test("AnswerPanel reports clipboard failure without claiming success", async () => {
+    writeText.mockRejectedValue(new Error("Clipboard denied"));
+    render(<AnswerPanel {...answerPanelProps} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "复制回答与来源" }));
+
+    expect(await screen.findByText("复制失败，请检查剪贴板权限后重试。")).toBeInTheDocument();
+    expect(screen.queryByText("已复制回答与来源。")).not.toBeInTheDocument();
+  });
+
+  test("AnswerPanel hides copy when there is no complete successful answer or in Agent mode", () => {
+    const { rerender } = render(<AnswerPanel loading />);
+    expect(screen.queryByRole("button", { name: "复制回答与来源" })).not.toBeInTheDocument();
+
+    rerender(<AnswerPanel {...answerPanelProps} status="empty" />);
+    expect(screen.queryByRole("button", { name: "复制回答与来源" })).not.toBeInTheDocument();
+
+    rerender(<AnswerPanel {...answerPanelProps} status="error" />);
+    expect(screen.queryByRole("button", { name: "复制回答与来源" })).not.toBeInTheDocument();
+
+    rerender(<AnswerPanel {...answerPanelProps} answer={{ ...answer, disclaimer: "" }} />);
+    expect(screen.queryByRole("button", { name: "复制回答与来源" })).not.toBeInTheDocument();
+
+    rerender(<AnswerPanel {...answerPanelProps} copyEnabled={false} />);
+    expect(screen.queryByRole("button", { name: "复制回答与来源" })).not.toBeInTheDocument();
   });
 
   test("ThemeToggle persists and applies dark mode", async () => {

@@ -129,12 +129,77 @@ describe("core React components", () => {
   });
 
   test("AnswerPanel renders answer confidence and evidence", () => {
-    render(<AnswerPanel answer={answer} status="ok" />);
+    render(<AnswerPanel answer={answer} sources={[]} status="ok" />);
 
     expect(screen.getByText("高置信回答")).toBeInTheDocument();
     expect(screen.getByText("置信度 86%")).toBeInTheDocument();
     expect(screen.getByText("图书馆借阅规则")).toBeInTheDocument();
   });
+
+  test("AnswerPanel links matched evidence to the canonical original URL", () => {
+    render(
+      <AnswerPanel
+        answer={answer}
+        sources={[{ ...source, canonicalUrl: "https://lib.tjcu.edu.cn/canonical/1.htm" }]}
+        status="ok"
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: "查看原文：图书馆借阅规则" })).toHaveAttribute(
+      "href",
+      "https://lib.tjcu.edu.cn/canonical/1.htm",
+    );
+    expect(screen.getByRole("link", { name: "查看原文：图书馆借阅规则" })).toHaveAttribute(
+      "target",
+      "_blank",
+    );
+    expect(screen.getByRole("link", { name: "查看原文：图书馆借阅规则" })).toHaveAttribute(
+      "rel",
+      "noreferrer",
+    );
+  });
+
+  test("AnswerPanel falls back to the source URL when the canonical URL is invalid", () => {
+    render(
+      <AnswerPanel
+        answer={answer}
+        sources={[{ ...source, canonicalUrl: "mailto:library@example.com" }]}
+        status="ok"
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: "查看原文：图书馆借阅规则" })).toHaveAttribute(
+      "href",
+      source.url,
+    );
+  });
+
+  test("AnswerPanel keeps unmatched evidence as text without an original link", () => {
+    render(<AnswerPanel answer={answer} sources={[{ ...source, id: "another-source" }]} status="ok" />);
+
+    expect(screen.getByText("图书馆借阅规则")).toBeInTheDocument();
+    expect(screen.getByText("凭校园卡办理借阅。")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "查看原文：图书馆借阅规则" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "查看原文：图书馆借阅规则" })).not.toBeInTheDocument();
+  });
+
+  test.each([undefined, "javascript:alert(1)", "file:///notice.html", "mailto:library@example.com", "https://"])(
+    "AnswerPanel keeps evidence as text when the matched source URL is %s",
+    (url) => {
+      render(
+        <AnswerPanel
+          answer={answer}
+          sources={[{ ...source, canonicalUrl: "ftp://lib.tjcu.edu.cn/notice", url }]}
+          status="ok"
+        />,
+      );
+
+      expect(screen.getByText("图书馆借阅规则")).toBeInTheDocument();
+      expect(screen.getByText("凭校园卡办理借阅。")).toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: "查看原文：图书馆借阅规则" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "查看原文：图书馆借阅规则" })).not.toBeInTheDocument();
+    },
+  );
 
   test("ThemeToggle persists and applies dark mode", async () => {
     render(

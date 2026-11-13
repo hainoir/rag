@@ -24,6 +24,7 @@ vi.mock("@/hooks/use-search-navigation", () => ({
 
 const source: SearchSource = {
   id: "source-1",
+  documentId: "source-1",
   title: "图书馆借阅规则",
   type: "official",
   sourceName: "天津商业大学图书馆",

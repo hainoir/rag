@@ -36,7 +36,7 @@
     "test:operations-monitor": "node --experimental-strip-types tests/unit/operations-monitor.test.ts",
     "test:backup-drill": "node --experimental-strip-types tests/unit/backup-drill.test.ts",
     "test:search-service-proxy": "node --experimental-strip-types tests/unit/search-service-proxy.test.ts",
-    "test:search-service-runtime": "node tests/unit/search-service-runtime.test.cjs",
+    "test:search-service-runtime": "node tests/unit/search-service-runtime.test.cjs && node --test tests/unit/notice-document.test.cjs",
     "test:embedding-client": "node tests/unit/embedding-client.test.cjs",
     "test:rerank-client": "node tests/unit/rerank-client.test.cjs",
     "test:components": "vitest run tests/components",

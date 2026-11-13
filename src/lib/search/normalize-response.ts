@@ -428,12 +428,12 @@ function normalizeSource(rawSource: JsonRecord, index: number, query: string, fa
   const canonicalUrl = pickString(rawSource, ["canonicalUrl", "canonical_url"]) ?? url;
   const governanceStatus = pickString(rawSource, ["governanceStatus", "governance_status"]);
   const answerEligible = pickFirst(rawSource, ["answerEligible", "answer_eligible"]);
+  const documentId = pickString(rawSource, ["documentId"]) ?? pickString(rawSource, ["document_id"]);
 
   return {
     id:
-      pickString(rawSource, ["id", "documentId", "sourceId", "chunkId"]) ??
-      url ??
-      `source-${index + 1}`,
+      pickString(rawSource, ["id", "sourceId", "chunkId"]) ?? documentId ?? url ?? `source-${index + 1}`,
+    ...(documentId ? { documentId } : {}),
     title,
     type: sourceType,
     sourceName,

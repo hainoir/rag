@@ -33,6 +33,7 @@ const sampleResponse: SearchResponse = {
   sources: [
     {
       id: "official-1",
+      documentId: "official-1",
       title: "图书馆借阅说明",
       type: "official",
       sourceName: "图书馆",
@@ -46,6 +47,7 @@ const sampleResponse: SearchResponse = {
     },
     {
       id: "community-1",
+      documentId: "community-1",
       title: "借书经验",
       type: "community",
       sourceName: "贴吧",

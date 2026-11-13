@@ -230,9 +230,12 @@ export function ResultsShell({ initialQuery, agentMode = false }: ResultsShellPr
                     {viewMode === "answer" ? (
                       <AnswerPanel
                         answer={response!.answer!}
+                        copyEnabled={!agentMode}
                         query={response!.query}
                         requestId={response!.meta?.requestId}
+                        resultGeneratedAt={response!.resultGeneratedAt}
                         sourceIds={response!.sources.map((source) => source.id)}
+                        sources={response!.sources}
                         status={response!.status}
                       />
                     ) : null}

@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from "react";
 
-import type { SearchAnswer, SearchStatus } from "@/lib/search/types";
+import { formatAnswerForCopy } from "@/lib/search/format-answer-copy";
+import type { SearchAnswer, SearchSource, SearchStatus } from "@/lib/search/types";
 
 type FeedbackState = "idle" | "submitting" | "sent" | "failed";
+type CopyState = "idle" | "copying" | "copied" | "failed";
 
 type AnswerPanelProps =
   | {
@@ -16,7 +18,10 @@ type AnswerPanelProps =
       loading?: false;
       answer: SearchAnswer;
       status: SearchStatus;
-      query?: string;
+      query: string;
+      sources: SearchSource[];
+      resultGeneratedAt: string;
+      copyEnabled?: boolean;
       requestId?: string;
       sourceIds?: string[];
     };
@@ -26,6 +31,7 @@ export function AnswerPanel(props: AnswerPanelProps) {
     props.loading ? 0 : props.answer.summary.length,
   );
   const [feedbackState, setFeedbackState] = useState<FeedbackState>("idle");
+  const [copyState, setCopyState] = useState<CopyState>("idle");
   const summaryText = props.loading ? "" : props.answer.summary;
 
   useEffect(() => {
@@ -57,6 +63,18 @@ export function AnswerPanel(props: AnswerPanelProps) {
     setFeedbackState("idle");
   }, [props.loading ? "" : props.requestId]);
 
+  useEffect(() => {
+    setCopyState("idle");
+  }, [
+    props.loading ? "" : props.requestId,
+    props.loading ? "" : props.query,
+    props.loading ? "" : props.answer.summary,
+    props.loading ? "" : props.answer.sourceNote,
+    props.loading ? "" : props.answer.disclaimer,
+    props.loading ? "" : props.resultGeneratedAt,
+    props.loading ? "" : props.status,
+  ]);
+
   if (props.loading) {
     return (
       <section
@@ -86,6 +104,38 @@ export function AnswerPanel(props: AnswerPanelProps) {
   const evidence = props.answer.evidence ?? [];
   const { query, requestId, sourceIds } = props;
   const canSendFeedback = Boolean(requestId && query);
+  const canCopy =
+    props.copyEnabled !== false &&
+    (props.status === "ok" || props.status === "partial") &&
+    Boolean(
+      query.trim() &&
+        props.answer.summary.trim() &&
+        props.answer.sourceNote.trim() &&
+        props.answer.disclaimer.trim() &&
+        props.resultGeneratedAt.trim(),
+    );
+
+  async function copyAnswer() {
+    if (!canCopy || copyState === "copying") {
+      return;
+    }
+
+    setCopyState("copying");
+
+    try {
+      await navigator.clipboard.writeText(
+        formatAnswerForCopy({
+          query,
+          answer: props.answer,
+          sources: props.sources,
+          resultGeneratedAt: props.resultGeneratedAt,
+        }),
+      );
+      setCopyState("copied");
+    } catch {
+      setCopyState("failed");
+    }
+  }
 
   async function submitFeedback(rating: "up" | "down") {
     if (!canSendFeedback || feedbackState === "submitting") {
@@ -174,6 +224,26 @@ export function AnswerPanel(props: AnswerPanelProps) {
               </div>
             ))}
           </div>
+        </div>
+      ) : null}
+
+      {canCopy ? (
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <button
+            className="rounded-full border border-[var(--line)] bg-white px-4 py-2 text-sm font-semibold text-[var(--official)] transition hover:border-[var(--official)] disabled:cursor-not-allowed disabled:opacity-55"
+            disabled={copyState === "copying"}
+            onClick={() => void copyAnswer()}
+            type="button"
+          >
+            复制回答与来源
+          </button>
+          <span aria-live="polite" className="text-sm muted">
+            {copyState === "copied"
+              ? "已复制回答与来源。"
+              : copyState === "failed"
+                ? "复制失败，请检查剪贴板权限后重试。"
+                : null}
+          </span>
         </div>
       ) : null}
 

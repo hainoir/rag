@@ -1,4 +1,5 @@
 const { seedCorpus } = require("./seed-corpus.cjs");
+const { deriveSourceDomain } = require("./source-domain.cjs");
 
 const NOTICE_BODY_HARD_MAX_CHARS = 20_000;
 const TRUNCATION_MARK = "…[已截断]";
@@ -42,7 +43,7 @@ function toNoticeDocument(row, seed = false) {
     title: row.title,
     type: seed ? row.type : row.source_type,
     sourceName: seed ? row.sourceName : row.source_name,
-    sourceDomain: seed ? row.sourceDomain : url ? new URL(url).hostname : null,
+    sourceDomain: seed ? (row.sourceDomain ?? deriveSourceDomain(url)) : deriveSourceDomain(url),
     url,
     canonicalUrl: seed ? (row.canonicalUrl ?? null) : (row.canonical_url ?? null),
     publishedAt: isoOrNull(seed ? row.publishedAt : row.published_at),

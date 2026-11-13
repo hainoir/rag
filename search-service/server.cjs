@@ -29,6 +29,7 @@ const {
 const { loadLocalEnv } = require("./load-env.cjs");
 const { readRerankConfig, rerankDocuments, shouldUseRerank } = require("./rerank-client.cjs");
 const { buildHealthSnapshot, readSearchServiceRuntimePreflight } = require("./runtime-preflight.cjs");
+const { deriveSourceDomain } = require("./source-domain.cjs");
 const { defaultQuestions, seedCorpus } = require("./seed-corpus.cjs");
 const { answerEligibilitySql, documentVisibilitySql, getNoticeDocument, governanceStatusSql } = require("./notice-document.cjs");
 const { parseSearchFeedbackPayload, parseSearchQueryLogPayload } = require("./telemetry-contract.cjs");
@@ -806,18 +807,6 @@ function toNullableIsoTimestamp(value) {
 
   const normalized = toIsoTimestamp(value, "");
   return normalized || null;
-}
-
-function deriveSourceDomain(url) {
-  if (!url) {
-    return undefined;
-  }
-
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    return undefined;
-  }
 }
 
 function deriveFreshnessLabel(source, generatedAt) {

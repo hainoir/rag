@@ -166,6 +166,12 @@ test("synthetic long body truncates to the exact hard cap", () => {
   assert.equal(exact.returnedCharCount, exact.bodyCharCount);
 });
 
+test("invalid database URL omits source domain without losing the document", () => {
+  const result = toNoticeDocument({ ...dbRow, url: "not a url" });
+  assert.equal(result.body, dbRow.cleaned_markdown);
+  assert.equal(result.sourceDomain, undefined);
+});
+
 test("HTTP route authenticates and emits body without logging it", async () => {
   const oldProvider = process.env.SEARCH_SERVICE_PROVIDER;
   const oldKey = process.env.SEARCH_SERVICE_API_KEY;
@@ -192,6 +198,28 @@ test("HTTP route authenticates and emits body without logging it", async () => {
     assert.equal(found.status, 200);
     assert.equal(found.body.body, seedCorpus.find((item) => item.id === found.body.documentId).cleanedMarkdown);
     assert.equal("raw_html" in found.body, false);
+    const injected = seedCorpus.find((item) => item.id === found.body.documentId);
+    const originalBody = injected.cleanedMarkdown;
+    const originalUrl = injected.url;
+    const originalDomain = injected.sourceDomain;
+    try {
+      injected.cleanedMarkdown = longBody;
+      injected.url = "not a url";
+      injected.sourceDomain = undefined;
+      const synthetic = await get(`/api/documents/${injected.documentId}`);
+      assert.equal(synthetic.status, 200);
+      assert.equal(synthetic.body.url, "not a url");
+      assert.equal(synthetic.body.sourceDomain, undefined);
+      assert.equal(synthetic.body.truncated, true);
+      assert.equal(synthetic.body.body.length, 20_000);
+      assert.equal(synthetic.body.body.endsWith(TRUNCATION_MARK), true);
+      assert.equal(synthetic.body.bodyCharCount, longBody.length);
+      assert.equal(synthetic.body.returnedCharCount, 20_000);
+    } finally {
+      injected.cleanedMarkdown = originalBody;
+      injected.url = originalUrl;
+      injected.sourceDomain = originalDomain;
+    }
     assert.equal((await get("/api/documents")).body.error, "invalid_document_id");
     assert.equal((await get("/api/documents/%20%20")).status, 400);
     assert.equal((await get(`/api/documents/${"x".repeat(129)}`)).status, 400);

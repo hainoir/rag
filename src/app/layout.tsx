@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import "./globals.css";
 import { SearchHistoryProvider } from "@/components/search-history-provider";
+import { SavedSourcesProvider } from "@/components/saved-sources-provider";
 import { ThemeProvider } from "@/components/theme-provider";
 
 export const metadata: Metadata = {
@@ -19,7 +20,9 @@ export default function RootLayout({
     <html data-scroll-behavior="smooth" lang="zh-CN" suppressHydrationWarning>
       <body>
         <ThemeProvider>
-          <SearchHistoryProvider>{children}</SearchHistoryProvider>
+          <SearchHistoryProvider>
+            <SavedSourcesProvider>{children}</SavedSourcesProvider>
+          </SearchHistoryProvider>
         </ThemeProvider>
       </body>
     </html>

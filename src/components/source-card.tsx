@@ -1,8 +1,12 @@
 "use client";
 
+import { useState } from "react";
+
 import type { SearchSource } from "@/lib/search/types";
+import { toSavedSource } from "@/lib/search/saved-sources";
 import { formatDateTime, formatFreshnessLabel, formatSourceDate } from "@/lib/utils";
 import { QueryHighlight } from "@/components/query-highlight";
+import { useSavedSources } from "@/components/saved-sources-provider";
 
 type SourceCardProps = {
   source: SearchSource;
@@ -11,6 +15,12 @@ type SourceCardProps = {
 };
 
 export function SourceCard({ source, expanded, onToggle }: SourceCardProps) {
+  const { items, hydrated, saveSource, removeSource } = useSavedSources();
+  const [saveFailed, setSaveFailed] = useState(false);
+  const savedSource = toSavedSource(source);
+  const isSaved = savedSource
+    ? items.some((item) => item.preferredUrl === savedSource.preferredUrl)
+    : false;
   const isOfficial = source.type === "official";
   const displayText =
     expanded && source.fullSnippet ? source.fullSnippet : source.snippet;
@@ -84,6 +94,21 @@ export function SourceCard({ source, expanded, onToggle }: SourceCardProps) {
       </div>
 
       <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+        {savedSource ? (
+          <button
+            aria-label={`${isSaved ? "取消收藏" : "收藏"}：${source.title}`}
+            aria-pressed={isSaved}
+            className="rounded-full border border-[var(--line)] bg-white/80 px-4 py-2 text-sm transition hover:border-[var(--official)]"
+            disabled={!hydrated}
+            onClick={() => {
+              const ok = isSaved ? removeSource(savedSource.preferredUrl) : saveSource(source);
+              setSaveFailed(!ok);
+            }}
+            type="button"
+          >
+            {isSaved ? "取消收藏" : "收藏"}
+          </button>
+        ) : null}
         {source.url ? (
           <a
             aria-label={`查看原文：${source.title}`}
@@ -116,6 +141,12 @@ export function SourceCard({ source, expanded, onToggle }: SourceCardProps) {
           {expanded ? "收起片段" : "展开片段"}
         </button>
       </div>
+
+      {saveFailed ? (
+        <p className="mt-3 text-sm text-red-700" role="alert">
+          收藏操作失败，请检查浏览器本地存储后重试。
+        </p>
+      ) : null}
 
       <div className="mt-4 flex flex-wrap gap-2">
         {source.matchedKeywords.map((keyword) => (

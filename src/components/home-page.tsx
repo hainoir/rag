@@ -1,5 +1,6 @@
 import { DEFAULT_QUESTIONS } from "@/lib/search/default-questions";
 import { HistoryPanel } from "@/components/history-panel";
+import { SavedSourcesPanel } from "@/components/saved-sources-panel";
 import { SearchBox } from "@/components/search-box";
 import { SuggestedQuestions } from "@/components/suggested-questions";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -96,7 +97,10 @@ export function HomePage() {
         </section>
 
         <section className="grid gap-5 md:gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
-          <HistoryPanel />
+          <div className="space-y-5 md:space-y-6">
+            <HistoryPanel />
+            <SavedSourcesPanel />
+          </div>
 
           <div className="surface rounded-[24px] p-4 sm:p-6 md:rounded-[var(--radius-lg)]">
             <p className="text-sm font-semibold tracking-[0.18em] text-[var(--official)] uppercase">

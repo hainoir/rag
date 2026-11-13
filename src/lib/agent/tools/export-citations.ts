@@ -1,12 +1,35 @@
-import type { SearchAnswerEvidence, SearchSource } from "../../search/types.ts";
+import type { NoticeDocument, SearchAnswerEvidence, SearchSource } from "../../search/types.ts";
 import type { AgentCitation } from "../types.ts";
+import { noticeBodyExcerpt } from "./fetch-notice.ts";
 
 export type CitationExport = { text: string; citations: AgentCitation[] };
 
 export function exportCitations(
   sources: SearchSource[],
   evidence: SearchAnswerEvidence[] = [],
+  documents?: NoticeDocument[],
 ): CitationExport {
+  if (documents) {
+    const eligible = new Map(documents.filter((document) => document.answerEligible).map((document) => [document.documentId, document]));
+    const seen = new Set<string>();
+    const citations: AgentCitation[] = [];
+    for (const source of sources) {
+      const documentId = source.documentId?.trim();
+      const document = documentId ? eligible.get(documentId) : undefined;
+      if (!document || seen.has(document.documentId)) continue;
+      seen.add(document.documentId);
+      const snippet = noticeBodyExcerpt(document.body, 96);
+      citations.push({
+        sourceId: source.id,
+        documentId: document.documentId,
+        title: document.title,
+        sourceName: document.sourceName,
+        ...(document.canonicalUrl || document.url ? { url: document.canonicalUrl || document.url } : {}),
+        ...(snippet ? { snippet } : {}),
+      });
+    }
+    return { citations, text: formatCitations(citations) };
+  }
   const evidenceBySource = new Map<string, SearchAnswerEvidence>();
 
   for (const item of evidence) {
@@ -29,7 +52,11 @@ export function exportCitations(
     } satisfies AgentCitation;
   });
 
-  const text = citations
+  return { text: formatCitations(citations), citations };
+}
+
+function formatCitations(citations: AgentCitation[]) {
+  return citations
     .map((citation, index) =>
       [
         `[${index + 1}] ${citation.title} — ${citation.sourceName}`,
@@ -39,5 +66,4 @@ export function exportCitations(
     )
     .join("\n\n");
 
-  return { text, citations };
 }

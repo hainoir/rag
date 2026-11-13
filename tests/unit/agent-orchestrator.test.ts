@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 
 import { runCampusAgent } from "../../src/lib/agent/orchestrator.ts";
+import { exportCitations } from "../../src/lib/agent/tools/export-citations.ts";
 import { toolRegistry } from "../../src/lib/agent/tools/registry.ts";
 import { AGENT_NOTICE_BODY_MAX_CHARS, AGENT_NOTICE_BODY_TOTAL_CHARS, capNoticeBody, fetchNoticeTool } from "../../src/lib/agent/tools/fetch-notice.ts";
 import type { AgentEvent } from "../../src/lib/agent/types.ts";
@@ -26,6 +27,7 @@ async function run(sources: SearchSource[], fetchNotice?: SearchProvider["fetchN
   return { events, answer };
 }
 function calls(events: AgentEvent[], name: string) { return events.filter((event) => event.type === "tool_call" && event.name === name); }
+function exportResult(events: AgentEvent[]) { return events.find((event): event is Extract<AgentEvent, { type: "tool_result" }> => event.type === "tool_result" && event.name === "export_citations"); }
 
 async function test(name: string, task: () => Promise<void> | void) {
   try { await task(); console.log(`PASS ${name}`); }
@@ -42,6 +44,10 @@ await test("registers fetch_notice and keeps deterministic event order", async (
   assert.equal(answer.summary, "凭校园卡借阅。");
   assert.deepEqual(answer.citations[0], { sourceId: "chunk", documentId: "doc", title: "doc 标题", sourceName: "图书馆", snippet: "凭校园卡借阅。" });
   assert.deepEqual(answer.evidence, [{ sourceId: "chunk", title: "doc 标题", sourceName: "图书馆", snippet: "凭校园卡借阅。" }]);
+  const expected = exportCitations([source("chunk", "doc")], [], [document("doc", "凭校园卡借阅。")]);
+  assert.deepEqual(exportResult(events), { type: "tool_result", id: "export-2", name: "export_citations", ok: true, summary: expected.text });
+  assert.match(expected.text, /依据：凭校园卡借阅。/);
+  assert.doesNotMatch(expected.text, /已导出|搜索摘要/);
   assert.equal(answer.fallback, undefined);
   assert.deepEqual(events.at(-1), { type: "phase", phase: "done" });
 });
@@ -54,6 +60,9 @@ await test("missing documentId never fetches the chunk id and says full text was
   assert.equal(answer.fallback, true);
   assert.match(answer.summary, /未读到通知全文/);
   assert.doesNotMatch(answer.summary, /搜索摘要/);
+  assert.equal(exportResult(events)?.type, "tool_result");
+  assert.equal(exportResult(events)?.ok, false);
+  assert.doesNotMatch(JSON.stringify(exportResult(events)), /搜索摘要|依据：|已导出/);
 });
 
 await test("deduplicates document IDs and limits fetches to three, eligible first", async () => {
@@ -117,6 +126,11 @@ await test("all fetches failed degrades without claiming original text was read"
   assert.equal(answer.fallback, true);
   assert.equal(answer.citations.length, 0);
   assert.match(answer.summary, /未读到通知全文/);
+  const exported = exportResult(events);
+  assert.equal(exported?.type, "tool_result");
+  if (exported?.type !== "tool_result") throw new Error("export result missing");
+  assert.equal(exported.ok, false);
+  assert.doesNotMatch(exported.summary, /搜索摘要|依据：|已导出/);
 });
 
 await test("supplemental body and search answer do not become evidence", async () => {
@@ -129,6 +143,11 @@ await test("supplemental body and search answer do not become evidence", async (
   const onlyCommunity = await run([source("community", "community", "community")], async () => ({ status: "ok", document: document("community", "经验帖", false) }));
   assert.equal(onlyCommunity.answer.citations.length, 0);
   assert.doesNotMatch(onlyCommunity.answer.summary, /经验帖|community 标题/);
+  const exported = exportResult(onlyCommunity.events);
+  assert.equal(exported?.type, "tool_result");
+  if (exported?.type !== "tool_result") throw new Error("export result missing");
+  assert.equal(exported.ok, false);
+  assert.doesNotMatch(exported.summary, /经验帖|搜索摘要|依据：|已导出/);
 });
 
 await test("mock search without mock fetch never uses the real provider", async () => {

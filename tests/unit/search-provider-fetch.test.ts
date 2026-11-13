@@ -99,6 +99,14 @@ await test("missing service URL returns an error without fetching", async () => 
   process.env.SEARCH_SERVICE_URL = "https://search.test/api/search";
 });
 
+await test("malformed service URL also degrades without throwing", async () => {
+  process.env.SEARCH_SERVICE_URL = "not a url";
+  mock(async () => { throw new Error("called"); });
+  const response = await searchServiceProvider.fetchNotice("doc one");
+  assert.equal(response.status, "error");
+  process.env.SEARCH_SERVICE_URL = "https://search.test/api/search";
+});
+
 globalThis.fetch = originalFetch;
 if (oldUrl === undefined) delete process.env.SEARCH_SERVICE_URL; else process.env.SEARCH_SERVICE_URL = oldUrl;
 if (oldKey === undefined) delete process.env.SEARCH_SERVICE_API_KEY; else process.env.SEARCH_SERVICE_API_KEY = oldKey;

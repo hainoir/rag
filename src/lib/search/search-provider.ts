@@ -123,7 +123,12 @@ async function callNoticeService(documentId: string, options: SearchProviderOpti
     ...(errorCode ? { meta: { requestId: options.requestId ?? "", errorCode } } : {}),
   });
   if (!id || id.length > 128) return failure("invalid");
-  const endpoint = resolveSearchServiceSiblingEndpoint(`/api/documents/${encodeURIComponent(id)}`);
+  let endpoint: string | null;
+  try {
+    endpoint = resolveSearchServiceSiblingEndpoint(`/api/documents/${encodeURIComponent(id)}`);
+  } catch {
+    endpoint = null;
+  }
   if (!endpoint) return failure("error", "missing_search_service_url");
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), parsePositiveInteger(process.env.SEARCH_SERVICE_TIMEOUT_MS, DEFAULT_TIMEOUT_MS));

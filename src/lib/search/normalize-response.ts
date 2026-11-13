@@ -434,6 +434,11 @@ function normalizeSource(rawSource: JsonRecord, index: number, query: string, fa
       pickString(rawSource, ["id", "documentId", "sourceId", "chunkId"]) ??
       url ??
       `source-${index + 1}`,
+    documentId:
+      pickString(rawSource, ["documentId", "document_id"]) ??
+      pickString(rawSource, ["id", "sourceId", "chunkId"]) ??
+      url ??
+      `source-${index + 1}`,
     title,
     type: sourceType,
     sourceName,

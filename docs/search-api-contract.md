@@ -48,6 +48,7 @@
   "sources": [
     {
       "id": "official-library-borrow-guide",
+      "documentId": "official-library-borrow-guide",
       "title": "图书馆借阅与续借办理说明",
       "type": "official",
       "sourceName": "天津商业大学图书馆",
@@ -111,6 +112,7 @@
 ### Required Fields
 
 - `id: string`
+- `documentId: string`
 - `title: string`
 - `type: "official" | "community"`
 - `sourceName: string`
@@ -130,6 +132,18 @@
 - `canonicalUrl?: string`
 - `trustScore?: number`
 - `dedupKey?: string`
+
+`id` 是搜索命中键：Postgres 返回 chunk ID，seed 返回 slug。`documentId` 是取正文的文档键：Postgres 返回 `documents.id`，seed 返回同一 slug。不要从 chunk ID 推算文档 ID。
+
+## Notice Document
+
+`GET /api/documents/:documentId` 使用与搜索相同的 API key 请求头。路径 ID trim 后必须是非空字符串且不超过 128 字符；只按文档 ID 精确查找最新版本，不接受版本参数。成功返回 `documentId`, `versionNo`, `title`, `type`, `sourceName`, `sourceDomain`, `url`, `canonicalUrl`, `publishedAt`, `updatedAt`, `fetchedAt`, `lastVerifiedAt`, `governanceStatus`, `answerEligible`, `body`, `truncated`, `bodyCharCount`, `returnedCharCount`。时间未知时为 `null`；正文来自最新 `cleaned_markdown`，seed 来自 `cleanedMarkdown`。
+
+完整样例见 [fixtures/notice-document.json](../fixtures/notice-document.json)。
+
+仅 active 且来源启用的官方、已批准社区及 supplemental 社区文档可取。supplemental 与演示 seed 社区文档的 `answerEligible` 为 `false`；隐藏与未知文档同为 404 `notice_not_found`。错误体为 `{ "error": "<code>", "message": "<human>" }`：401 `unauthorized`、400 `invalid_document_id`、404 `notice_not_found`、503 `database_unavailable`、500 `search_service_error`。库查询失败不使用 seed 正文替代。
+
+正文硬顶 `NOTICE_BODY_HARD_MAX_CHARS = 20000`，按 JavaScript 字符串长度计算。超过上限时返回前 `20000 - "…[已截断]".length` 字符并追加 `…[已截断]`；`bodyCharCount` 是原长度，`returnedCharCount` 是含标记的实际返回长度（20000）。未截断时两者等于 `body.length`。
 
 ### Nullability Rule
 
@@ -211,7 +225,7 @@
 ## Non-Negotiable Naming Rules
 
 - 顶层字段只用 `query / status / answer / sources / relatedQuestions / retrievedCount / resultGeneratedAt`
-- 来源字段只用 `sourceName / publishedAt / updatedAt / fetchedAt / lastVerifiedAt / freshnessLabel`
+- 来源字段只用 `id / documentId / sourceName / publishedAt / updatedAt / fetchedAt / lastVerifiedAt / freshnessLabel` 等本页规定的 camelCase 名称
 - 不要再输出 snake_case、PascalCase 或同义别名来赌前端兜底
 
 ## Verification

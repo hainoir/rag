@@ -34,6 +34,7 @@ export type SearchProviderOptions = {
 
 export type SearchSource = {
   id: string;
+  documentId: string;
   title: string;
   type: SourceType;
   sourceName: string;

@@ -119,7 +119,7 @@ npm run backup:drill
 npm run ingest:worker -- --once
 ```
 
-本地 Redis 7.0.15 已消费该任务：`source=tjcu-library ... errors=0`。GitHub Actions 定时同步仍 blocked，见验收报告。
+本地 Redis 7.0.15 已消费该任务：`source=tjcu-library ... errors=0`。GitHub Actions 定时同步已有 2026-11-02 至 2026-11-13（北京时间）连续 63 次成功记录，见验收报告状态更新。
 
 - [x] feedback 列表能追踪到 query、source snapshot、answer summary 和处理状态。本地查询“图书馆”提交“不准确”后，后台改为 `resolved`。
 - [x] 社区审核记录能区分 `pending`、`rejected`、`supplemental`、`approved`。`pending` / `rejected` 不召回，`supplemental` 只展示不进 evidence，`approved` 进入 evidence。
@@ -145,8 +145,8 @@ npm run ingest:worker -- --once
 
 ## 8. 发布后 24 小时观察
 
-- [ ] scheduled ingestion 正常执行或失败可追踪。failed：当前问题是 hosted runner 间歇性抓不到 TJCU 列表页，例 run `40591519263`。run `38709421953` 的 `in-burro-41364.upstash.io` `ENOTFOUND` 是历史 Redis 失败；Actions `REDIS_URL` 现已配置，那次入队已经能成功。还不能签 24 小时观察。
-- [ ] `/health` 持续可用。blocked：Ops Health Check run `38709402812` 和 `40827602734` 都因为没有 `OPS_SEARCH_SERVICE_URL` 而跳过，当时 workflow 仍是绿的。缺端点现在应失败。本次无法做 24 小时观察。
+- [ ] scheduled ingestion 正常执行或失败可追踪。2026-11-02 至 2026-11-13（北京时间）已有连续 63 次成功记录（run #706–#768）；历史 run `40591519263` 的列表页失败和 run `38709421953` 的 Redis `ENOTFOUND` 不代表当前状态。完整运维观察仍待留证。
+- [ ] `/health` 持续可用。Ops Health Check 因缺 `OPS_SEARCH_SERVICE_URL` 每日 schedule 红一次（如 2026-11-13 run #91）；kir 已接受维持现状：不配 secret、不停 schedule、不放宽失败门。不能把红的检查写作通过。
 - [ ] `/metrics.persistent` 有真实请求数据。blocked：同上，没有托管 search-service 地址。
 - [ ] `service_event_logs` 没有新增阻断错误。blocked：同上。
 - [ ] feedback 可以正常写入和处理。本地已验证；托管环境 24 小时观察 blocked。

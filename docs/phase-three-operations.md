@@ -291,6 +291,8 @@ workflow 会把检查结果写到 `reports/ops-health-check.json` 和 `reports/o
 
 没有 `OPS_SEARCH_SERVICE_URL`，并且 `OPS_SEARCH_SERVICE_HEALTH_URL` 与 `OPS_SEARCH_SERVICE_METRICS_URL` 没有同时设置时，workflow 直接失败。缺端点是失败门，不是成功跳过。run `40827602734` 和更早的 run `38709402812` 仍是旧行为：步骤打印 skip，整次运行是绿的。那两次都没有证明托管 `/health` 可用。
 
+截至 2026-11-13，`OPS_SEARCH_SERVICE_URL` 仍未配置，Ops Health Check 每天 schedule 红一次（如 run #91）。kir 已接受维持现状：不配置该 secret、不停 schedule、不放宽失败门；这不构成托管 `/health` 验收通过。
+
 ### 5.5 外部通知 webhook
 
 仓库现在提供通用 webhook 通知脚本：

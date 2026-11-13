@@ -34,7 +34,9 @@
 
 结论说明：
 
-> 本地 release gate、seed UI、本地 Postgres 官方摄取、后台治理、telemetry 和本地备份恢复已经复跑。`v0.1.0-rc.1` 仍不能打 tag。2026-10-29 把挡住发布的原因拆成三件不同的事：hosted runner 间歇性抓不到 TJCU 列表页（`failed`），`OPS_SEARCH_SERVICE_URL` / webhook / embedding 仍然没有证据（`blocked`），以及 2026-10-15 的 Redis `ENOTFOUND`（历史，不再是当前密钥缺口）。
+> 2026-10-29 验收快照：本地 release gate、seed UI、本地 Postgres 官方摄取、后台治理、telemetry 和本地备份恢复已经复跑；当时 hosted runner 间歇性抓不到 TJCU 列表页，`OPS_SEARCH_SERVICE_URL` / webhook / embedding 仍没有证据，Redis `ENOTFOUND` 已是历史问题。
+
+> 2026-11-13 状态更新：#11 的 unreachable 软失败、48 小时 freshness 和每天第二次官方同步，以及 #12 的 Ops Health unreachable 阈值回退值 3 已合入。2026-11-02 至 2026-11-13（北京时间）Scheduled Ingestion 连续 63 次成功（run #706–#768；最新一次 2026-11-13T03:45:20Z，即北京时间 11:45）。Ops Health Check 因缺 `OPS_SEARCH_SERVICE_URL` 每日 schedule 红一次（如 2026-11-13 run #91），kir 已接受维持现状：不配 secret、不停 schedule、不放宽失败门。webhook、embedding 和托管 backup drill 专用库仍缺验收证据，暂不打 tag。
 
 ## 3. 自动化验收记录
 
@@ -50,8 +52,8 @@
 | Admin unit         | `npm run test:admin`              | 无数据库依赖                          | passed  | 含在 `verify:release:local`                       | 否       |                                                                                                  |
 | Admin postgres     | `npm run test:admin:postgres`     | 本地 `DATABASE_URL`                   | passed  | 命令退出码 0                                      | 否       |                                                                                                  |
 | Telemetry postgres | `npm run test:telemetry:postgres` | 本地 `DATABASE_URL`                   | passed  | 命令退出码 0；备份恢复后又跑过一次                | 否       |                                                                                                  |
-| 定时同步           | GitHub `Scheduled Ingestion`      | Actions secrets                       | failed  | run `40591519263`                                 | 是       | 四个源列表页 `fetch failed`。Redis DNS 已不是这次的原因                                          |
-| 托管健康检查       | GitHub `Ops Health Check`         | `OPS_SEARCH_SERVICE_URL`              | blocked | run `38709402812`、`40827602734`                  | 是       | 两次都因端点未配置而 skip 并显示为绿。代码现改为缺端点失败，还没有合并后的运行。不能当成检查通过 |
+| 定时同步           | GitHub `Scheduled Ingestion`      | Actions secrets                       | passed  | run #706–#768                                     | 否       | 2026-11-02 至 11-13 连续 63 次成功；旧 run 曾失败                                                |
+| 托管健康检查       | GitHub `Ops Health Check`         | `OPS_SEARCH_SERVICE_URL`              | failed  | 2026-11-13 run #91                                | 否       | 缺 endpoint secret，每日红；kir 接受维持现状                                                     |
 
 状态只能使用：
 
@@ -111,7 +113,7 @@
 | 管理员登录    | passed | 本地 `/admin/login` 进入 `/admin`                                         | 一次性口令，未入库                        |
 | 来源治理列表  | passed | 图书馆 8 文档 / 31 chunk，最近同步成功                                    | 本地 Postgres                             |
 | 禁用来源      | passed | 召回排除；API `409 source_disabled`；UI 同步按钮禁用                      | 测试源 `gov-disabled`                     |
-| 手动触发同步  | passed | `POST /api/admin/sources/tjcu-library/ingest` 202，worker `errors=0`      | 本地 Redis。托管定时同步是间歇性 `failed` |
+| 手动触发同步  | passed | `POST /api/admin/sources/tjcu-library/ingest` 202，worker `errors=0`      | 本地 Redis；托管同步近期 63 次成功        |
 | feedback 追踪 | passed | 查询“图书馆”，评分 down，备注 `local acceptance handled`，状态 `resolved` | 含 source snapshot                        |
 | 社区审核状态  | passed | 四个状态都走管理 API 和后台筛选                                           | `supplemental` 不进 `answer.evidence`     |
 | 保存提示      | fixed  | `src/components/admin-dashboard.tsx`                                      | 原先 `refresh()` 会立刻清掉成功提示       |
@@ -131,23 +133,23 @@
 | 后台处理 feedback | passed | 后台改为 `resolved`                    | 状态可更新                                     | 截图在 `artifacts/admin-acceptance/`                  |
 | 错误态            | passed | e2e 拦截失败请求                       | 明确错误，不伪装成无答案                       | `verify:ui` 不拦截健康的 `/api/search`                |
 
-## 9. kir 需要提供的内容
+## 9. 仍缺材料与历史问题
 
-定时同步是 `failed`。下面其余材料仍是 `blocked`。不要用本地结果代替。
+定时同步当前已有连续 63 次成功记录，其余材料仍缺证据。不要用本地结果代替。
 
-1. 定时同步的当前缺口不是 Redis。run `38709421953`（2026-10-15）在入队时 `getaddrinfo ENOTFOUND in-burro-41364.upstash.io`，那是历史失败。run `40591519263`（2026-10-27）里 `DATABASE_URL` 和 `REDIS_URL` 的跳过步骤都被跳过，入队打印了 job id，然后 `www` / `lib` / `jwc` / `zs.tjcu.edu.cn` 四个列表页都是裸 `fetch failed`。2026-10-15 至 2026-10-29 该 workflow 为 80 success / 11 failure。代码侧重试和部分成功退出不能代替一次新的 hosted 成功记录。若 runner 持续连不上 `.edu.cn`，需要 self-hosted / 可达校园网的 runner，或 HTTPS 代理（`NODE_USE_ENV_PROXY=1`）。
-2. GitHub Actions secret `OPS_SEARCH_SERVICE_URL`（指向已部署 search-service 的 `/api/search`），或者同时设置变量 `OPS_SEARCH_SERVICE_HEALTH_URL` 与 `OPS_SEARCH_SERVICE_METRICS_URL`。run `38709402812` 和 `40827602734`（2026-10-29）三者都空，workflow 绿是因为跳过。本次没有托管 search URL 的证据。缺端点的 workflow 现应失败，但合并前的运行仍是旧行为。
+1. 定时同步已有新证据：2026-11-02 至 2026-11-13（北京时间）run #706–#768 连续 63 次成功。run `38709421953`（2026-10-15）的 Redis `ENOTFOUND` 和 run `40591519263`（2026-10-27）的列表页 `fetch failed` 都是历史失败；官方源仍可能间歇不可达，#11 已加入 unreachable 软失败、48 小时 freshness 和每天第二次 cron，#12 已对齐 Ops Health 阈值回退值为 3。
+2. `OPS_SEARCH_SERVICE_URL` 仍未配置，Ops Health Check 每日 schedule 红一次（如 2026-11-13 run #91）。kir 已接受维持现状：不配该 secret、不停 schedule、不放宽失败门；这也不构成托管 `/health` 验收通过。
 3. GitHub Actions secret `OPS_ALERT_WEBHOOK_URL`。用它发送一次成功通知，再制造一次失败检查并确认失败通知到达。本次没有 webhook 证据。
 4. `EMBEDDING_API_KEY`。如果不是 2026-05-13 使用的 Qwen 配置，还要给 `EMBEDDING_BASE_URL` 和 `EMBEDDING_MODEL`。数据库必须安装 `vector` 扩展。本机 PostgreSQL 16.15 没有这个扩展。本次没有重跑检索评估。
 5. 若要验收托管主库而不是这次本地库：生产 `DATABASE_URL`，以及一个空的、不是主库的 `BACKUP_DRILL_RESTORE_DATABASE_URL`。run `40591519263` 只证明那次 Actions 数据库能完成摄取初始化，不是备份演练。
-6. 上面的托管健康检查和 webhook 落地后，再观察 24 小时的定时同步、`/health`、`/metrics.persistent`、`service_event_logs` 和 feedback。本次没有这个观察窗口。
+6. 定时同步已有近期连续成功记录；`/health`、`/metrics.persistent`、`service_event_logs` 和 feedback 的完整托管观察仍无证据。已接受的 Ops Health 每日红不能写作检查通过。
 
 托管后台如果和本地不是同一套密钥，还要在部署环境配置 `ADMIN_DASHBOARD_TOKEN` 和 `SEARCH_SERVICE_API_KEY`。不要把这些值提交进仓库。
 
 ## 10. 已知限制
 
 - 真实外部监控平台没有接入，不能宣称 production-grade 运维闭环。
-- GitHub-hosted Scheduled Ingestion 到 `*.tjcu.edu.cn` 间歇性失败。run `40591519263` 四个源都没有发现详情链接。加长重试之后，仍要有新的 hosted 运行才能把这项从 `failed` 改掉。
+- GitHub-hosted Scheduled Ingestion 的历史 run `40591519263` 曾因官方源不可达失败；#11/#12 后已有连续 63 次 hosted 成功记录。官方源仍可能间歇不可达，持续不可达由 48 小时 freshness 与 Ops Health 阈值发现。
 - webhook 成功和失败通知没有发送证据。
 - 备份恢复只在本地一次性 Postgres 上演练过，没有对托管主库演练。
 - 社区来源仍是补充经验，不是权威事实来源。
@@ -160,5 +162,5 @@
 | 角色 | 结论    | 备注                                                                                       |
 | ---- | ------- | ------------------------------------------------------------------------------------------ |
 | 开发 | passed  | 本地 gate、数据摄取修复和后台提示修复已留证                                                |
-| 验收 | blocked | 检索重评、托管通知、稳定的定时同步和 24 小时观察未完成。Redis `ENOTFOUND` 不再计为当前缺口 |
-| 发布 | blocked | 不要打 tag，直到第 9 节的材料补齐并且对应命令重新通过                                      |
+| 验收 | blocked | 检索重评、托管通知、备份演练和完整运维观察仍缺证据                                         |
+| 发布 | blocked | webhook、embedding 和托管备份演练待验收，暂不打 tag                                        |

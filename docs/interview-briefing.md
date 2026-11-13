@@ -10,14 +10,14 @@
 ## 30 秒版本
 
 这个项目是一个校园信息检索与可解释问答助手，我想解决的不是“模型能不能生成一段话”，而是“用户拿到答案后能不能快速核验”。  
-所以我把结果页做成了“回答摘要 + 来源卡片 + 原始命中片段”的结构，前端统一通过 `/api/search` 获取 `SearchResponse`，后面再由 `searchServiceProvider` 代理到独立搜索服务。  
-它已经是一个可以演示的 RAG MVP，而且真实数据验收、检索评估和后台治理代码侧 MVP 已经完成；但我不会把它包装成生产级平台，因为监控、稳定调度、真实管理员验收和长期运维能力还没有完全闭环。
+所以我把结果页做成了“回答摘要 + 来源卡片 + 原始命中片段”的结构，主路径通过 `/api/search` 获取完整 `SearchResponse`，后面再由 `searchServiceProvider` 代理到搜索服务；可选 Agent 面板另走 `/api/agent` 步骤 SSE。
+它已经是一个可以演示的 RAG MVP，而且真实数据验收、检索评估、后台治理代码侧 MVP 和近期 hosted 定时摄取成功记录都已有证据；但我不会把它包装成生产级平台，因为监控、真实管理员验收和长期运维能力还没有完全闭环。
 
 ## 1 分钟版本
 
 这个项目的主题是“校园信息检索与可解释问答”。我没有把它做成一个普通聊天页面，而是把重点放在“答案是否可信、用户能不能回头核对来源”。
 
-技术上它基于 `Next.js App Router + React + TypeScript + Tailwind CSS v4`。前端只请求 `/api/search`，Route Handler 再通过 `searchServiceProvider` 调上游 `search-service`。上游服务目前支持 `seed / postgres / auto` 三种 provider，能够返回统一的 `SearchResponse` 契约。
+技术上它基于 `Next.js App Router + React + TypeScript + Tailwind CSS v4`。主问答 / 检索由前端请求 `/api/search`，Route Handler 再通过 `searchServiceProvider` 调上游 `search-service`，一次性返回完整 `SearchResponse` JSON；可选 Agent 面板通过 `EventSource` 接收 `/api/agent` 的步骤事件。上游服务目前支持 `seed / postgres / auto` 三种 provider。
 
 这个项目最有价值的地方有三个：
 
@@ -56,7 +56,7 @@
 
 `SearchBox -> /search?q=... -> ResultsShell -> /api/search -> searchServiceProvider -> search-service -> SearchResponse -> AnswerPanel / SourceList`
 
-这样前端只消费 `SearchResponse`，不直接依赖数据库、抓取器或索引细节。  
+这样主路径的前端只消费 `SearchResponse`，不直接依赖数据库、抓取器或索引细节。
 后面即使换检索方式，页面层基本不用推倒重来。
 
 ### 4. 这个项目最值得讲的亮点
@@ -64,13 +64,13 @@
 - 可解释性：回答和证据一起展示，用户能回到来源核验
 - 可信度表达：官方 `official` 和社区 `community` 明确分层
 - 状态设计：不是简单的“有结果 / 没结果”，而是 `ok / partial / empty / error`
-- 工程边界：前端统一走 `/api/search`，由服务端代理上游搜索服务
+- 工程边界：主路径走 `/api/search`，可选 Agent 步骤演示走 `/api/agent`
 - 可演进性：上游已经有真实验证过的 lexical / hybrid 检索、实验性 rerank 和可选 LLM answer，但前端契约保持稳定
 
 ### 5. 我会怎么诚实总结它
 
 我会把它定义成“一个可演示的校园信息检索 / explainable RAG MVP”。  
-它已经能展示完整主流程，也有真实化改造的代码路径；但我不会把它说成生产级平台，因为真实外部告警、准线上管理员验收、备份恢复、稳定调度和更完整的数据治理还没完全闭环。
+它已经能展示完整主流程，也有真实化改造的代码路径；但我不会把它说成生产级平台，因为真实外部告警、准线上管理员验收、托管备份恢复和更完整的数据治理还没完全闭环。
 
 ## 项目主链路怎么讲
 
@@ -78,11 +78,13 @@
 
 1. 用户在首页输入校园问题，或者点推荐问题。
 2. 前端通过 `useSearchNavigation` 跳到 `/search?q=...`。
-3. `ResultsShell` 请求 `/api/search`，这是前端唯一搜索入口。
+3. `ResultsShell` 用 `await fetch` 请求 `/api/search`，这是主问答 / 检索入口。
 4. `src/app/api/search/route.ts` 会生成 `requestId`，做限流、缓存、日志记录，然后调用 `searchServiceProvider`。
 5. `searchServiceProvider` 根据 `SEARCH_SERVICE_URL` 去请求上游 `search-service`。
 6. 上游返回统一的 `SearchResponse`，其中包含 `status`、`answer`、`sources`、`relatedQuestions`、`resultGeneratedAt` 等字段。
-7. 前端再用 `AnswerPanel`、`SourceList`、`StatusPanel` 把回答、证据和状态展示出来。
+7. Route Handler 一次性返回完整 JSON 后，前端再用 `AnswerPanel`、`SourceList`、`StatusPanel` 把回答、证据和状态展示出来。
+
+可选 Agent 演示在结果页用 `?agent=1` 或页面开关打开。`agent-steps-panel.tsx` 用 `EventSource` 监听 `GET /api/agent` 的 phase / tool_call / tool_result / answer 步骤事件；`answer` 是检索完成后的一条事件，不是 token 流。编排固定使用 `search_notices`，有来源时再用 `export_citations`，没有 LLM 路由。
 
 ## 你可以重点强调的技术亮点
 
@@ -132,7 +134,7 @@
 - 可选 evidence-bound LLM answer
 - `/metrics` 统计
 
-你可以把这部分讲成：后端能力在逐步真实化，但页面层始终只消费一个统一结果契约。
+你可以把这部分讲成：后端能力在逐步真实化，主路径的页面层始终只消费一个统一结果契约。Qwen3 在仓库内用于 embedding（`Qwen/Qwen3-Embedding-8B`）和默认关闭的 rerank（`Qwen/Qwen3-Reranker-8B`），不是聊天模型。
 
 ## 绝对不要夸大的说法
 
@@ -143,6 +145,9 @@
 - 不要说“前端直接查数据库”
 - 不要说“模型自己理解并回答了所有校园问题”
 - 不要把 seed demo 当成真实数据库闭环证明
+- 不要说主问答 / 检索路径是流式输出；`/api/agent` 只流式发送步骤事件，不逐 token 生成答案
+- 不要把 Qwen3 embedding / rerank 说成聊天流式模型
+- 不要把 54 条黄金问题的离线 Recall@10 等检索指标说成在线回答正确率
 
 更稳妥的说法是：
 
@@ -171,7 +176,7 @@
 我把它拆成三层：
 
 - 页面层：输入、跳转、结果展示、来源展开、视图切换
-- 网关层：`/api/search` 统一前端入口，做限流、缓存、日志和错误归一化
+- 网关层：主检索入口 `/api/search` 做限流、缓存、日志和错误归一化；可选 `/api/agent` 发步骤 SSE
 - 搜索服务层：负责 seed / Postgres 检索、可选向量召回、可选 rerank 和可选 LLM summary
 
 这种拆法的核心好处是：检索实现可以继续演化，但前端不需要直接跟着底层数据结构变化。
@@ -202,7 +207,7 @@
 ### 9. 这个项目算不算真正的 RAG
 
 算是一个 RAG 思路驱动的 MVP，但不是完整生产级 RAG 平台。  
-因为它已经具备“检索优先、证据约束、统一结果契约、来源展示”的关键链路，也已经有真实检索评估报告；但真实告警、稳定调度、管理员验收、备份恢复和更完整的数据治理还没全部闭环。
+因为它已经具备“检索优先、证据约束、统一结果契约、来源展示”的关键链路，也已经有真实检索评估报告；但真实告警、管理员验收、托管备份恢复和更完整的数据治理还没全部闭环。定时摄取已有 #11/#12 改动及近期 hosted 成功记录。
 
 ### 10. LLM 在这个项目里扮演什么角色
 
@@ -247,14 +252,7 @@ LLM 在这里不是唯一核心，而是可选的回答组织层。
 
 ### 15. 如果继续做，你下一步会补什么
 
-我会按这个顺序继续：
-
-1. 先执行第五阶段 release gate，把 local、Postgres、ops 的结果写入验收报告
-2. 再回收第四阶段后台治理的准线上复验，包括管理员登录、来源治理、feedback 处理和社区审核
-3. 补真实 Redis 手动同步、Postgres admin integration、外部监控、webhook 和备份恢复验收
-4. 如果后续有必要，再单独优化实验性 rerank，而不是把它作为默认策略
-
-这个顺序的核心思路是：先把真实链路做扎实，再谈更大的能力扩展。
+下一步先补托管 `OPS_ALERT_WEBHOOK_URL` 的通知证据、`EMBEDDING_API_KEY` 与向量数据库条件下的重评证据，以及托管 backup drill 专用库的恢复演练。`OPS_SEARCH_SERVICE_URL` 未配置导致 Ops Health Check 每天 schedule 红一次，kir 已接受维持现状，不把它列成立刻修复项。Agent 是否增加模型决策尚未拍板，需要另定；这些材料齐之前不打 `v0.1.0-rc.1` tag。
 
 ### 16. 如果面试官问“你最想体现的能力是什么”
 
@@ -278,7 +276,8 @@ LLM 在这里不是唯一核心，而是可选的回答组织层。
 如果面试官要你进一步落到代码，可以优先看这些文件：
 
 - `src/lib/search/types.ts`：统一 `SearchResponse` / `SearchSource` / `SearchStatus`
-- `src/app/api/search/route.ts`：前端唯一搜索入口，含限流、缓存、日志、错误归一化
+- `src/app/api/search/route.ts`：主问答 / 检索入口，完整 JSON 响应，含限流、缓存、日志、错误归一化
+- `src/app/api/agent/route.ts`：可选 Agent 步骤 SSE 入口
 - `src/lib/search/search-provider.ts`：上游搜索服务适配层
 - `src/lib/search/source-registry.ts`：官方 / 社区来源白名单和权重
 - `search-service/server.cjs`：seed / Postgres / vector / rerank / LLM answer / metrics

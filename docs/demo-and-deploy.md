@@ -17,6 +17,8 @@ npm run verify:demo
 
 这个脚本会强制使用 seed provider，检查固定 query 的状态、来源数量和 evidence，不依赖真实数据库。
 
+主问答 / 检索 demo 通过 `/api/search` 一次性返回完整 `SearchResponse` JSON。结果页可加 `?agent=1`（已有 `q` 时用 `&agent=1`）或使用页面开关，打开可选 Agent 步骤面板；`GET /api/agent` 的 SSE 发送 phase / tool_call / tool_result / answer 事件，answer 在检索完成后一次发出，不是 token 流。
+
 ## 本地服务分工
 
 - Next.js 前端：`npm run dev`，默认 `http://localhost:3000`。
@@ -57,7 +59,7 @@ npm run compose:down
 
 ## 部署边界
 
-生产部署时不要让前端直接读数据库。前端仍然只访问 `/api/search`，由 Route Handler 调用 `SEARCH_SERVICE_URL`。搜索服务负责读取 Postgres、排序 chunks、生成 extractive answer；如果配置了 LLM，也只在检索命中后基于 evidence 生成回答，并继续返回同一个 `SearchResponse`。
+生产部署时不要让前端直接读数据库。主问答 / 检索路径访问 `/api/search`，由 Route Handler 调用 `SEARCH_SERVICE_URL`；可选 Agent 步骤路径访问 `/api/agent`。搜索服务负责读取 Postgres、排序 chunks、生成 extractive answer；如果配置了 LLM，也只在检索命中后基于 evidence 生成回答，并继续返回同一个 `SearchResponse`。
 
 最低环境变量：
 
@@ -123,7 +125,7 @@ npm run verify:release:ops
 
 仓库内置 `.github/workflows/scheduled-ingestion.yml`。它支持手动触发，并配置了两类定时任务：
 
-- 官方源：每天 UTC 18:00 执行 `npm run ingest:scheduled:official`
+- 官方源：每天 UTC 18:00 和 UTC 00:00 执行 `npm run ingest:scheduled:official`
 - 社区源：每小时检查一次；只有 `RUN_COMMUNITY_INGESTION=true` 时才执行 `npm run ingest:scheduled:community`
 
 这条 workflow 只有在 `DATABASE_URL` 和 `REDIS_URL` 都已配置时才会真正执行队列化 ingestion。可用 GitHub Actions variables 覆盖：
@@ -135,7 +137,7 @@ npm run verify:release:ops
 
 默认不在定时任务里自动跑社区来源；把 `RUN_COMMUNITY_INGESTION=true` 后，workflow 才会额外执行 `npm run ingest:scheduled:community`。这样可以先把官方来源作为稳定基线，社区来源按合规和质量策略逐步打开。
 
-GitHub-hosted runner 到 `www.tjcu.edu.cn`、`lib.tjcu.edu.cn`、`jwc.tjcu.edu.cn`、`zs.tjcu.edu.cn` 的出口不稳定。run `40591519263` 里四个官方源都是列表页 `fetch failed`，接着 `No detail URLs discovered`。这是抓取传输失败，不是选择器或正文抽取失败。2026-10-15 以来该 workflow 有 80 次 success、11 次 failure；其中 run `38709421953` 是已经换掉的 Redis 主机 `in-burro-41364.upstash.io` `ENOTFOUND`，抽查的后续失败是同一类列表页 `fetch failed`。加长重试不能证明下一次 hosted runner 一定能连上 `.edu.cn`。
+GitHub-hosted runner 到官方源仍可能间歇不可达。历史 run `40591519263` 中四个官方源的列表页都 `fetch failed`，属于抓取传输失败；run `38709421953` 的 Redis `ENOTFOUND` 也属历史失败。#11 已将纯网络不可达在门槛内改为软失败，并加入 48 小时 freshness 与每天第二次官方同步；#12 已将 Ops Health unreachable 阈值回退值对齐为 3。2026-11-02 至 2026-11-13（北京时间）Scheduled Ingestion 连续 63 次成功（run #706–#768；最新一次 2026-11-13T03:45:20Z，即北京时间 11:45）。
 
 抓取失败会把 `cause`、`code`、`errno` 和 `name` 写进错误文本。重试仍由环境变量控制，默认值是 `INGEST_RETRY_ATTEMPTS=5`、`INGEST_RETRY_DELAY_MS=1000`、`INGEST_RETRY_MAX_DELAY_MS=8000`，间隔按指数增加并被上限截断。确定性的解析失败和 4xx（除 408 / 429）不重试。
 

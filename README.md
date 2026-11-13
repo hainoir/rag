@@ -13,7 +13,7 @@
 
 项目当前定位要点：
 
-- 前端统一通过 `/api/search` 获取 `SearchResponse`
+- 主问答 / 检索 demo 通过 `/api/search` 获取完整 `SearchResponse` JSON；可选 Campus Agent 演示走 `/api/agent` 步骤 SSE
 - Route Handler 内部调用 `searchServiceProvider`，再代理到外部搜索服务
 - `SearchSource` 已支持来源站点、发布时间、更新时间、抓取时间、最近校验时间和来源新鲜度
 - 仓库内已经具备来源注册表、清洗规则、去重规则、Postgres 入库结构和真实官方来源 ingestion 链路
@@ -39,7 +39,7 @@
 - 来源卡片展示来源站点、发布时间、更新时间、抓取时间和最近校验时间
 - 暗色模式切换，偏好会保存在浏览器本地
 - 无答案兜底和相关问题推荐
-- 统一的 `/api/search` 搜索入口
+- 主检索入口 `/api/search` 与可选 Agent 步骤入口 `/api/agent`；结果页可用 `?agent=1` 或页面开关打开步骤面板
 - `/api/feedback` 保持前端入口不变，但已改为由 `search-service` 统一持久化
 - `search-service` 现在额外提供 `/api/query-logs`、增强版 `/health` 和带 `persistent` 聚合的 `/metrics`
 - `/health` 现在会额外标记 `databaseRequired` / `telemetryRequired`，区分 seed demo 与真实持久化模式
@@ -47,11 +47,13 @@
 
 ## 当前检索链路
 
-浏览器提问后，当前链路是：
+浏览器提问后，主问答 / 检索链路是：
 
 `SearchBox / SuggestedQuestions -> /api/search -> searchServiceProvider -> SEARCH_SERVICE_URL -> search-service -> SearchResponse -> ResultsShell -> 回答视图 / 检索视图`
 
-这条链路已经具备“前端只消费统一结果结构”的边界。当前仓库已经包含官方来源摄取、保守社区来源摄取、Postgres chunk 检索、pgvector hybrid retrieval、实验性 rerank、query / feedback 持久化、基础运维检查和后台治理代码侧 MVP。
+`/api/search` 由 Next.js Route Handler 调用搜索服务后一次性返回完整 JSON，`ResultsShell` 等整份结果再渲染；可选 LLM 回答也不是 token 流。可选 Agent 切片另走 `GET /api/agent`，用 SSE 发送 phase / tool_call / tool_result / answer 步骤事件，检索完成后才发送一条 answer。默认工具编排没有 LLM 路由，是否增加模型决策尚未拍板，详见 [docs/campus-agent-min-slice.md](./docs/campus-agent-min-slice.md)。
+
+主链路已经具备“前端只消费统一结果结构”的边界。当前仓库已经包含官方来源摄取、保守社区来源摄取、Postgres chunk 检索、pgvector hybrid retrieval、实验性 rerank、query / feedback 持久化、基础运维检查和后台治理代码侧 MVP。
 
 当前仍然**不等同于生产级 RAG 平台**，上线前还需要继续完成并留证：
 
@@ -93,6 +95,8 @@
 - 为什么要把 `resultGeneratedAt` 和来源更新时间分开
 - 为什么来源卡片要展示发布时间、更新时间和最近校验时间
 - 这个仓库里哪些是前端表达，哪些应该由上游搜索服务负责
+- 如何区分 `/api/search` 的完整 JSON 响应和 `/api/agent` 的步骤 SSE；不要把主路径讲成流式输出
+- Qwen3 在仓库内用于 embedding / rerank，不是聊天流式模型；离线检索指标不是在线回答正确率
 - 为什么当前默认策略收口为 `hybrid`，而 `rerank` 只保留为显式实验能力
 
 详细拆解见 [docs/architecture.md](./docs/architecture.md)。  
@@ -132,6 +136,8 @@ npm run check:phase-three-ops
 ```
 
 然后访问 [http://localhost:3000](http://localhost:3000)。
+
+在结果页 URL 加 `?agent=1`（已有 `q` 时用 `&agent=1`），或使用页面开关，可打开「Agent 步骤」面板。面板通过 `EventSource` 连接 `/api/agent` 查看工具步骤；默认主问答 / 检索 demo 仍走 `/api/search`。
 
 ### Docker Compose 本地编排
 

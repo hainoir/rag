@@ -8,7 +8,7 @@
 
 我想解决的不是“模型能不能说一段话”，而是“用户拿到答案后能不能快速核验”。所以用户提问后，页面不会只展示一段 AI 文本，而是同时展示回答摘要、来源分层和原始命中片段。这样它更像真实的信息检索产品，也更能体现前端在可信度表达上的价值。
 
-技术上它基于 **Next.js App Router + React + TypeScript + Tailwind CSS v4**。前端现在通过 `/api/search` 获取统一的 `SearchResponse`，接口背后由 `searchServiceProvider` 代理到 `search-service`。这个仓库已经具备官方来源摄取、Postgres 检索、真实 `lexical / hybrid / hybrid_rerank` 评估和后台治理代码侧 MVP，但真实外部监控、管理员准线上验收和长期运维闭环还没有完成，所以不会把它说成完整生产级 RAG 平台。
+技术上它基于 **Next.js App Router + React + TypeScript + Tailwind CSS v4**。主问答 / 检索通过 `/api/search` 获取完整 `SearchResponse` JSON，接口背后由 `searchServiceProvider` 代理到 `search-service`；可选 Agent 面板通过 `/api/agent` 接收步骤 SSE。这个仓库已经具备官方来源摄取、Postgres 检索、真实 `lexical / hybrid / hybrid_rerank` 评估和后台治理代码侧 MVP，但真实外部监控、管理员准线上验收和长期运维闭环还没有完成，所以不会把它说成完整生产级 RAG 平台。
 
 ## 3 分钟版本
 
@@ -54,7 +54,7 @@
 
 接着补一句：
 
-> 我这个项目重点体现的是第 3 和第 4 层，也就是回答组织、来源分层和可核验交互；第 1 和第 2 层现在由仓库内的 `search-service` 承担，但外部监控、稳定调度、管理员验收和长期运营还没闭环，所以不会把它说成完整生产系统。
+> 我这个项目重点体现的是第 3 和第 4 层，也就是回答组织、来源分层和可核验交互；第 1 和第 2 层现在由仓库内的 `search-service` 承担，但外部监控、管理员验收和长期运营还没闭环，所以不会把它说成完整生产系统。
 
 ## 项目映射讲法
 
@@ -62,7 +62,8 @@
 
 - 用户提问：`SearchBox` 或推荐问题触发搜索
 - 搜索导航：`useSearchNavigation` 负责跳转到 `/search?q=...`
-- 统一入口：结果页由 `ResultsShell` 请求 `/api/search`
+- 主检索入口：结果页由 `ResultsShell` 请求 `/api/search`，等完整 JSON 返回后渲染
+- 可选 Agent 入口：结果页用 `?agent=1` 或页面开关显示步骤面板，`EventSource` 连接 `/api/agent`
 - 服务端适配：`/api/search` 内部调用 `searchServiceProvider`
 - 统一结果：接口返回 `SearchResponse`
 - 前端表达：`AnswerPanel` 展示摘要，`SourceList` 展示来源和命中片段
@@ -71,6 +72,8 @@
 一句话总结这段映射：
 
 > 当前项目已经有统一 API 边界和来源契约；前端信息组织、状态设计和搜索服务边界是重点，抓取、索引、后台治理和运维入口都被收口在前端页面之外。
+
+Agent 切片发送 phase / tool_call / tool_result / answer 步骤事件，检索完成后才发一条 `answer`，不是 token 流；编排固定调用 `search_notices`，有来源时再调用 `export_citations`，没有 LLM 路由。
 
 ## 可以重点讲的设计点
 
@@ -103,7 +106,7 @@
 
 ### 4. API 边界先行
 
-前端现在不直接依赖具体搜索实现，而是统一请求 `/api/search`。这个接口背后由 `searchServiceProvider` 代理到外部服务，工程上已经形成了“页面层”和“数据提供层”的边界，后续替换抓取器、索引方式或排序策略时，前端成本会更低。
+主问答 / 检索页面不直接依赖具体搜索实现，而是请求 `/api/search`。这个接口背后由 `searchServiceProvider` 代理到外部服务，工程上已经形成了“页面层”和“数据提供层”的边界，后续替换抓取器、索引方式或排序策略时，前端成本会更低。
 
 ## 高频追问准备
 
@@ -125,16 +128,11 @@
 
 ### 当前项目算不算真实 RAG
 
-不算生产级 RAG。更准确的说法是：它是一个 **RAG 思路驱动的校园信息检索 / explainable RAG MVP**。现在已经有统一 API 边界、统一结果契约、官方来源摄取、Postgres 检索、hybrid 默认策略和后台治理代码侧 MVP；缺口主要在真实 release gate、外部监控、管理员验收、备份恢复和长期运营闭环。
+不算生产级 RAG。更准确的说法是：它是一个 **RAG 思路驱动的校园信息检索 / explainable RAG MVP**。现在已经有主检索结果契约、可选 Agent 步骤演示、官方来源摄取、Postgres 检索、hybrid 默认策略和后台治理代码侧 MVP；缺口主要在托管 release 验收材料、外部监控、管理员验收、备份恢复和长期运营闭环。
 
 ### 如果继续做，你下一步会补什么
 
-我会按这个顺序做：
-
-1. 执行第五阶段 release gate，把 local、Postgres、ops 的通过、失败或 blocked 结果写入验收报告
-2. 在准线上环境回收第四阶段后台验收，包括管理员登录、来源治理、feedback 处理和社区审核
-3. 补真实 Redis 手动同步、外部 webhook 通知和备份恢复演练留证
-4. 再根据最新评估报告决定是否继续优化实验性 rerank
+下一步是补托管 webhook 通知、embedding 条件下的重评和托管 backup drill 专用库的恢复演练证据，材料齐之前不打 `v0.1.0-rc.1` tag。`OPS_SEARCH_SERVICE_URL` 未配置导致 Ops Health Check 每日 schedule 红一次，kir 已接受维持现状；Agent 是否增加模型决策尚未拍板，需要另定。
 
 ### 如果检索不到、来源冲突、信息过期怎么办
 
@@ -216,7 +214,13 @@
 
 ### 难点 3：原型和真实产品之间要留迁移边界
 
-当前仓库已经有最小官方来源摄取、Postgres 入库、真实验证过的 `lexical / hybrid / hybrid_rerank` 检索链路，以及第四阶段后台治理代码侧 MVP，但我不会把它说成完整生产级 RAG 平台。核心设计是先守住 `/api/search` 边界、来源时间字段和 `SearchResponse` 契约，让前端只消费统一结果结构；当前默认策略已经收口为 `hybrid`，后续重点转向真实监控、真实调度验收、后台治理准线上验收和发布物料。
+当前仓库已经有最小官方来源摄取、Postgres 入库、真实验证过的 `lexical / hybrid / hybrid_rerank` 检索链路，以及第四阶段后台治理代码侧 MVP，但我不会把它说成完整生产级 RAG 平台。核心设计是守住主路径 `/api/search` 边界、来源时间字段和 `SearchResponse` 契约，让主检索页面只消费统一结果结构；可选 Agent 步骤面板另走 `/api/agent`。当前默认策略已经收口为 `hybrid`，定时摄取也已有 #11/#12 改动与近期 hosted 成功记录，后续仍需托管验收材料。
+
+## 绝对不要夸大
+
+- 不要说主问答 / 检索路径流式输出；`/api/search` 等完整 JSON 返回，`/api/agent` 只流式发送步骤事件
+- 不要把 Qwen3 说成聊天流式模型；仓库内的 `Qwen/Qwen3-Embedding-8B` 用于 embedding，`Qwen/Qwen3-Reranker-8B` 用于默认关闭的 rerank
+- 不要把 54 条黄金问题上的离线 Recall@10 等检索指标说成在线回答正确率
 
 ## 一句话总结
 

@@ -6,7 +6,7 @@
 
 它现在的边界比早期 mock 版本清晰得多：前端通过 `src/app/api/search/route.ts` 请求结果，Route Handler 内部再调用 `searchServiceProvider` 访问外部搜索服务。这个仓库负责统一结果契约、状态编排和可信度表达；`search-service/` 负责最小可用的官方来源摄取、Postgres chunk 检索、seed fallback，以及可选的 evidence-bound LLM 回答生成。
 
-从项目形态看，它已经具备完整主流程，适合作品集展示；从工程成熟度看，它仍然不是完整生产级 RAG 平台，因为当前虽然已经完成真实数据闭环、真实检索评估、`lexical / hybrid / hybrid_rerank` 三档验证和第四阶段后台治理代码侧 MVP，但线上告警、稳定调度、真实管理员验收和长期运维闭环仍未完成。
+从项目形态看，它已经具备完整主流程，适合作品集展示；从工程成熟度看，它仍然不是完整生产级 RAG 平台，因为当前虽然已经完成真实数据闭环、真实检索评估、`lexical / hybrid / hybrid_rerank` 三档验证、第四阶段后台治理代码侧 MVP 和近期 hosted 定时摄取连续成功记录，但线上告警、真实管理员验收和长期运维闭环仍未完成。
 
 ## 项目定位与目标用户
 
@@ -57,7 +57,7 @@
 
 ## 当前检索链路
 
-当前链路可以直接这样讲：
+主问答 / 检索链路可以直接这样讲：
 
 `用户提问 -> useSearchNavigation -> /search?q=... -> ResultsShell -> /api/search -> searchServiceProvider -> 外部搜索服务 -> SearchResponse -> AnswerPanel / SourceList`
 
@@ -69,7 +69,7 @@
 
 当前同时要明确说明：
 
-- `/api/search` 是前端唯一入口；仓库内的 `search-service/` 已经承担真实检索与摄取职责，但仍不是完整生产级搜索平台
+- `/api/search` 是主检索入口，一次性返回完整 `SearchResponse` JSON；可选 `/api/agent` 通过 SSE 发送步骤事件，结果页用 `?agent=1` 或页面开关显示 Agent 面板。仓库内的 `search-service/` 已经承担真实检索与摄取职责，但仍不是完整生产级搜索平台
 - `searchServiceProvider` 负责请求上游搜索服务，不直接读取数据库
 - `search-service/` 可以读取 Postgres chunks，默认生成 extractive answer，也可以在 `SEARCH_ANSWER_MODE=llm` 时调用 LLM 生成回答
 - pgvector hybrid retrieval 已完成真实验证，当前默认推荐策略是 `hybrid`
@@ -106,7 +106,7 @@
 
 - `src/lib/search/types.ts` 定义统一搜索数据契约
 - `SearchProvider.search(query)` 抽象统一搜索接口
-- `src/app/api/search/route.ts` 提供前端唯一搜索入口
+- `src/app/api/search/route.ts` 提供主检索入口；`src/app/api/agent/route.ts` 提供可选 Agent 步骤 SSE 入口
 - `searchServiceProvider` 负责调用外部搜索服务并归一化响应
 - `default-questions.ts` 提供首页和空态的默认问题
 
@@ -188,6 +188,6 @@
 
 - 项目结构是单体前端仓库，不是前后端混合 monorepo
 - 核心代码位于 `src/app`、`src/components`、`src/lib/search`
-- 当前已有 `src/app/api/search/route.ts` 作为统一搜索入口
+- 当前已有 `src/app/api/search/route.ts` 作为主检索入口，另有 `src/app/api/agent/route.ts` 作为可选步骤入口
 - 当前不再依赖 `mock-data.ts`，而是通过 `searchServiceProvider` 访问外部搜索服务
 - 仓库内已经具备来源注册表、清洗 / 去重契约、Postgres 入库结构、后台治理结构和 release gate 文档入口

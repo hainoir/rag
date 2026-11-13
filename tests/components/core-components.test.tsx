@@ -6,6 +6,8 @@ import { EmptyState } from "@/components/empty-state";
 import { ErrorState } from "@/components/error-state";
 import { ResultToolbar } from "@/components/result-toolbar";
 import { SearchBox } from "@/components/search-box";
+import { SavedSourcesPanel } from "@/components/saved-sources-panel";
+import { SavedSourcesProvider } from "@/components/saved-sources-provider";
 import { SourceCard } from "@/components/source-card";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -100,13 +102,66 @@ describe("core React components", () => {
   test("SourceCard renders metadata and toggles expansion", () => {
     const onToggle = vi.fn();
 
-    render(<SourceCard expanded={false} onToggle={onToggle} source={source} />);
+    render(
+      <SavedSourcesProvider>
+        <SourceCard expanded={false} onToggle={onToggle} source={source} />
+      </SavedSourcesProvider>,
+    );
 
     expect(screen.getByText("官方来源")).toBeInTheDocument();
     expect(screen.getByText("图书馆借阅规则")).toBeInTheDocument();
     expect(screen.getByText("来源权重 95%")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "展开片段" }));
     expect(onToggle).toHaveBeenCalledWith("source-1");
+  });
+
+  test("SourceCard saves and unsaves a source", async () => {
+    render(
+      <SavedSourcesProvider>
+        <SourceCard expanded={false} onToggle={vi.fn()} source={source} />
+      </SavedSourcesProvider>,
+    );
+
+    const save = await screen.findByRole("button", { name: "收藏：图书馆借阅规则" });
+    await waitFor(() => expect(save).toBeEnabled());
+    fireEvent.click(save);
+    expect(screen.getByRole("button", { name: "取消收藏：图书馆借阅规则" })).toHaveAttribute("aria-pressed", "true");
+    expect(window.localStorage.getItem("campus-rag-saved-sources")).toContain(source.canonicalUrl);
+
+    fireEvent.click(screen.getByRole("button", { name: "取消收藏：图书馆借阅规则" }));
+    expect(screen.getByRole("button", { name: "收藏：图书馆借阅规则" })).toHaveAttribute("aria-pressed", "false");
+    expect(window.localStorage.getItem("campus-rag-saved-sources")).toBe("[]");
+  });
+
+  test("SavedSourcesPanel has an accessible empty state", async () => {
+    render(
+      <SavedSourcesProvider>
+        <SavedSourcesPanel />
+      </SavedSourcesProvider>,
+    );
+    expect(await screen.findByRole("status")).toHaveTextContent("还没有收藏来源");
+    expect(screen.getByRole("region", { name: "已收藏来源" })).toBeInTheDocument();
+  });
+
+  test("a failed write does not appear saved", async () => {
+    const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("storage unavailable");
+    });
+    try {
+      render(
+        <SavedSourcesProvider>
+          <SourceCard expanded={false} onToggle={vi.fn()} source={source} />
+        </SavedSourcesProvider>,
+      );
+      const save = screen.getByRole("button", { name: "收藏：图书馆借阅规则" });
+      await waitFor(() => expect(save).toBeEnabled());
+      fireEvent.click(save);
+      expect(screen.getByRole("alert")).toHaveTextContent("收藏操作失败");
+      expect(save).toHaveAttribute("aria-pressed", "false");
+      expect(screen.queryByRole("button", { name: "取消收藏：图书馆借阅规则" })).not.toBeInTheDocument();
+    } finally {
+      setItem.mockRestore();
+    }
   });
 
   test("EmptyState keeps no-answer wording distinct from failures", () => {

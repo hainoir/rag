@@ -81,6 +81,36 @@ export type SearchResponse = {
   meta?: SearchResponseMeta;
 };
 
+export type NoticeFetchStatus = "ok" | "not_found" | "invalid" | "error";
+
+export type NoticeDocument = {
+  documentId: string;
+  versionNo: number;
+  title: string;
+  type: SourceType;
+  sourceName: string;
+  sourceDomain?: string;
+  url?: string;
+  canonicalUrl?: string;
+  publishedAt: string | null;
+  updatedAt: string | null;
+  fetchedAt: string;
+  lastVerifiedAt: string | null;
+  governanceStatus?: SourceGovernanceStatus;
+  answerEligible: boolean;
+  body: string;
+  truncated: boolean;
+  bodyCharCount: number;
+  returnedCharCount: number;
+};
+
+export type NoticeFetchResponse = {
+  status: NoticeFetchStatus;
+  document: NoticeDocument | null;
+  meta?: SearchResponseMeta;
+};
+
 export type SearchProvider = {
   search: (query: string, options?: SearchProviderOptions) => Promise<SearchResponse>;
+  fetchNotice: (documentId: string, options?: SearchProviderOptions) => Promise<NoticeFetchResponse>;
 };

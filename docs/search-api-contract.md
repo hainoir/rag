@@ -107,7 +107,7 @@
 
 ## Source Contract
 
-每一条 `sources[i]` 都必须满足以下约束。
+当前 search-service 返回的每一条 `sources[i]` 都必须满足以下约束；前端仍兼容缺少 `documentId` 的旧版或不完整上游响应。
 
 ### Required Fields
 
@@ -133,7 +133,7 @@
 - `trustScore?: number`
 - `dedupKey?: string`
 
-`id` 是搜索命中键：Postgres 返回 chunk ID，seed 返回 slug。`documentId` 是取正文的文档键：Postgres 返回 `documents.id`，seed 返回同一 slug。不要从 chunk ID 推算文档 ID。
+`id` 是搜索命中键：Postgres 返回 chunk ID，seed 返回 slug。`documentId` 是取正文的文档键：Postgres 返回 `documents.id`，seed 返回同一 slug。当前 search-service 的 seed 和 Postgres 响应始终返回 `documentId`；旧版或不完整的上游响应可能省略它，客户端以缺失字段表示。客户端不能从 `id`、`sourceId`、`chunkId` 或 URL 推算 `documentId`；只有上游实际提供非空 `documentId` 时才允许取正文。
 
 ## Notice Document
 

@@ -89,6 +89,25 @@ test("keeps chunk id and document id separate when both are present", () => {
   assert.equal(response.sources[0].documentId, "document-1");
 });
 
+test("does not infer document ID from a chunk ID or URL", () => {
+  for (const documentId of [undefined, "  ", 123]) {
+    const response = normalizeUpstreamResponse("借阅", {
+      sources: [{ id: "chunk-1", documentId, url: "https://example.test/notice" }],
+    });
+    assert.equal(response.sources[0].id, "chunk-1");
+    assert.equal(response.sources[0].documentId, undefined);
+    assert.equal("documentId" in response.sources[0], false);
+  }
+});
+
+test("uses an explicit document ID as the legacy source ID only when no source ID exists", () => {
+  const response = normalizeUpstreamResponse("借阅", {
+    sources: [{ document_id: " document-1 " }],
+  });
+  assert.equal(response.sources[0].id, "document-1");
+  assert.equal(response.sources[0].documentId, "document-1");
+});
+
 test("builds partial answers when upstream returns sources without answer", () => {
   const response = normalizeUpstreamResponse("报修", {
     resultGeneratedAt: generatedAt,

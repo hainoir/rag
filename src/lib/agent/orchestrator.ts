@@ -85,7 +85,7 @@ export async function runCampusAgent(
     try {
       const exported = toolRegistry.export_citations.run({ sources: result.sources, documents });
       citations = exported.citations;
-      emit({ type: "tool_result", id: exportId, name: "export_citations", ok: true, summary: `已导出 ${citations.length} 条正文引用。` });
+      emit({ type: "tool_result", id: exportId, name: "export_citations", ok: citations.length > 0, summary: exported.text || "没有可导出的正文引用。" });
     } catch {
       fallback = true;
       emit({ type: "tool_result", id: exportId, name: "export_citations", ok: false, summary: "引用导出失败。" });

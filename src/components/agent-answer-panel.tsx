@@ -26,6 +26,9 @@ export function AgentAnswerPanel({
         {answer?.fallback ? (
           <span className="rounded-full border border-[var(--line)] px-3 py-1 text-xs">回退回答</span>
         ) : null}
+        {answer?.demoCorpus ? (
+          <span className="rounded-full border border-[var(--line)] px-3 py-1 text-xs">演示语料，非真实通知全文</span>
+        ) : null}
       </div>
       {answer ? (
         <p className="whitespace-pre-wrap font-display text-3xl leading-tight md:text-[2.5rem]">{answer.summary}</p>
@@ -36,17 +39,32 @@ export function AgentAnswerPanel({
       )}
       {answer?.procedure ? (
         <div className="mt-6 space-y-6">
-          <div>
-            <h3 className="font-semibold">办理步骤</h3>
-            <ol className="mt-2 list-decimal space-y-3 pl-6">
-              {answer.procedure.steps.map((item, index) => (
-                <li key={`${item.evidence.documentId}-step-${index}`}>
-                  <p className="whitespace-pre-wrap">{item.text}</p>
-                  <p className="mt-1 text-sm muted">来源：{item.evidence.title}</p>
-                </li>
-              ))}
-            </ol>
-          </div>
+          {answer.procedure.steps.length ? (
+            <div>
+              <h3 className="font-semibold">办理步骤</h3>
+              <ol className="mt-2 list-decimal space-y-3 pl-6">
+                {answer.procedure.steps.map((item, index) => (
+                  <li key={`${item.evidence.documentId}-step-${index}`}>
+                    <p className="whitespace-pre-wrap">{item.text}</p>
+                    <p className="mt-1 text-sm muted">来源：{item.evidence.title}</p>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          ) : null}
+          {answer.procedure.materials.length ? (
+            <div>
+              <h3 className="font-semibold">材料</h3>
+              <ul className="mt-2 list-disc space-y-3 pl-6">
+                {answer.procedure.materials.map((item, index) => (
+                  <li key={`${item.evidence.documentId}-material-${index}`}>
+                    <p className="whitespace-pre-wrap">{item.text}</p>
+                    <p className="mt-1 text-sm muted">来源：{item.evidence.title}</p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           {answer.procedure.exceptions.length ? (
             <div>
               <h3 className="font-semibold">特殊情况</h3>

@@ -22,7 +22,8 @@ export type AgentProcedureItem = {
 };
 
 export type AgentProcedure = {
-  steps: [AgentProcedureItem, ...AgentProcedureItem[]];
+  steps: AgentProcedureItem[];
+  materials: AgentProcedureItem[];
   exceptions: AgentProcedureItem[];
   verify: AgentProcedureItem[];
 };
@@ -31,5 +32,5 @@ export type AgentEvent =
   | { type: "phase"; phase: AgentPhase; detail?: string }
   | { type: "tool_call"; id: string; name: ToolName; args: Record<string, unknown> }
   | { type: "tool_result"; id: string; name: ToolName; ok: boolean; summary: string }
-  | { type: "answer"; summary: string; citations: AgentCitation[]; evidence?: { sourceId: string; title: string; sourceName: string; snippet: string }[]; fallback?: boolean; procedure?: AgentProcedure }
+  | { type: "answer"; summary: string; citations: AgentCitation[]; evidence?: { sourceId: string; title: string; sourceName: string; snippet: string }[]; fallback?: boolean; demoCorpus?: boolean; procedure?: AgentProcedure }
   | { type: "error"; message: string; code?: string };

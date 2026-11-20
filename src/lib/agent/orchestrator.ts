@@ -115,6 +115,7 @@ export async function runCampusAgent(
   emit({ type: "phase", phase: "answering" });
   const evidence = citations.filter((citation) => citation.snippet).map((citation) => ({ sourceId: citation.sourceId, title: citation.title, sourceName: citation.sourceName, snippet: citation.snippet! }));
   const procedure = extractProcedure({ documents });
-  emit({ type: "answer", summary, citations, evidence, ...(fallback ? { fallback: true } : {}), ...(procedure ? { procedure } : {}) });
+  const demoCorpus = documents.some((document) => document.body.includes("演示语料（非真实通知全文）"));
+  emit({ type: "answer", summary, citations, evidence, ...(fallback ? { fallback: true } : {}), ...(demoCorpus ? { demoCorpus: true } : {}), ...(procedure ? { procedure } : {}) });
   emit({ type: "phase", phase: "done" });
 }

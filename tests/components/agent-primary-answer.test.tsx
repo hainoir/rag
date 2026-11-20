@@ -99,6 +99,7 @@ describe("Agent primary answer", () => {
         ...answer("借阅正文摘要"),
         procedure: {
           steps: [{ text: "确认图书可借。", evidence: { documentId: "d1", title: "图书馆借阅规则" } }],
+          materials: [{ text: "校园卡或读者码。", evidence: { documentId: "d1", title: "图书馆借阅规则" } }],
           exceptions: [{ text: "热门教材限制外借。", evidence: { documentId: "d1", title: "图书馆借阅规则" } }],
           verify: [{ text: "核对最新馆内规则。", evidence: { documentId: "d1", title: "图书馆借阅规则" } }],
         },
@@ -106,12 +107,39 @@ describe("Agent primary answer", () => {
     });
     const region = within(primary());
     expect(region.getByRole("heading", { name: "办理步骤" })).toBeInTheDocument();
+    expect(region.getByRole("heading", { name: "材料" })).toBeInTheDocument();
     expect(region.getByRole("heading", { name: "特殊情况" })).toBeInTheDocument();
     expect(region.getByRole("heading", { name: "仍需核对原文" })).toBeInTheDocument();
     expect(region.getByText("确认图书可借。")).toBeInTheDocument();
-    expect(region.getAllByText("来源：图书馆借阅规则")).toHaveLength(3);
+    expect(region.getByText("校园卡或读者码。")).toBeInTheDocument();
+    expect(within(region.getByRole("heading", { name: "材料" }).parentElement!).getByText("校园卡或读者码。")).toBeInTheDocument();
+    expect(within(region.getByRole("heading", { name: "特殊情况" }).parentElement!).queryByText("校园卡或读者码。")).not.toBeInTheDocument();
+    expect(region.getAllByText("来源：图书馆借阅规则")).toHaveLength(4);
     expect(region.getByText("借阅正文摘要")).toBeInTheDocument();
     expect(region.getByText("已读到正文")).toBeInTheDocument();
+  });
+
+  test("shows materials-only and 演示语料，非真实通知全文 in the primary region", () => {
+    renderPage();
+    act(() => {
+      stream().send(fetchResult(true));
+      stream().send({
+        ...answer("请假申请说明"),
+        demoCorpus: true,
+        procedure: {
+          steps: [],
+          materials: [{ text: "请假申请表", evidence: { documentId: "d1", title: "请假通知" } }],
+          exceptions: [],
+          verify: [],
+        },
+      });
+    });
+    const region = within(primary());
+    expect(region.getByText("演示语料，非真实通知全文")).toBeInTheDocument();
+    expect(region.getByRole("heading", { name: "材料" })).toBeInTheDocument();
+    expect(region.getByText("请假申请表")).toBeInTheDocument();
+    expect(region.queryByRole("heading", { name: "办理步骤" })).not.toBeInTheDocument();
+    expect(region.queryByRole("heading", { name: "特殊情况" })).not.toBeInTheDocument();
   });
 
   test("unread fallback has no procedure sections", () => {
@@ -122,6 +150,7 @@ describe("Agent primary answer", () => {
     });
     const region = within(primary());
     expect(region.getByText("未读到正文")).toBeInTheDocument();
+    expect(region.queryByText("演示语料，非真实通知全文")).not.toBeInTheDocument();
     expect(region.queryByRole("heading", { name: "办理步骤" })).not.toBeInTheDocument();
     expect(region.queryByText("确认图书可借。")).not.toBeInTheDocument();
   });
@@ -138,6 +167,7 @@ describe("Agent primary answer", () => {
       stream().fail();
     });
     expect(within(primary()).getByText("Agent 正文独有回答")).toBeInTheDocument();
+    expect(within(primary()).queryByText("演示语料，非真实通知全文")).not.toBeInTheDocument();
     expect(within(primary()).getByText("已读到正文")).toBeInTheDocument();
     expect(within(primary()).getAllByText(/正文依据/).length).toBeGreaterThan(0);
     expect(screen.queryByText("并行检索独有摘要")).not.toBeInTheDocument();

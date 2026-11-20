@@ -109,15 +109,25 @@ describe("Agent primary answer", () => {
     expect(screen.queryByRole("button", { name: "重新运行 Agent" })).not.toBeInTheDocument();
   });
 
-  test("labels partial body reads", () => {
+  test("labels an eligible success and eligible failure as a partial body read", () => {
     renderPage();
     act(() => {
       stream().send(fetchResult(true));
       stream().send(fetchResult(false));
-      stream().send(answer("Agent 部分正文回答"));
+      stream().send(answer("官方正文用于回答，另一篇官方通知读取失败。"));
     });
     expect(within(primary()).getByText("部分读到正文")).toBeInTheDocument();
-    expect(within(primary()).getByText("Agent 部分正文回答")).toBeInTheDocument();
+    expect(within(primary()).getByText("官方正文用于回答，另一篇官方通知读取失败。")).toBeInTheDocument();
+  });
+
+  test("labels a supplemental-only body as unread when the answer says no usable full text was read", () => {
+    renderPage();
+    act(() => {
+      stream().send({ type: "tool_result", id: "fetch-1", name: "fetch_notice", ok: true, summary: "已读取《经验帖》正文。" });
+      stream().send(answer("未读到可用于回答的通知全文，请核对官方通知。", true));
+    });
+    expect(within(primary()).getByText("未读到正文")).toBeInTheDocument();
+    expect(within(primary()).queryByText("已读到正文")).not.toBeInTheDocument();
   });
 
   test("labels unread fallback and keeps search summary hidden", () => {

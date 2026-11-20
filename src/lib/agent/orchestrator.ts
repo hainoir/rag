@@ -2,6 +2,7 @@ import type { NoticeDocument, SearchProvider, SearchSource } from "../search/typ
 import { toolRegistry } from "./tools/registry.ts";
 import { AGENT_NOTICE_BODY_TOTAL_CHARS, MAX_FETCH_NOTICES, capNoticeBody, isOfficialAnswerDocument, noticeBodyExcerpt } from "./tools/fetch-notice.ts";
 import type { AgentCitation, AgentEvent } from "./types.ts";
+import { extractProcedure } from "./procedure-steps.ts";
 
 export type RunCampusAgentOptions = {
   emit: (event: AgentEvent) => void;
@@ -113,6 +114,8 @@ export async function runCampusAgent(
   }
   emit({ type: "phase", phase: "answering" });
   const evidence = citations.filter((citation) => citation.snippet).map((citation) => ({ sourceId: citation.sourceId, title: citation.title, sourceName: citation.sourceName, snippet: citation.snippet! }));
-  emit({ type: "answer", summary, citations, evidence, ...(fallback ? { fallback: true } : {}) });
+  const procedure = extractProcedure({ documents });
+  const demoCorpus = documents.some((document) => document.body.includes("演示语料（非真实通知全文）"));
+  emit({ type: "answer", summary, citations, evidence, ...(fallback ? { fallback: true } : {}), ...(demoCorpus ? { demoCorpus: true } : {}), ...(procedure ? { procedure } : {}) });
   emit({ type: "phase", phase: "done" });
 }

@@ -1,6 +1,6 @@
 import type { NoticeDocument, SearchAnswerEvidence, SearchSource } from "../../search/types.ts";
 import type { AgentCitation } from "../types.ts";
-import { noticeBodyExcerpt } from "./fetch-notice.ts";
+import { isOfficialAnswerDocument, noticeBodyExcerpt } from "./fetch-notice.ts";
 
 export type CitationExport = { text: string; citations: AgentCitation[] };
 
@@ -10,7 +10,7 @@ export function exportCitations(
   documents?: NoticeDocument[],
 ): CitationExport {
   if (documents) {
-    const eligible = new Map(documents.filter((document) => document.answerEligible).map((document) => [document.documentId, document]));
+    const eligible = new Map(documents.filter(isOfficialAnswerDocument).map((document) => [document.documentId, document]));
     const seen = new Set<string>();
     const citations: AgentCitation[] = [];
     for (const source of sources) {

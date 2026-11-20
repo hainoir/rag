@@ -1,6 +1,6 @@
 import type { NoticeDocument, SearchProvider, SearchSource } from "../search/types.ts";
 import { toolRegistry } from "./tools/registry.ts";
-import { AGENT_NOTICE_BODY_TOTAL_CHARS, MAX_FETCH_NOTICES, capNoticeBody, noticeBodyExcerpt } from "./tools/fetch-notice.ts";
+import { AGENT_NOTICE_BODY_TOTAL_CHARS, MAX_FETCH_NOTICES, capNoticeBody, isOfficialAnswerDocument, noticeBodyExcerpt } from "./tools/fetch-notice.ts";
 import type { AgentCitation, AgentEvent } from "./types.ts";
 
 export type RunCampusAgentOptions = {
@@ -72,7 +72,7 @@ export async function runCampusAgent(
         : fetchNotice;
       const fetched = await toolRegistry.fetch_notice.run({ documentId }, { fetchNotice: runFetch, requestId });
       emit({ type: "tool_result", id, name: "fetch_notice", ok: fetched.ok, summary: fetched.summary });
-      if (fetched.ok && fetched.document?.answerEligible && remaining > 0 && (fetched.document.body.length <= remaining || remaining > "…[已截断]".length)) {
+      if (fetched.ok && fetched.document && isOfficialAnswerDocument(fetched.document) && remaining > 0 && (fetched.document.body.length <= remaining || remaining > "…[已截断]".length)) {
         const kept = capNoticeBody(fetched.document, remaining);
         remaining -= kept.body.length;
         documents.push(kept);

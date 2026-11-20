@@ -150,6 +150,33 @@ await test("supplemental body and search answer do not become evidence", async (
   assert.doesNotMatch(exported.summary, /经验帖|搜索摘要|依据：|已导出/);
 });
 
+
+await test("approved community and supplemental official bodies stay out of answers and citations", async () => {
+  const approvedCommunity = { ...document("community-approved-1", "社区经验：找舍友帮忙即可报修。"), type: "community" as const, sourceName: "校园论坛", title: "宿舍报修经验", answerEligible: true, governanceStatus: "approved" as const };
+  const official = { ...document("official-1", "官方正文：登录后提交报修。"), title: "报修办法" };
+  const communitySource = { ...source("chunk-community", "community-approved-1", "community"), title: "宿舍报修经验", answerEligible: true, governanceStatus: "approved" as const };
+  const officialSource = { ...source("chunk-official", "official-1"), title: "报修办法" };
+
+  const onlyCommunity = await run([communitySource], async () => ({ status: "ok", document: approvedCommunity }), "社区经验：找舍友帮忙即可报修。");
+  assert.equal(onlyCommunity.answer.fallback, true);
+  assert.equal(onlyCommunity.answer.citations.length, 0);
+  assert.deepEqual(onlyCommunity.answer.evidence, []);
+  assert.match(onlyCommunity.answer.summary, /未读到可用于回答的通知全文/);
+  assert.doesNotMatch(`${JSON.stringify(onlyCommunity.answer)}${JSON.stringify(exportResult(onlyCommunity.events))}`, /找舍友|社区经验/);
+
+  const mixed = await run([officialSource, communitySource], async (id) => ({ status: "ok", document: id === "official-1" ? official : approvedCommunity }), "社区经验：找舍友帮忙即可报修。");
+  assert.equal(mixed.answer.fallback, undefined);
+  assert.equal(mixed.answer.summary, "官方正文：登录后提交报修。");
+  assert.deepEqual(mixed.answer.citations.map((citation) => citation.documentId), ["official-1"]);
+  assert.doesNotMatch(`${JSON.stringify(mixed.answer)}${JSON.stringify(exportResult(mixed.events))}`, /找舍友|社区经验/);
+
+  const supplementalOfficial = { ...document("supp-1", "补充材料：内部口径。"), answerEligible: true, governanceStatus: "supplemental" as const };
+  const supplementalOnly = await run([{ ...source("chunk-supp", "supp-1"), answerEligible: true, governanceStatus: "supplemental" }], async () => ({ status: "ok", document: supplementalOfficial }));
+  assert.equal(supplementalOnly.answer.fallback, true);
+  assert.equal(supplementalOnly.answer.citations.length, 0);
+  assert.doesNotMatch(`${JSON.stringify(supplementalOnly.answer)}${JSON.stringify(exportResult(supplementalOnly.events))}`, /内部口径/);
+});
+
 await test("mock search without mock fetch never uses the real provider", async () => {
   const { answer, events } = await run([source("chunk", "doc")]);
   assert.equal(answer.fallback, true);

@@ -25,6 +25,10 @@ export function noticeBodyExcerpt(body: string, maxChars: number): string {
   return line.slice(0, maxChars).trim();
 }
 
+export function isOfficialAnswerDocument(document: NoticeDocument): boolean {
+  return document.type === "official" && document.answerEligible && document.governanceStatus !== "supplemental";
+}
+
 export async function fetchNoticeTool(
   documentId: string,
   fetchNotice?: SearchProvider["fetchNotice"],

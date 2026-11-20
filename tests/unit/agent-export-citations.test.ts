@@ -15,6 +15,7 @@ function test(name: string, task: () => void) {
 
 const source: SearchSource = {
   id: "notice-1",
+  documentId: "notice-1",
   title: "借阅规则",
   type: "official",
   sourceName: "图书馆",

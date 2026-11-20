@@ -14,7 +14,7 @@ function test(name: string, task: () => void) {
     console.log(`PASS ${name}`);
   } catch (error) {
     console.error(`FAIL ${name}`);
-    console.error(error instanceof Error ? error.stack ?? error.message : String(error));
+    console.error(error instanceof Error ? (error.stack ?? error.message) : String(error));
     process.exitCode = 1;
   }
 }
@@ -59,6 +59,7 @@ test("normalizes legacy aliases and freshness by timestamp priority", () => {
   assert.equal(response.retrievedCount, 3);
   assert.equal(response.relatedQuestions[0], "续借规则");
   assert.equal(response.sources[0].id, "doc-1");
+  assert.equal(response.sources[0].documentId, "doc-1");
   assert.equal(response.sources[0].type, "official");
   assert.equal(response.sources[0].sourceName, "天津商业大学图书馆");
   assert.equal(response.sources[0].updatedAt, "2026-05-03T00:00:00.000Z");
@@ -66,6 +67,45 @@ test("normalizes legacy aliases and freshness by timestamp priority", () => {
   assert.equal(response.sources[0].freshnessLabel, "fresh");
   assert.equal(response.sources[0].trustScore, 0.96);
   assert.equal(response.answer?.evidence?.[0].sourceId, "doc-1");
+});
+
+test("keeps chunk id and document id separate when both are present", () => {
+  const response = normalizeUpstreamResponse("借阅", {
+    status: "partial",
+    resultGeneratedAt: generatedAt,
+    sources: [
+      {
+        id: "chunk-1",
+        documentId: "document-1",
+        title: "借阅说明",
+        type: "official",
+        sourceName: "图书馆",
+        snippet: "借阅摘要",
+        fetchedAt: generatedAt,
+      },
+    ],
+  });
+  assert.equal(response.sources[0].id, "chunk-1");
+  assert.equal(response.sources[0].documentId, "document-1");
+});
+
+test("does not infer document ID from a chunk ID or URL", () => {
+  for (const documentId of [undefined, "  ", 123]) {
+    const response = normalizeUpstreamResponse("借阅", {
+      sources: [{ id: "chunk-1", documentId, url: "https://example.test/notice" }],
+    });
+    assert.equal(response.sources[0].id, "chunk-1");
+    assert.equal(response.sources[0].documentId, undefined);
+    assert.equal("documentId" in response.sources[0], false);
+  }
+});
+
+test("uses an explicit document ID as the legacy source ID only when no source ID exists", () => {
+  const response = normalizeUpstreamResponse("借阅", {
+    sources: [{ document_id: " document-1 " }],
+  });
+  assert.equal(response.sources[0].id, "document-1");
+  assert.equal(response.sources[0].documentId, "document-1");
 });
 
 test("builds partial answers when upstream returns sources without answer", () => {

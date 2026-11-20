@@ -29,7 +29,9 @@ const {
 const { loadLocalEnv } = require("./load-env.cjs");
 const { readRerankConfig, rerankDocuments, shouldUseRerank } = require("./rerank-client.cjs");
 const { buildHealthSnapshot, readSearchServiceRuntimePreflight } = require("./runtime-preflight.cjs");
+const { deriveSourceDomain } = require("./source-domain.cjs");
 const { defaultQuestions, seedCorpus } = require("./seed-corpus.cjs");
+const { answerEligibilitySql, documentVisibilitySql, getNoticeDocument, governanceStatusSql } = require("./notice-document.cjs");
 const { parseSearchFeedbackPayload, parseSearchQueryLogPayload } = require("./telemetry-contract.cjs");
 const {
   closeTelemetryPool,
@@ -807,18 +809,6 @@ function toNullableIsoTimestamp(value) {
   return normalized || null;
 }
 
-function deriveSourceDomain(url) {
-  if (!url) {
-    return undefined;
-  }
-
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    return undefined;
-  }
-}
-
 function deriveFreshnessLabel(source, generatedAt) {
   const reference =
     source.lastVerifiedAt ?? source.updatedAt ?? source.publishedAt ?? source.fetchedAt ?? null;
@@ -850,6 +840,7 @@ function deriveFreshnessLabel(source, generatedAt) {
 function buildSource(record, terms) {
   return {
     id: record.id,
+    documentId: record.documentId,
     title: record.title,
     type: record.type,
     sourceName: record.sourceName,
@@ -873,6 +864,7 @@ function buildPostgresSource(row, terms, query, generatedAt) {
   const fetchedAt = toIsoTimestamp(row.fetched_at, generatedAt);
   const source = {
     id: row.chunk_id,
+    documentId: row.document_id,
     title: row.title,
     type: row.source_type === "community" ? "community" : "official",
     sourceName: row.source_name,
@@ -1553,12 +1545,8 @@ async function searchPostgres(query, limit, options = {}) {
             d.last_verified_at,
             d.dedup_key,
             coalesce(sgo.trust_weight_override, sr.trust_weight, 0.72)::float as trust_score,
-            coalesce(crr.status, case when d.source_type = 'community' then 'pending' else 'approved' end) as governance_status,
-            case
-              when d.source_type <> 'community' then true
-              when coalesce(crr.status, 'pending') = 'approved' then true
-              else false
-            end as answer_eligible,
+            ${governanceStatusSql()} as governance_status,
+            ${answerEligibilitySql()} as answer_eligible,
             greatest(
               similarity(d.title, $3),
               similarity(c.snippet, $3),
@@ -1580,12 +1568,7 @@ async function searchPostgres(query, limit, options = {}) {
             order by updated_at desc, created_at desc
             limit 1
           ) crr on true
-          where d.status = 'active'
-            and coalesce(sgo.enabled_override, sr.enabled, true) = true
-            and (
-              d.source_type <> 'community'
-              or coalesce(crr.status, 'pending') in ('approved', 'supplemental')
-            )
+          where ${documentVisibilitySql()}
             and (
               d.title ilike any($1::text[])
               or c.snippet ilike any($1::text[])
@@ -1636,12 +1619,8 @@ async function searchPostgres(query, limit, options = {}) {
           d.last_verified_at,
           d.dedup_key,
           coalesce(sgo.trust_weight_override, sr.trust_weight, 0.72)::float as trust_score,
-          coalesce(crr.status, case when d.source_type = 'community' then 'pending' else 'approved' end) as governance_status,
-          case
-            when d.source_type <> 'community' then true
-            when coalesce(crr.status, 'pending') = 'approved' then true
-            else false
-          end as answer_eligible,
+          ${governanceStatusSql()} as governance_status,
+          ${answerEligibilitySql()} as answer_eligible,
           greatest(
             similarity(d.title, $3),
             similarity(c.snippet, $3),
@@ -1660,12 +1639,7 @@ async function searchPostgres(query, limit, options = {}) {
           order by updated_at desc, created_at desc
           limit 1
         ) crr on true
-        where d.status = 'active'
-          and coalesce(sgo.enabled_override, sr.enabled, true) = true
-          and (
-            d.source_type <> 'community'
-            or coalesce(crr.status, 'pending') in ('approved', 'supplemental')
-          )
+        where ${documentVisibilitySql()}
           and (
             d.title ilike any($1::text[])
             or c.snippet ilike any($1::text[])
@@ -2344,6 +2318,7 @@ function createServer() {
     if (url.pathname.startsWith("/api/") && !isAuthorizedRequest(request)) {
       sendJson(response, 401, {
         error: "unauthorized",
+        message: "Unauthorized request.",
       });
       return;
     }
@@ -2355,6 +2330,35 @@ function createServer() {
 
     if (url.pathname === "/api/query-logs" && request.method === "POST") {
       await handleQueryLog(request, response);
+      return;
+    }
+
+    if (request.method === "GET" && (url.pathname === "/api/documents" || url.pathname.startsWith("/api/documents/"))) {
+      let documentId;
+      try {
+        documentId = decodeURIComponent(url.pathname.slice("/api/documents/".length));
+      } catch {
+        documentId = "";
+      }
+      try {
+        const result = await getNoticeDocument(documentId, {
+          provider: normalizeProvider(process.env.SEARCH_SERVICE_PROVIDER),
+          databaseConfigured: Boolean(String(process.env.DATABASE_URL ?? "").trim()),
+          query: async (sql, values) => withPostgresClient(async (client) => (await client.query(sql, values)).rows),
+        });
+        if (result.document) {
+          sendJson(response, 200, result.document);
+        } else {
+          const messages = {
+            invalid_document_id: "Invalid document ID.",
+            notice_not_found: "Notice not found.",
+            database_unavailable: "Database unavailable.",
+          };
+          sendJson(response, result.status, { error: result.error, message: messages[result.error] });
+        }
+      } catch {
+        sendJson(response, 500, { error: "search_service_error", message: "The search service failed." });
+      }
       return;
     }
 
@@ -2428,6 +2432,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  buildPostgresSource,
   countSpecificTermHits,
   buildTerms,
   closeAdminPool,

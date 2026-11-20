@@ -24,6 +24,7 @@
   "sources": [
     {
       "id": "official-library-borrow-guide",
+      "documentId": "official-library-borrow-guide",
       "title": "图书馆借阅与续借办理说明",
       "type": "official",
       "sourceName": "天津商业大学图书馆",
@@ -47,6 +48,7 @@
     },
     {
       "id": "community-library-borrow-thread",
+      "documentId": "community-library-borrow-thread",
       "title": "图书馆借书高峰期要不要早点去",
       "type": "community",
       "sourceName": "天津商业大学吧",

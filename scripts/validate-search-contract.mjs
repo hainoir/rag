@@ -122,6 +122,7 @@ function validateSource(source, index, generatedAt) {
 
   assert(isPlainObject(source), `${base} must be an object.`);
   assertString(source.id, `${base}.id`);
+  assertString(source.documentId, `${base}.documentId`);
   assertString(source.title, `${base}.title`);
   assert(allowedSourceTypes.has(source.type), `${base}.type must be "official" or "community".`);
   assert(hasOwn(source, "sourceName"), `${base}.sourceName must exist.`);

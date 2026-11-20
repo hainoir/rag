@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { AnswerPanel } from "@/components/answer-panel";
-import { AgentStepsPanel } from "@/components/agent-steps-panel";
+import { AgentSession } from "@/components/agent-session";
 import { EmptyState } from "@/components/empty-state";
 import { ErrorState } from "@/components/error-state";
 import { RelatedQuestionsPanel } from "@/components/related-questions-panel";
@@ -119,15 +119,11 @@ export function ResultsShell({ initialQuery, agentMode = false }: ResultsShellPr
   }, [initialQuery, reloadToken]);
 
   const filteredSources =
-    filter === "all"
-      ? response?.sources ?? []
-      : (response?.sources ?? []).filter((source) => source.type === filter);
+    filter === "all" ? (response?.sources ?? []) : (response?.sources ?? []).filter((source) => source.type === filter);
 
   const toggleExpand = (sourceId: string) => {
     setExpandedSourceIds((current) =>
-      current.includes(sourceId)
-        ? current.filter((item) => item !== sourceId)
-        : [...current, sourceId],
+      current.includes(sourceId) ? current.filter((item) => item !== sourceId) : [...current, sourceId],
     );
   };
 
@@ -155,15 +151,9 @@ export function ResultsShell({ initialQuery, agentMode = false }: ResultsShellPr
           <div className="space-y-6">
             <section className="surface rounded-[24px] p-4 sm:p-6 md:rounded-[32px] md:p-8">
               <div className="flex flex-wrap items-center gap-3">
-                <span className="highlight text-xs font-semibold tracking-[0.18em] uppercase">
-                  结果页
-                </span>
-                <span className="highlight text-xs font-semibold tracking-[0.18em] uppercase">
-                  来源过滤
-                </span>
-                <span className="highlight text-xs font-semibold tracking-[0.18em] uppercase">
-                  可解释回答
-                </span>
+                <span className="highlight text-xs font-semibold tracking-[0.18em] uppercase">结果页</span>
+                <span className="highlight text-xs font-semibold tracking-[0.18em] uppercase">来源过滤</span>
+                <span className="highlight text-xs font-semibold tracking-[0.18em] uppercase">可解释回答</span>
               </div>
 
               <h1
@@ -173,7 +163,9 @@ export function ResultsShell({ initialQuery, agentMode = false }: ResultsShellPr
                 {queryHeading}
               </h1>
               <p className="mt-3 max-w-3xl text-sm leading-7 muted" id="search-results-note">
-                回答会优先展示结论摘要与来源说明；如果你更想核对依据，可以直接切到检索结果视图查看原始命中片段。
+                {agentMode
+                  ? "Agent 回答会展示读取正文的情况、引用和依据。下方来源列表来自并行检索，口径可能与 Agent 回答不同。"
+                  : "回答会优先展示结论摘要与来源说明；如果你更想核对依据，可以直接切到检索结果视图查看原始命中片段。"}
               </p>
 
               <div className="mt-6">
@@ -184,16 +176,14 @@ export function ResultsShell({ initialQuery, agentMode = false }: ResultsShellPr
                   className="mt-3 inline-block text-sm font-semibold text-[var(--accent)] underline"
                   href={`/search?q=${encodeURIComponent(initialQuery)}${agentMode ? "" : "&agent=1"}`}
                 >
-                  {agentMode ? "返回普通检索" : "查看 Agent 步骤"}
+                  {agentMode ? "返回普通检索" : "查看 Agent 回答"}
                 </a>
               ) : null}
             </section>
 
-            {agentMode && initialQuery.trim() ? (
-              <AgentStepsPanel key={`${initialQuery}-${reloadToken}`} query={initialQuery} />
-            ) : null}
+            {agentMode && initialQuery.trim() ? <AgentSession key={initialQuery} query={initialQuery} /> : null}
 
-            <StatusPanel loadingPhase={loadingPhase} response={response} />
+            <StatusPanel agentMode={agentMode} loadingPhase={loadingPhase} response={response} />
 
             {initialQuery.trim() ? (
               <>
@@ -206,7 +196,42 @@ export function ResultsShell({ initialQuery, agentMode = false }: ResultsShellPr
                   viewMode={viewMode}
                 />
 
-                {loadingPhase !== "done" ? (
+                {agentMode ? (
+                  <section aria-label="并行检索来源" className="space-y-4">
+                    <p className="text-sm muted">以下来源来自并行检索，口径可能与上方 Agent 回答不同。</p>
+                    {loadingPhase !== "done" ? (
+                      <SourceList
+                        expandedSourceIds={expandedSourceIds}
+                        loading
+                        mode={viewMode}
+                        onToggleExpand={toggleExpand}
+                        parallelSearch
+                        sources={[]}
+                      />
+                    ) : response?.status === "error" ? (
+                      <div className="surface rounded-[var(--radius-lg)] p-5" role="alert">
+                        并行检索来源加载失败。
+                        <button
+                          className="ml-3 font-semibold underline"
+                          onClick={() => handleRetry(initialQuery)}
+                          type="button"
+                        >
+                          重试来源
+                        </button>
+                      </div>
+                    ) : response?.status === "empty" ? (
+                      <div className="surface rounded-[var(--radius-lg)] p-5">并行检索没有找到可展示的来源。</div>
+                    ) : (
+                      <SourceList
+                        expandedSourceIds={expandedSourceIds}
+                        mode={viewMode}
+                        onToggleExpand={toggleExpand}
+                        parallelSearch
+                        sources={filteredSources}
+                      />
+                    )}
+                  </section>
+                ) : loadingPhase !== "done" ? (
                   <>
                     <AnswerPanel loading />
                     <SourceList
@@ -218,11 +243,7 @@ export function ResultsShell({ initialQuery, agentMode = false }: ResultsShellPr
                     />
                   </>
                 ) : response?.status === "error" ? (
-                  <ErrorState
-                    onRetry={handleRetry}
-                    onSameQuery={handleSameQuery}
-                    query={initialQuery}
-                  />
+                  <ErrorState onRetry={handleRetry} onSameQuery={handleSameQuery} query={initialQuery} />
                 ) : response?.status === "empty" ? (
                   <EmptyState onSameQuery={handleSameQuery} query={initialQuery} />
                 ) : (

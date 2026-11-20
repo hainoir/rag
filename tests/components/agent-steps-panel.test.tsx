@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
-import { AgentStepsPanel } from "@/components/agent-steps-panel";
+import { AgentSession } from "@/components/agent-session";
 import type { AgentEvent } from "@/lib/agent/types";
 
 class MockEventSource {
@@ -16,6 +16,13 @@ class MockEventSource {
 
   send(event: AgentEvent) {
     this.onmessage?.({ data: JSON.stringify(event) } as MessageEvent);
+  }
+
+  done() {
+    this.onmessage?.({ data: "[DONE]" } as MessageEvent);
+  }
+  fail() {
+    this.onerror?.();
   }
 }
 
@@ -38,10 +45,16 @@ afterEach(() => {
 
 describe("AgentStepsPanel citation copy", () => {
   test("copies the exact successful export summary", async () => {
-    render(<AgentStepsPanel query="图书馆借书" />);
+    render(<AgentSession query="图书馆借书" />);
     expect(MockEventSource.instances[0]?.url).toBe("/api/agent?q=%E5%9B%BE%E4%B9%A6%E9%A6%86%E5%80%9F%E4%B9%A6");
     act(() => {
-      MockEventSource.instances[0].send({ type: "tool_result", id: "export-2", name: "export_citations", ok: true, summary: citationText });
+      MockEventSource.instances[0].send({
+        type: "tool_result",
+        id: "export-2",
+        name: "export_citations",
+        ok: true,
+        summary: citationText,
+      });
     });
 
     fireEvent.click(screen.getByRole("button", { name: "复制引用" }));
@@ -53,7 +66,7 @@ describe("AgentStepsPanel citation copy", () => {
     { ok: true, summary: "" },
     { ok: false, summary: citationText },
   ])("hides copy for non-copyable export %#", ({ ok, summary }) => {
-    render(<AgentStepsPanel query="图书馆借书" />);
+    render(<AgentSession query="图书馆借书" />);
     act(() => {
       MockEventSource.instances[0].send({ type: "tool_result", id: "export-2", name: "export_citations", ok, summary });
     });

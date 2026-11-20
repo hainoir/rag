@@ -14,41 +14,15 @@ const phaseLabels = {
   fallback: "回退",
 };
 
-export function AgentStepsPanel({ query }: { query: string }) {
-  const [events, setEvents] = useState<AgentEvent[]>([]);
-  const [connectionError, setConnectionError] = useState(false);
+export function AgentStepsPanel({ events }: { events: AgentEvent[] }) {
   const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    if (!query.trim()) return;
-
-    const source = new EventSource(`/api/agent?q=${encodeURIComponent(query)}`);
-    source.onmessage = (message) => {
-      if (message.data === "[DONE]") {
-        source.close();
-        return;
-      }
-
-      try {
-        const event = JSON.parse(message.data) as AgentEvent;
-        setEvents((current) => [...current, event]);
-      } catch {
-        setConnectionError(true);
-        source.close();
-      }
-    };
-    source.onerror = () => {
-      setConnectionError(true);
-      source.close();
-    };
-
-    return () => source.close();
-  }, [query]);
 
   const citationText = events.find(
     (event) => event.type === "tool_result" && event.name === "export_citations" && event.ok,
   );
   const exportedText = citationText?.type === "tool_result" ? citationText.summary : "";
+
+  useEffect(() => setCopied(false), [exportedText]);
 
   return (
     <section aria-label="Agent 步骤" aria-live="polite" className="surface rounded-[var(--radius-lg)] p-5 sm:p-6">
@@ -74,18 +48,24 @@ export function AgentStepsPanel({ query }: { query: string }) {
       <ol className="mt-4 space-y-2 text-sm">
         {events.map((event, index) => (
           <li className="rounded-xl border border-[var(--line)] px-3 py-2" key={`${index}-${event.type}`}>
-            {event.type === "phase" ? <span>{phaseLabels[event.phase]}{event.detail ? ` · ${event.detail}` : ""}</span> : null}
+            {event.type === "phase" ? (
+              <span>
+                {phaseLabels[event.phase]}
+                {event.detail ? ` · ${event.detail}` : ""}
+              </span>
+            ) : null}
             {event.type === "tool_call" ? <span>调用 {event.name}</span> : null}
             {event.type === "tool_result" ? (
-              <span className="whitespace-pre-wrap">{event.name} {event.ok ? "✓" : "失败"} · {event.summary}</span>
+              <span className="whitespace-pre-wrap">
+                {event.name} {event.ok ? "✓" : "失败"} · {event.summary}
+              </span>
             ) : null}
             {event.type === "answer" ? <span>{event.summary}</span> : null}
             {event.type === "error" ? <span role="alert">{event.message}</span> : null}
           </li>
         ))}
       </ol>
-      {events.length === 0 && !connectionError ? <p className="mt-3 text-sm muted">正在连接 Agent…</p> : null}
-      {connectionError ? <p className="mt-3 text-sm" role="alert">Agent 连接中断，请刷新页面重试。</p> : null}
+      {events.length === 0 ? <p className="mt-3 text-sm muted">正在连接 Agent…</p> : null}
     </section>
   );
 }

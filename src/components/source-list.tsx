@@ -5,6 +5,7 @@ type SourceListProps = {
   mode: ViewMode;
   sources: SearchSource[];
   loading?: boolean;
+  parallelSearch?: boolean;
   expandedSourceIds: string[];
   onToggleExpand: (sourceId: string) => void;
 };
@@ -13,12 +14,14 @@ export function SourceList({
   mode,
   sources,
   loading = false,
+  parallelSearch = false,
   expandedSourceIds,
   onToggleExpand,
 }: SourceListProps) {
-  const title = mode === "answer" ? "引用来源" : "命中原始片段";
-  const body =
-    mode === "answer"
+  const title = parallelSearch ? "并行检索来源" : mode === "answer" ? "引用来源" : "命中原始片段";
+  const body = parallelSearch
+    ? "这些来源由并行检索返回，可能与 Agent 回答的引用和依据不同。"
+    : mode === "answer"
       ? "回答中的关键信息都可以在下面的来源中核对。"
       : "这里直接展示检索命中的原始片段，便于你跳过摘要自行判断。";
 

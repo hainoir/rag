@@ -254,6 +254,7 @@ export function ResultsShell({ initialQuery, agentMode = false }: ResultsShellPr
                         query={response!.query}
                         requestId={response!.meta?.requestId}
                         sourceIds={response!.sources.map((source) => source.id)}
+                        sources={response!.sources}
                         status={response!.status}
                       />
                     ) : null}

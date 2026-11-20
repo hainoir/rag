@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import type { SearchAnswer, SearchStatus } from "@/lib/search/types";
+import type { SearchAnswer, SearchSource, SearchStatus } from "@/lib/search/types";
 
 type FeedbackState = "idle" | "submitting" | "sent" | "failed";
 
@@ -19,7 +19,58 @@ type AnswerPanelProps =
       query?: string;
       requestId?: string;
       sourceIds?: string[];
+      sources: SearchSource[];
     };
+
+function getEvidenceOriginalUrl(sourceId: string, sources: SearchSource[]) {
+  const source = sources.find((item) => item.id === sourceId);
+
+  for (const candidate of [source?.canonicalUrl, source?.url]) {
+    if (!candidate || !/^https?:\/\//i.test(candidate.trim())) {
+      continue;
+    }
+
+    try {
+      const url = new URL(candidate.trim());
+
+      if ((url.protocol === "http:" || url.protocol === "https:") && url.hostname) {
+        return url.href;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return undefined;
+}
+
+function EvidenceOriginalLink({
+  sourceId,
+  sources,
+  title,
+}: {
+  sourceId: string;
+  sources: SearchSource[];
+  title: string;
+}) {
+  const originalUrl = getEvidenceOriginalUrl(sourceId, sources);
+
+  if (!originalUrl) {
+    return null;
+  }
+
+  return (
+    <a
+      aria-label={`查看原文：${title}`}
+      className="mt-3 inline-block rounded-full border border-[var(--line)] bg-white/80 px-4 py-2 text-center text-sm transition hover:border-[var(--official)]"
+      href={originalUrl}
+      rel="noreferrer"
+      target="_blank"
+    >
+      查看原文
+    </a>
+  );
+}
 
 export function AnswerPanel(props: AnswerPanelProps) {
   const [visibleCount, setVisibleCount] = useState(
@@ -171,6 +222,11 @@ export function AnswerPanel(props: AnswerPanelProps) {
                 {item.snippet ? (
                   <p className="mt-2 text-sm leading-6 muted">{item.snippet}</p>
                 ) : null}
+                <EvidenceOriginalLink
+                  sourceId={item.sourceId}
+                  sources={props.sources}
+                  title={item.title}
+                />
               </div>
             ))}
           </div>

@@ -1,10 +1,11 @@
 import "server-only";
 
-import type { SearchErrorCode, SearchProvider, SearchProviderOptions } from "@/lib/search/types";
+import type { NoticeDocument, NoticeFetchResponse, SearchErrorCode, SearchProvider, SearchProviderOptions } from "@/lib/search/types";
 import {
   buildSearchServiceRequestHeaders,
   getConfiguredSearchServiceUrl,
   parsePositiveInteger,
+  resolveSearchServiceSiblingEndpoint,
 } from "@/lib/search/search-service-config";
 import {
   buildEmptyResponse,
@@ -69,6 +70,90 @@ function classifyHttpStatus(status: number): SearchErrorCode {
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
+}
+
+function parseNoticeDocument(value: unknown, expectedId: string): NoticeDocument | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  const nullableDate = (key: string) => row[key] === null || (typeof row[key] === "string" && !Number.isNaN(Date.parse(row[key])));
+  const optionalString = (key: string) => row[key] === undefined || row[key] === null || typeof row[key] === "string";
+  if (
+    row.documentId !== expectedId ||
+    !Number.isInteger(row.versionNo) || Number(row.versionNo) < 1 ||
+    !isNonEmptyString(row.title) ||
+    (row.type !== "official" && row.type !== "community") ||
+    !isNonEmptyString(row.sourceName) ||
+    !optionalString("sourceDomain") || !optionalString("url") || !optionalString("canonicalUrl") ||
+    !nullableDate("publishedAt") || !nullableDate("updatedAt") ||
+    !isNonEmptyString(row.fetchedAt) || Number.isNaN(Date.parse(row.fetchedAt)) ||
+    !nullableDate("lastVerifiedAt") ||
+    (row.governanceStatus !== undefined && !["approved", "supplemental", "pending", "rejected"].includes(String(row.governanceStatus))) ||
+    typeof row.answerEligible !== "boolean" || typeof row.body !== "string" ||
+    typeof row.truncated !== "boolean" ||
+    !Number.isInteger(row.bodyCharCount) || Number(row.bodyCharCount) < 0 ||
+    !Number.isInteger(row.returnedCharCount) || Number(row.returnedCharCount) < 0 ||
+    Number(row.returnedCharCount) !== row.body.length || Number(row.bodyCharCount) < row.body.length
+  ) return null;
+  return {
+    documentId: row.documentId as string,
+    versionNo: row.versionNo as number,
+    title: row.title as string,
+    type: row.type as NoticeDocument["type"],
+    sourceName: row.sourceName as string,
+    ...(typeof row.sourceDomain === "string" ? { sourceDomain: row.sourceDomain } : {}),
+    ...(typeof row.url === "string" ? { url: row.url } : {}),
+    ...(typeof row.canonicalUrl === "string" ? { canonicalUrl: row.canonicalUrl } : {}),
+    publishedAt: row.publishedAt as string | null,
+    updatedAt: row.updatedAt as string | null,
+    fetchedAt: row.fetchedAt as string,
+    lastVerifiedAt: row.lastVerifiedAt as string | null,
+    ...(row.governanceStatus ? { governanceStatus: row.governanceStatus as NoticeDocument["governanceStatus"] } : {}),
+    answerEligible: row.answerEligible as boolean,
+    body: row.body,
+    truncated: row.truncated as boolean,
+    bodyCharCount: row.bodyCharCount as number,
+    returnedCharCount: row.returnedCharCount as number,
+  };
+}
+
+async function callNoticeService(documentId: string, options: SearchProviderOptions = {}): Promise<NoticeFetchResponse> {
+  const id = typeof documentId === "string" ? documentId.trim() : "";
+  const failure = (status: NoticeFetchResponse["status"], errorCode?: SearchErrorCode): NoticeFetchResponse => ({
+    status, document: null,
+    ...(errorCode ? { meta: { requestId: options.requestId ?? "", errorCode } } : {}),
+  });
+  if (!id || id.length > 128) return failure("invalid");
+  let endpoint: string | null;
+  try {
+    endpoint = resolveSearchServiceSiblingEndpoint(`/api/documents/${encodeURIComponent(id)}`);
+  } catch {
+    endpoint = null;
+  }
+  if (!endpoint) return failure("error", "missing_search_service_url");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), parsePositiveInteger(process.env.SEARCH_SERVICE_TIMEOUT_MS, DEFAULT_TIMEOUT_MS));
+  try {
+    const response = await fetch(endpoint, { method: "GET", headers: buildSearchServiceRequestHeaders(), cache: "no-store", signal: controller.signal });
+    const status = response.status === 400 ? "invalid" : response.status === 404 ? "not_found" : "error";
+    if (!response.ok) {
+      const errorCode = classifyHttpStatus(response.status);
+      logSearchProviderEvent("error", { event: "notice.fetch", requestId: options.requestId, documentId: id, status, httpStatus: response.status, errorCode });
+      return failure(status, errorCode);
+    }
+    const document = parseNoticeDocument(await response.json() as unknown, id);
+    if (!document) {
+      logSearchProviderEvent("error", { event: "notice.fetch", requestId: options.requestId, documentId: id, status: "error", errorCode: "invalid_upstream_response" });
+      return failure("error", "invalid_upstream_response");
+    }
+    logSearchProviderEvent("info", { event: "notice.fetch", requestId: options.requestId, documentId: id, status: "ok", truncated: document.truncated, bodyCharCount: document.bodyCharCount, returnedCharCount: document.returnedCharCount });
+    return { status: "ok", document };
+  } catch (error) {
+    const errorCode = classifySearchProviderError(error);
+    logSearchProviderEvent("error", { event: "notice.fetch", requestId: options.requestId, documentId: id, status: "error", errorCode });
+    return failure("error", errorCode);
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function buildSearchServiceRequest(query: string) {
@@ -210,4 +295,5 @@ export const searchServiceProvider: SearchProvider = {
 
     return callSearchService(trimmedQuery, options);
   },
+  fetchNotice: callNoticeService,
 };

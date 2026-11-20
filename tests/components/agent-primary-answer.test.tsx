@@ -52,7 +52,7 @@ const searchResponse: SearchResponse = {
   retrievedCount: 1,
   resultGeneratedAt: "2026-01-01T00:00:00Z",
 };
-const answer = (summary: string, fallback = false): AgentEvent => ({
+const answer = (summary: string, fallback = false): Extract<AgentEvent, { type: "answer" }> => ({
   type: "answer",
   summary,
   citations: [{ sourceId: "s1", title: "图书馆借阅规则", sourceName: "图书馆", snippet: "正文依据" }],
@@ -91,6 +91,41 @@ function renderPage() {
 }
 
 describe("Agent primary answer", () => {
+  test("shows procedure sections and each item's source in the Agent answer", () => {
+    renderPage();
+    act(() => {
+      stream().send(fetchResult(true));
+      stream().send({
+        ...answer("借阅正文摘要"),
+        procedure: {
+          steps: [{ text: "确认图书可借。", evidence: { documentId: "d1", title: "图书馆借阅规则" } }],
+          exceptions: [{ text: "热门教材限制外借。", evidence: { documentId: "d1", title: "图书馆借阅规则" } }],
+          verify: [{ text: "核对最新馆内规则。", evidence: { documentId: "d1", title: "图书馆借阅规则" } }],
+        },
+      });
+    });
+    const region = within(primary());
+    expect(region.getByRole("heading", { name: "办理步骤" })).toBeInTheDocument();
+    expect(region.getByRole("heading", { name: "特殊情况" })).toBeInTheDocument();
+    expect(region.getByRole("heading", { name: "仍需核对原文" })).toBeInTheDocument();
+    expect(region.getByText("确认图书可借。")).toBeInTheDocument();
+    expect(region.getAllByText("来源：图书馆借阅规则")).toHaveLength(3);
+    expect(region.getByText("借阅正文摘要")).toBeInTheDocument();
+    expect(region.getByText("已读到正文")).toBeInTheDocument();
+  });
+
+  test("unread fallback has no procedure sections", () => {
+    renderPage();
+    act(() => {
+      stream().send(fetchResult(false));
+      stream().send(answer("未读到通知全文，请核对原文。", true));
+    });
+    const region = within(primary());
+    expect(region.getByText("未读到正文")).toBeInTheDocument();
+    expect(region.queryByRole("heading", { name: "办理步骤" })).not.toBeInTheDocument();
+    expect(region.queryByText("确认图书可借。")).not.toBeInTheDocument();
+  });
+
   test("shows the SSE answer, body evidence, and parallel search sources", async () => {
     renderPage();
     await waitFor(() => expect(screen.getByText("图书馆借阅规则", { selector: "h3" })).toBeInTheDocument(), {
